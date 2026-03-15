@@ -26,70 +26,73 @@ export class Summary {
     if (summaryItems.length === 0) {
       return
     }
-    for (const summaryItem of summaryItems) {
-      const stockCode = summaryItem.StockCode ?? ''
-      if (!stockCode) {
-        continue
+    await Database.transaction(async tx => {
+      for (const summaryItem of summaryItems) {
+        const stockCode = summaryItem.StockCode ?? ''
+        if (!stockCode) {
+          continue
+        }
+        const dateStr = summaryItem.Date ?? ''
+        const rowDateInt = dateStr ? Services.CronDate.stringToDateInt(dateStr) : dateInt
+        const id = `${rowDateInt}-${stockCode}`
+        const row: typeof Schemas.summary.$inferInsert = {
+          id,
+          date: rowDateInt,
+          stockCode,
+          stockName: summaryItem.StockName ?? null,
+          remarks: summaryItem.Remarks ?? null,
+          previous: summaryItem.Previous ?? null,
+          firstTrade: summaryItem.FirstTrade ?? null,
+          priceOpen: summaryItem.OpenPrice ?? null,
+          priceHigh: summaryItem.High ?? null,
+          priceLow: summaryItem.Low ?? null,
+          priceClose: summaryItem.Close ?? null,
+          change: summaryItem.Change ?? null,
+          volume: summaryItem.Volume ?? null,
+          value: summaryItem.Value ?? null,
+          frequency: summaryItem.Frequency ?? null,
+          individualIndex: summaryItem.IndexIndividual ?? null,
+          weightForIndex: summaryItem.WeightForIndex ?? null,
+          offerValue: summaryItem.Offer ?? null,
+          offerVolume: summaryItem.OfferVolume ?? null,
+          bidValue: summaryItem.Bid ?? null,
+          bidVolume: summaryItem.BidVolume ?? null,
+          listedShares: summaryItem.ListedShares ?? null,
+          tradableShares: summaryItem.TradebleShares ?? null,
+          foreignBuy: summaryItem.ForeignBuy ?? null,
+          foreignSell: summaryItem.ForeignSell ?? null
+        }
+        await tx
+          .insert(Schemas.summary)
+          .values(row)
+          .onConflictDoUpdate({
+            target: Schemas.summary.id,
+            set: {
+              stockName: row.stockName,
+              remarks: row.remarks,
+              previous: row.previous,
+              firstTrade: row.firstTrade,
+              priceOpen: row.priceOpen,
+              priceHigh: row.priceHigh,
+              priceLow: row.priceLow,
+              priceClose: row.priceClose,
+              change: row.change,
+              volume: row.volume,
+              value: row.value,
+              frequency: row.frequency,
+              individualIndex: row.individualIndex,
+              weightForIndex: row.weightForIndex,
+              offerValue: row.offerValue,
+              offerVolume: row.offerVolume,
+              bidValue: row.bidValue,
+              bidVolume: row.bidVolume,
+              listedShares: row.listedShares,
+              tradableShares: row.tradableShares,
+              foreignBuy: row.foreignBuy,
+              foreignSell: row.foreignSell
+            }
+          })
       }
-      const dateStr = summaryItem.Date ?? ''
-      const rowDateInt = dateStr ? Services.CronDate.stringToDateInt(dateStr) : dateInt
-      const id = `${rowDateInt}-${stockCode}`
-      const row: typeof Schemas.summary.$inferInsert = {
-        id,
-        date: rowDateInt,
-        stockCode,
-        stockName: summaryItem.StockName ?? null,
-        remarks: summaryItem.Remarks ?? null,
-        previous: summaryItem.Previous ?? null,
-        firstTrade: summaryItem.FirstTrade ?? null,
-        priceOpen: summaryItem.OpenPrice ?? null,
-        priceHigh: summaryItem.High ?? null,
-        priceLow: summaryItem.Low ?? null,
-        priceClose: summaryItem.Close ?? null,
-        change: summaryItem.Change ?? null,
-        volume: summaryItem.Volume ?? null,
-        value: summaryItem.Value ?? null,
-        frequency: summaryItem.Frequency ?? null,
-        individualIndex: summaryItem.IndexIndividual ?? null,
-        weightForIndex: summaryItem.WeightForIndex ?? null,
-        offerValue: summaryItem.Offer ?? null,
-        offerVolume: summaryItem.OfferVolume ?? null,
-        bidValue: summaryItem.Bid ?? null,
-        bidVolume: summaryItem.BidVolume ?? null,
-        listedShares: summaryItem.ListedShares ?? null,
-        tradableShares: summaryItem.TradebleShares ?? null,
-        foreignBuy: summaryItem.ForeignBuy ?? null,
-        foreignSell: summaryItem.ForeignSell ?? null
-      }
-      await Database.insert(Schemas.summary)
-        .values(row)
-        .onConflictDoUpdate({
-          target: Schemas.summary.id,
-          set: {
-            stockName: row.stockName,
-            remarks: row.remarks,
-            previous: row.previous,
-            firstTrade: row.firstTrade,
-            priceOpen: row.priceOpen,
-            priceHigh: row.priceHigh,
-            priceLow: row.priceLow,
-            priceClose: row.priceClose,
-            change: row.change,
-            volume: row.volume,
-            value: row.value,
-            frequency: row.frequency,
-            individualIndex: row.individualIndex,
-            weightForIndex: row.weightForIndex,
-            offerValue: row.offerValue,
-            offerVolume: row.offerVolume,
-            bidValue: row.bidValue,
-            bidVolume: row.bidVolume,
-            listedShares: row.listedShares,
-            tradableShares: row.tradableShares,
-            foreignBuy: row.foreignBuy,
-            foreignSell: row.foreignSell
-          }
-        })
-    }
+    })
   }
 }

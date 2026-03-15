@@ -7,8 +7,11 @@
  */
 
 import { Router } from '@neabyte/deserve'
+import { initDb } from '@app/server/Database.ts'
 import * as Services from '@app/server/services/index.ts'
 import type * as Types from '@app/server/Types.ts'
+
+await initDb()
 
 async function runFetchData(): Promise<void> {
   const fetcher = new Services.Fetcher()

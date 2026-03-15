@@ -6,10 +6,12 @@
  * Fullstack developer with a focus on security and experience in trading systems.
  */
 
+import { initDb } from '@app/server/Database.ts'
 import * as Services from '@app/server/services/index.ts'
 
 export class Bootstrap {
   static async run(): Promise<void> {
+    await initDb()
     const client = new Services.Client()
     console.log('[bootstrap] Start: upsert screener (single snapshot)')
     await Bootstrap.withRetry('screenerJob', () => Services.Screener.run(client))
@@ -26,9 +28,8 @@ export class Bootstrap {
       const dateInt = Bootstrap.dateIntFromDate(currentDate)
       const progress = `${processedCount + 1}/${totalDays}`
       console.log(`[bootstrap] (${progress}) stock summary date=${dateInt}`)
-      await Bootstrap.withRetry(
-        `stockSummary:${dateInt}`,
-        () => Services.Summary.run(client, dateInt)
+      await Bootstrap.withRetry(`stockSummary:${dateInt}`, () =>
+        Services.Summary.run(client, dateInt)
       )
       processedCount++
       currentDate = Bootstrap.addDays(currentDate, 1)
@@ -59,7 +60,7 @@ export class Bootstrap {
   }
 
   private static sleepMs(delayMs: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, delayMs))
+    return new Promise(resolve => setTimeout(resolve, delayMs))
   }
 
   private static async withRetry<T>(label: string, task: () => Promise<T>): Promise<T> {
