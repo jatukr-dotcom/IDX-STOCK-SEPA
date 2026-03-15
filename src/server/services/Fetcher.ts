@@ -12,8 +12,10 @@ export class Fetcher {
   private readonly client = new Services.Client()
 
   async run(): Promise<void> {
-    const dateInt = Services.CronDate.todayDateInt()
     await Services.Screener.run(this.client)
-    await Services.Summary.run(this.client, dateInt)
+    for (let offset = -5; offset <= 2; offset++) {
+      const dateInt = Services.CronDate.getDateIntForDayOffset(offset)
+      await Services.Summary.run(this.client, dateInt)
+    }
   }
 }

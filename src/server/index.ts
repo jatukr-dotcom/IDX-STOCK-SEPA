@@ -11,8 +11,6 @@ import { initDb } from '@app/server/Database.ts'
 import * as Services from '@app/server/services/index.ts'
 import type * as Types from '@app/server/Types.ts'
 
-await initDb()
-
 async function runFetchData(): Promise<void> {
   const fetcher = new Services.Fetcher()
   await fetcher.run()
@@ -53,4 +51,12 @@ router.catch(async (ctx, error) => {
   return ctx.send.html(html, { status: 200 })
 })
 
-await router.serve(50270)
+router
+  .serve(50270)
+  .then(async () => {
+    await initDb()
+    await runFetchData()
+  })
+  .catch(error => {
+    console.error('[server] Error serving router:', error)
+  })

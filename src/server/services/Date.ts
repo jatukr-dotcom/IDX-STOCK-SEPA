@@ -16,10 +16,15 @@ export class CronDate {
   }
 
   static todayDateInt(): number {
-    const now = new Date()
-    const year = now.getFullYear()
-    const month = String(now.getMonth() + 1).padStart(2, '0')
-    const day = String(now.getDate()).padStart(2, '0')
+    return CronDate.getDateIntForDayOffset(0)
+  }
+
+  static getDateIntForDayOffset(daysOffset: number): number {
+    const targetDate = new Date()
+    targetDate.setDate(targetDate.getDate() + daysOffset)
+    const year = targetDate.getFullYear()
+    const month = String(targetDate.getMonth() + 1).padStart(2, '0')
+    const day = String(targetDate.getDate()).padStart(2, '0')
     return parseInt(`${year}${month}${day}`, 10)
   }
 }
