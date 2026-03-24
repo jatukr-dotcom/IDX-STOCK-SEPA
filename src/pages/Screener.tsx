@@ -7,7 +7,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { BarChart2, Star, TrendingUp } from 'lucide-react'
+import { BarChart2, BookOpen, Flame, Medal, Star, TrendingUp, Zap } from 'lucide-react'
 import * as ScreenerComps from '@app/pages/components/screener/index.ts'
 import * as Hooks from '@app/pages/hooks/index.ts'
 import * as Utils from '@app/pages/utils/index.ts'
@@ -93,6 +93,30 @@ export default function Screener() {
     refetch: refetchCandidates
   } = Hooks.useCandidates(requestParams)
   const { data: sectorData, loading: sectorLoading } = Hooks.useSectorStrength(sectorWeek)
+  const {
+    data: trendTemplateData,
+    loading: trendTemplateLoading,
+    error: trendTemplateError,
+    refetch: refetchTrendTemplate
+  } = Hooks.useTrendTemplate()
+  const {
+    data: rsRankingData,
+    loading: rsRankingLoading,
+    error: rsRankingError,
+    refetch: refetchRsRanking
+  } = Hooks.useRsRanking()
+  const {
+    data: newHighsData,
+    loading: newHighsLoading,
+    error: newHighsError,
+    refetch: refetchNewHighs
+  } = Hooks.useNewHighs()
+  const {
+    data: sepaData,
+    loading: sepaLoading,
+    error: sepaError,
+    refetch: refetchSepa
+  } = Hooks.useSepa()
   const {
     data: detailData,
     loading: detailLoading,
@@ -205,6 +229,40 @@ export default function Screener() {
             <TrendingUp size={16} aria-hidden />
             <span>Analisa Teknikal</span>
           </button>
+          <button
+            type='button'
+            className={`idx-tab idx-tab-inline ${
+              mainTab === 'trendTemplate' ? 'idx-tab-active' : ''
+            }`}
+            onClick={() => setMainTab('trendTemplate')}
+          >
+            <BookOpen size={16} aria-hidden />
+            <span>Trend Template</span>
+          </button>
+          <button
+            type='button'
+            className={`idx-tab idx-tab-inline ${mainTab === 'rsRanking' ? 'idx-tab-active' : ''}`}
+            onClick={() => setMainTab('rsRanking')}
+          >
+            <Medal size={16} aria-hidden />
+            <span>RS Ranking</span>
+          </button>
+          <button
+            type='button'
+            className={`idx-tab idx-tab-inline ${mainTab === 'newHighs' ? 'idx-tab-active' : ''}`}
+            onClick={() => setMainTab('newHighs')}
+          >
+            <Flame size={16} aria-hidden />
+            <span>New High 52w</span>
+          </button>
+          <button
+            type='button'
+            className={`idx-tab idx-tab-inline ${mainTab === 'sepa' ? 'idx-tab-active' : ''}`}
+            onClick={() => setMainTab('sepa')}
+          >
+            <Zap size={16} aria-hidden />
+            <span>SEPA</span>
+          </button>
         </div>
         {mainTab === 'fundamental' && (
           <div className='idx-grid-main'>
@@ -262,6 +320,46 @@ export default function Screener() {
               loading={screenerBidOfferLoading}
               error={screenerBidOfferError}
               onRefetch={refetchScreenerBidOffer}
+            />
+          </div>
+        )}
+        {mainTab === 'rsRanking' && (
+          <div className='idx-mt-24'>
+            <ScreenerComps.RsRankingView
+              data={rsRankingData}
+              loading={rsRankingLoading}
+              error={rsRankingError}
+              onRefetch={refetchRsRanking}
+            />
+          </div>
+        )}
+        {mainTab === 'newHighs' && (
+          <div className='idx-mt-24'>
+            <ScreenerComps.NewHighsView
+              data={newHighsData}
+              loading={newHighsLoading}
+              error={newHighsError}
+              onRefetch={refetchNewHighs}
+            />
+          </div>
+        )}
+        {mainTab === 'trendTemplate' && (
+          <div className='idx-mt-24'>
+            <ScreenerComps.TrendTemplateView
+              data={trendTemplateData}
+              loading={trendTemplateLoading}
+              error={trendTemplateError}
+              onRefetch={refetchTrendTemplate}
+            />
+          </div>
+        )}
+        {mainTab === 'sepa' && (
+          <div className='idx-mt-24'>
+            <ScreenerComps.SepaView
+              data={sepaData}
+              loading={sepaLoading}
+              error={sepaError}
+              onRefetch={refetchSepa}
             />
           </div>
         )}

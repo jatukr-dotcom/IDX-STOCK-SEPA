@@ -13,6 +13,8 @@ export class Fetcher {
 
   async run(): Promise<void> {
     await Services.Screener.run(this.client)
+    await Services.FinancialRatio.run(this.client)
+    await Services.FinancialHistory.run(this.client)
     for (let offset = -5; offset <= 2; offset++) {
       const dateInt = Services.CronDate.getDateIntForDayOffset(offset)
       await Services.Summary.run(this.client, dateInt)

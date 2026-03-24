@@ -1,0 +1,157 @@
+/**
+ * Copyright (c) 2026 IDX Screener by @NeaByteLab (https://neabyte.com)
+ * SPDX-License-Identifier: MIT
+ *
+ * Open to remote work & consulting.
+ * Fullstack developer with a focus on security and experience in trading systems.
+ */
+
+.idx-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--idx-space-16);
+}
+
+.idx-btn-active {
+  background: var(--idx-deep);
+  color: var(--idx-white);
+  border-color: var(--idx-deep);
+}
+
+.idx-btn-active:hover {
+  background: var(--idx-deep);
+  color: var(--idx-white);
+  border-color: var(--idx-deep);
+}
+
+.idx-trend-stats {
+  display: flex;
+  align-items: center;
+  gap: var(--idx-space-16);
+}
+
+.idx-trend-filter-row {
+  display: flex;
+  align-items: center;
+  gap: var(--idx-space-8);
+  flex-wrap: wrap;
+  margin-top: var(--idx-space-8);
+}
+
+.idx-trend-row-pass {
+  background: rgba(5, 150, 105, 0.04);
+}
+
+.idx-trend-code {
+  display: flex;
+  align-items: center;
+  gap: var(--idx-space-8);
+}
+
+.idx-trend-expand-cell {
+  background: #f9fafb;
+  padding-top: 0 !important;
+}
+
+.idx-trend-criteria-detail {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--idx-space-8) var(--idx-space-24);
+  padding: var(--idx-space-12) 0;
+}
+
+.idx-trend-criteria-item {
+  display: flex;
+  align-items: center;
+  gap: var(--idx-space-8);
+  font-size: var(--idx-text-sm);
+}
+
+.idx-text-xs {
+  font-size: var(--idx-text-xs);
+}
+
+.idx-trend-filter-check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--idx-space-6);
+  cursor: pointer;
+  font-size: var(--idx-text-sm);
+}
+
+/* SEPA View */
+.idx-sepa-score-bar-wrap {
+  display: flex;
+  align-items: center;
+  gap: var(--idx-space-8);
+  justify-content: flex-end;
+}
+
+.idx-sepa-score-bar-track {
+  width: 72px;
+  height: 6px;
+  background: var(--idx-border);
+  border-radius: 3px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.idx-sepa-score-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.2s;
+}
+
+.idx-sepa-score-label {
+  font-size: var(--idx-text-sm);
+  font-weight: 700;
+  min-width: 32px;
+  text-align: right;
+}
+
+.idx-sepa-pips {
+  display: flex;
+  gap: 3px;
+  align-items: center;
+}
+
+.idx-sepa-pip {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--idx-border);
+  display: inline-block;
+  transition: background 0.15s;
+}
+
+.idx-sepa-pip-on {
+  background: var(--idx-up);
+}
+
+.idx-sepa-detail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--idx-space-16) var(--idx-space-24);
+  padding: var(--idx-space-12) 0;
+}
+
+.idx-sepa-detail-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 80px;
+}
+
+.idx-sepa-divider {
+  color: var(--idx-border);
+  margin: 0 var(--idx-space-4);
+}
+
+.idx-sepa-row {
+  cursor: pointer;
+}
+
+.idx-sepa-row:hover {
+  background: var(--idx-hover, rgba(0,0,0,0.03));
+}

@@ -94,7 +94,7 @@ export interface DashboardHeaderProps {
   loading?: boolean
 }
 
-export type DetailTab = 'fundamental' | 'technical'
+export type DetailTab = 'fundamental' | 'technical' | 'eps'
 
 export interface FilterPanelProps {
   params: CandidatesParams
@@ -171,7 +171,7 @@ export interface HistorySectorAggregate {
 
 export type HomeTab = 'methodology' | 'score' | 'filter' | 'howTo'
 
-export type MainAnalysisTab = 'fundamental' | 'technical' | 'watchlist'
+export type MainAnalysisTab = 'fundamental' | 'technical' | 'watchlist' | 'trendTemplate' | 'rsRanking' | 'newHighs' | 'sepa'
 
 export interface OhlcApiRow extends StockDetailOhlcRow {
   bidVolume: number | null
@@ -263,6 +263,8 @@ export interface StockDetail {
   roe: number | null
   der: number | null
   npm: number | null
+  eps: number | null
+  bookValue: number | null
   marketCapital: number | null
   week4PC: number | null
   week13PC: number | null
@@ -279,6 +281,22 @@ export interface StockDetail {
   value: number | null
   volume: number | null
   ohlc: StockDetailOhlcRow[]
+}
+
+export interface FinancialHistoryRow {
+  year: number
+  quarter: number
+  periodDate: string | null
+  eps: number | null
+  bookValue: number | null
+  sales: number | null
+  profit: number | null
+  profitAttrOwner: number | null
+}
+
+export interface FinancialHistoryResponse {
+  code: string
+  data: FinancialHistoryRow[]
 }
 
 export type RsiChartPoint = { date: string; rsi: number; sectorRsi: number | null }
@@ -301,3 +319,135 @@ export interface StockDetailOhlcRow {
 }
 
 export type PriceLinePoint = { date: string; close: number }
+
+export interface TrendTemplateCriteria {
+  aboveMa150Ma200: boolean
+  ma150AboveMa200: boolean
+  ma200Trending: boolean
+  ma50AboveMa150Ma200: boolean
+  aboveMa50: boolean
+  above52wLowBy30Pct: boolean
+  within25PctOf52wHigh: boolean
+  rsRank70: boolean
+}
+
+export interface TrendTemplateRow {
+  code: string
+  name: string | null
+  sector: string | null
+  price: number | null
+  ma50: number | null
+  ma150: number | null
+  ma200: number | null
+  low52w: number | null
+  high52w: number | null
+  criteriaCount: number
+  criteria: TrendTemplateCriteria
+  rsRank: number | null
+  pctFrom52wLow: number | null
+  pctFrom52wHigh: number | null
+}
+
+export interface TrendTemplateResponse {
+  date: number
+  totalCount: number
+  data: TrendTemplateRow[]
+}
+
+export interface TrendTemplateViewProps {
+  data: TrendTemplateResponse | null
+  loading: boolean
+  error: string | null
+  onRefetch: () => void
+}
+
+export interface RsRankingRow {
+  code: string
+  name: string | null
+  sector: string | null
+  price: number | null
+  rsScore: number
+  rsRank: number
+  return3m: number | null
+  return6m: number | null
+  return9m: number | null
+  return12m: number | null
+  trendCriteriaCount: number
+}
+
+export interface RsRankingResponse {
+  date: number
+  totalCount: number
+  data: RsRankingRow[]
+}
+
+export interface RsRankingViewProps {
+  data: RsRankingResponse | null
+  loading: boolean
+  error: string | null
+  onRefetch: () => void
+}
+
+export interface NewHighRow {
+  code: string
+  name: string | null
+  sector: string | null
+  price: number | null
+  high52w: number | null
+  low52w: number | null
+  pctFrom52wHigh: number | null
+  pctFrom52wLow: number | null
+  rsRank: number | null
+  trendCriteriaCount: number
+}
+
+export interface NewHighsResponse {
+  date: number
+  totalCount: number
+  data: NewHighRow[]
+}
+
+export interface NewHighsViewProps {
+  data: NewHighsResponse | null
+  loading: boolean
+  error: string | null
+  onRefetch: () => void
+}
+
+export interface SepaCandidateRow {
+  code: string
+  name: string | null
+  sector: string | null
+  price: number | null
+  rsRank: number
+  rsScore: number
+  return3m: number | null
+  return6m: number | null
+  trendCriteriaCount: number
+  criteria: TrendTemplateCriteria
+  ma50: number | null
+  ma150: number | null
+  ma200: number | null
+  pctFrom52wHigh: number | null
+  pctFrom52wLow: number | null
+  high52w: number | null
+  low52w: number | null
+  per: number | null
+  roe: number | null
+  der: number | null
+  npm: number | null
+  sepaScore: number
+}
+
+export interface SepaResponse {
+  date: number
+  totalCount: number
+  data: SepaCandidateRow[]
+}
+
+export interface SepaViewProps {
+  data: SepaResponse | null
+  loading: boolean
+  error: string | null
+  onRefetch: () => void
+}

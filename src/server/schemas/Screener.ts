@@ -31,6 +31,8 @@ export const screener = sqliteTable('stock_screener', {
   week52PC: real('week52_pc'),
   ytdpc: real('ytdpc'),
   mtdpc: real('mtdpc'),
+  eps: real('eps'),
+  bookValue: real('book_value'),
   umaDate: text('uma_date'),
   notation: text('notation'),
   status: text('status'),

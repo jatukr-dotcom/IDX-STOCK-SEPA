@@ -70,6 +70,7 @@
     "api:dev": "deno run -A --unstable-cron --watch src/server/index.ts",
     "api:serve": "deno run -A --unstable-cron src/server/index.ts",
     "db:init": "deno run -A src/server/Bootstrap.ts",
+    "db:fetch-eps": "deno run -A src/server/FetchFinancialHistory.ts",
     "db:generate": "deno run -A npm:drizzle-kit generate",
     "db:push": "deno run -A npm:drizzle-kit push",
     "ui:build": "deno run -A --node-modules-dir npm:vite build --mode production",

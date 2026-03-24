@@ -23,7 +23,7 @@ export function useSectorStrength(week: 26 | 52 = 26) {
       setLoading(true)
       setError(null)
       const opts = signal ? { signal } : undefined
-      Hooks.fetchApi<Types.SectorStrengthRow[]>('/api/sector/strength', { week }, opts)
+      Hooks.fetchApi<Types.SectorStrengthRow[]>('/api/sector/strength', { week, source: 'ohlc' }, opts)
         .then((result) => {
           if (requestIdRef.current === myId) {
             setData(result)

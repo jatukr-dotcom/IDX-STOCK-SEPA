@@ -7,7 +7,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { BarChart2, LineChart as LineChartIcon, TrendingUp, X } from 'lucide-react'
+import { BarChart2, BookOpen, LineChart as LineChartIcon, TrendingUp, X } from 'lucide-react'
 import {
   Area,
   AreaChart,
@@ -67,6 +67,79 @@ function buildRsiChartData(rsiData: Types.RsiResponse | null): {
   return { chartData, hasSector }
 }
 
+function calcQuarterlyEps(data: Types.FinancialHistoryRow[], year: number, quarter: number): number | null {
+  const byKey = new Map<string, Types.FinancialHistoryRow>()
+  for (const row of data) {
+    byKey.set(`${row.year}_${row.quarter}`, row)
+  }
+  const row = byKey.get(`${year}_${quarter}`)
+  if (!row || row.profitAttrOwner == null || row.eps == null) return null
+  // Derive shares from profitAttrOwner / eps (uses attr-owner profit for correct per-share basis)
+  // Try current year Q4 first, then previous year Q4 (for mid-year when Q4 not yet available)
+  let shares: number | null = null
+  for (let q = 4; q >= 1; q--) {
+    const r = byKey.get(`${year}_${q}`)
+    if (r?.profitAttrOwner != null && r?.eps != null && r.eps !== 0) {
+      shares = r.profitAttrOwner / r.eps
+      break
+    }
+  }
+  if (shares == null || shares === 0) {
+    for (let q = 4; q >= 1; q--) {
+      const r = byKey.get(`${year - 1}_${q}`)
+      if (r?.profitAttrOwner != null && r?.eps != null && r.eps !== 0) {
+        shares = r.profitAttrOwner / r.eps
+        break
+      }
+    }
+  }
+  if (shares == null || shares === 0) return null
+  const prevRow = quarter > 1 ? byKey.get(`${year}_${quarter - 1}`) : null
+  const prevProfit = prevRow?.profitAttrOwner ?? 0
+  return (row.profitAttrOwner - prevProfit) / shares
+}
+
+function EpsHistoryTable({ data }: { data: Types.FinancialHistoryRow[] }) {
+  const years = [2025, 2024, 2023, 2022]
+  const quarters = [1, 2, 3, 4]
+  return (
+    <div className='idx-table-wrap'>
+      <table className='idx-table'>
+        <thead>
+          <tr>
+            <th>Tahun</th>
+            <th className='idx-table-th-right'>Q1</th>
+            <th className='idx-table-th-right'>Q2</th>
+            <th className='idx-table-th-right'>Q3</th>
+            <th className='idx-table-th-right'>Q4</th>
+          </tr>
+        </thead>
+        <tbody>
+          {years.map((year) => (
+            <tr key={year}>
+              <td><strong>{year}</strong></td>
+              {quarters.map((q) => {
+                const eps = calcQuarterlyEps(data, year, q)
+                return (
+                  <td key={q} className='idx-table-td-right'>
+                    {eps != null
+                      ? (
+                        <span style={{ color: eps >= 0 ? 'var(--idx-up)' : 'var(--idx-down)', fontWeight: 600 }}>
+                          {Utils.Format.formatNum(eps, 2)}
+                        </span>
+                      )
+                      : <span className='idx-p-muted'>-</span>}
+                  </td>
+                )
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 export default function StockDetailModal({
   detail,
   loading,
@@ -92,6 +165,8 @@ export default function StockDetailModal({
     loading: foreignLoading,
     error: foreignError
   } = Hooks.useForeign(detail?.code ?? null, foreignPeriodDays)
+  const { data: financialHistoryData, loading: financialHistoryLoading } =
+    Hooks.useFinancialHistory(detail?.code ?? null)
   const chartData = detail?.ohlc?.map((ohlcRow: Types.StockDetailOhlcRow) => ({
     date: Utils.Format.formatDateInt(ohlcRow.date),
     close: ohlcRow.close ?? 0
@@ -178,6 +253,14 @@ export default function StockDetailModal({
                   <TrendingUp size={16} aria-hidden />
                   <span>Analisa Teknikal</span>
                 </button>
+                <button
+                  type='button'
+                  className={`idx-tab idx-tab-inline ${activeTab === 'eps' ? 'idx-tab-active' : ''}`}
+                  onClick={() => setActiveTab('eps')}
+                >
+                  <BookOpen size={16} aria-hidden />
+                  <span>EPS Historis</span>
+                </button>
               </div>
               {activeTab === 'fundamental' && (
                 <>
@@ -201,6 +284,14 @@ export default function StockDetailModal({
                         <div className='idx-detail-item'>
                           <label>PBV</label>
                           <span>{Utils.Format.formatNum(detail.pbv, 1)}</span>
+                        </div>
+                        <div className='idx-detail-item'>
+                          <label>EPS</label>
+                          <span>{detail.eps != null ? Utils.Format.formatNum(detail.eps, 0) : '-'}</span>
+                        </div>
+                        <div className='idx-detail-item'>
+                          <label>Book Value</label>
+                          <span>{detail.bookValue != null ? Utils.Format.formatNum(detail.bookValue, 0) : '-'}</span>
                         </div>
                       </div>
                     </section>
@@ -359,6 +450,19 @@ export default function StockDetailModal({
                     </>
                   )}
                 </>
+              )}
+              {activeTab === 'eps' && (
+                <div>
+                  <p className='idx-p-muted idx-mb-8' style={{ fontSize: 'var(--idx-text-sm)' }}>
+                    EPS per saham (Rp) — Q1=Mar, Q2=Jun, Q3=Sep, Q4=Des
+                  </p>
+                  {financialHistoryLoading && <div className='idx-loading'>Memuat EPS...</div>}
+                  {!financialHistoryLoading && financialHistoryData && (
+                    financialHistoryData.data.length > 0
+                      ? <EpsHistoryTable data={financialHistoryData.data} />
+                      : <p className='idx-p-muted'>Data EPS historis belum tersedia. Jalankan server untuk mengambil data dari IDX.</p>
+                  )}
+                </div>
               )}
               {activeTab === 'technical' && (
                 <>

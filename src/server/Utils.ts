@@ -151,10 +151,7 @@ export default class Utils {
       return false
     }
     const momentumValue = filter.momentumWeek === 52 ? row.week52PC : row.week26PC
-    if (
-      filter.momentumMin != null &&
-      (momentumValue == null || momentumValue < filter.momentumMin)
-    ) {
+    if (filter.momentumMin != null && momentumValue != null && momentumValue < filter.momentumMin) {
       return false
     }
     return true
