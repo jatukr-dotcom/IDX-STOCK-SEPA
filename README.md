@@ -1,43 +1,24 @@
 <div align="center">
 
-# IDX Screener
+# IDX-STOCK-SEPA
 
-Screener saham Indonesia: analisis pakai data, bukan feeling.
+Screener saham Indonesia dengan metode Minervini SEPA: analisis pakai data, bukan feeling.
 
-[![Deno](https://img.shields.io/badge/deno-2.7.4-000000?logo=deno&logoColor=ffcb00)](https://deno.com) [![price](https://img.shields.io/badge/price-free-22c55e)](https://github.com/NeaByteLab/IDX-UI) [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Deno](https://img.shields.io/badge/deno-2.7.4-000000?logo=deno&logoColor=ffcb00)](https://deno.com) [![price](https://img.shields.io/badge/price-free-22c55e)](https://github.com/jatukr-dotcom/IDX-STOCK-SEPA) [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-<table align="center">
-<tr>
-<td width="50%" style="text-align: center"><img src="./preview/1.png" alt="Screener" width="100%"/>
-<br/>
-<strong>Screener</strong>: filter kandidat, fundamental, valuasi, momentum, kekuatan sektor 26w/52w.
-</td>
-<td width="50%" style="text-align: center"><img src="./preview/2.png" alt="Detail saham" width="100%"/>
-<br/>
-<strong>Detail saham</strong>: modal fundamental, profitabilitas, valuasi, skor, momentum, chart harga.
-</td>
-</tr>
-<tr>
-<td width="50%" style="text-align: center"><img src="./preview/3.png" alt="Analisa teknikal" width="100%"/>
-<br/>
-<strong>Analisa teknikal</strong>: RSI per sektor, chart bid vs offer per sektor hari ini, ringkasan snapshot satu hari.
-</td>
-<td width="50%" style="text-align: center"><img src="./preview/4.png" alt="Historical bid vs offer" width="100%"/>
-<br/>
-<strong>Historical bid vs offer</strong>: tabel agregat per sektor, periode 1W–12M, rasio bid/offer, rata-rata hari.
-</td>
-</tr>
-</table>
 </div>
 
 ## Fitur Utama
 
+- **SEPA Candidates** — Filter kandidat saham berdasarkan kriteria Minervini SEPA (Specific Entry Point Analysis): trend template, RS ranking, EPS growth.
+- **Trend Template** — Daftar saham yang memenuhi 8 kriteria trend template Minervini (MA50 > MA150 > MA200, harga di atas semua MA, dll).
+- **RS Ranking** — Peringkat kekuatan relatif (Relative Strength) saham terhadap seluruh pasar IDX.
+- **New Highs 52W** — Daftar saham yang mencetak harga tertinggi 52 minggu.
 - **Screener** — Filter saham fundamental dan momentum, eksklusi risiko, pagination.
 - **Skor komposit** — Skor gabungan value, quality, momentum; bobot diatur; peringkat sektor.
-- **Ringkasan teknikal di Screener** — RSI dan bid/offer per sektor, chart satu hari.
 - **Kekuatan sektor** — Pie chart kekuatan sektor, periode 26 atau 52 minggu.
-- **Detail saham** — Modal tab fundamental dan teknikal: OHLC, RSI, foreign flow.
-- **Historical bid/offer** — Agregat bid/offer per sektor, rasio dan rata-rata, periode 1W–12M.
+- **Detail saham** — Modal tab fundamental, teknikal (OHLC, RSI, foreign flow), dan EPS historis.
+- **EPS Historis** — Data EPS per kuartal (Q1–Q4) tahun 2022–2025, dihitung dari `profitAttrOwner / shares` untuk akurasi per saham.
 - **Watchlist** — Simpan saham favorit pakai bintang, untuk akses data yang lebih cepat.
 - **API + SQLite** — Backend Deno, data di SQLite, cron tiap jam fetch data IDX.
 
@@ -48,23 +29,13 @@ Screener saham Indonesia: analisis pakai data, bukan feeling.
 **1. Clone repo**
 
 ```bash
-git clone https://github.com/NeaByteLab/IDX-UI.git
-cd IDX-UI
-```
-
-**Update dari repo (reset ke versi origin)**
-
-> [!WARNING]
-> Ini akan membuang semua perubahan lokal yang belum kamu commit.
-
-```bash
-git fetch origin
-git reset --hard origin/main
+git clone https://github.com/jatukr-dotcom/IDX-STOCK-SEPA.git
+cd IDX-STOCK-SEPA
 ```
 
 **2. Setup database**
 
-Dari root proyek (`IDX-UI/`), jalankan:
+Dari root proyek, jalankan:
 
 ```bash
 deno task db:generate
@@ -76,6 +47,14 @@ deno task db:init
 - `db:push` — menerapkan skema ke SQLite (membuat/update tabel).
 - `db:init` — mengisi data awal (snapshot screener, summary).
 
+**3. Fetch data EPS historis (2022–2025)**
+
+```bash
+deno task db:fetch-eps
+```
+
+Mengambil data EPS Q1–Q4 untuk semua saham dari IDX API. Cukup dijalankan sekali (data historis tidak berubah). Jalankan ulang setiap kuartal baru tersedia.
+
 ## Cara Menjalankan
 
 ### Production
@@ -84,7 +63,7 @@ deno task db:init
 deno task ui:build && deno task api:serve
 ```
 
-Akses di `http://127.0.0.1:50270` atau `http://localhost:50270` (port sama).
+Akses di `http://127.0.0.1:50270` atau `http://localhost:50270`.
 
 > [!IMPORTANT]
 > Cronjob akan otomatis mengambil data setiap jam (jadwal: menit 0).
@@ -95,28 +74,27 @@ Akses di `http://127.0.0.1:50270` atau `http://localhost:50270` (port sama).
 
 ```bash
 deno task api:dev
-# Akses di `http://127.0.0.1:50270` atau `http://localhost:50270`
 ```
 
 **Terminal 2 — UI:**
 
 ```bash
 deno task ui:dev
-# Akses di `http://127.0.0.1:50260` atau `http://localhost:50260`
+# Akses di `http://127.0.0.1:50260`
 ```
 
-## Dokumentasi
+## Tasks
 
-- **[Referensi API](API.md)** — Endpoint, parameter, return, dan contoh `curl` untuk integrasi & testing.
-- **[Contoh Tata Cara Menganalisa](https://x.com/NeaByteLab/status/2032285129696296987)** — Panduan singkat analisa dengan data screener (X / Twitter).
-
-## Build & Tes
-
-**Cek** — format, lint, dan typecheck:
-
-```bash
-deno task check
-```
+| Perintah | Keterangan |
+|---|---|
+| `deno task api:serve` | Jalankan API server (production) |
+| `deno task api:dev` | Jalankan API server dengan watch mode |
+| `deno task ui:build` | Build UI untuk production |
+| `deno task ui:dev` | Jalankan UI dev server |
+| `deno task db:push` | Terapkan skema ke database |
+| `deno task db:init` | Isi data awal |
+| `deno task db:fetch-eps` | Fetch data EPS historis Q1–Q4 dari IDX |
+| `deno task check` | Format, lint, dan typecheck |
 
 ## Lisensi
 
