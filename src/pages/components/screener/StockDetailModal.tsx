@@ -7,7 +7,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Activity, BarChart2, BookOpen, LineChart as LineChartIcon, TrendingUp, X } from 'lucide-react'
+import { Activity, BarChart2, BookOpen, FileDown, LineChart as LineChartIcon, TrendingUp, X } from 'lucide-react'
 import {
   Area,
   AreaChart,
@@ -212,15 +212,28 @@ export default function StockDetailModal({
             <LineChartIcon size={22} aria-hidden />
             <span>{detail ? `${detail.code}: ${detail.name ?? ''}` : 'Detail Saham'}</span>
           </h2>
-          <button
-            ref={closeButtonRef}
-            type='button'
-            className='idx-modal-close'
-            onClick={handleClose}
-            aria-label='Tutup Modal'
-          >
-            <X size={20} aria-hidden />
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {detail && (
+              <button
+                type='button'
+                className='idx-btn idx-btn-sm idx-btn-icon'
+                title='Download PDF'
+                onClick={() => Utils.exportStockPdf(detail, volumeData ?? null, financialHistoryData ?? null)}
+              >
+                <FileDown size={15} aria-hidden />
+                <span>PDF</span>
+              </button>
+            )}
+            <button
+              ref={closeButtonRef}
+              type='button'
+              className='idx-modal-close'
+              onClick={handleClose}
+              aria-label='Tutup Modal'
+            >
+              <X size={20} aria-hidden />
+            </button>
+          </div>
         </div>
         <div className='idx-modal-body'>
           {loading && <div className='idx-loading'>Memuat...</div>}

@@ -7,7 +7,7 @@
  */
 
 import React, { useMemo, useState } from 'react'
-import { RefreshCw, TrendingDown, TrendingUp } from 'lucide-react'
+import { FileDown, RefreshCw, TrendingDown, TrendingUp } from 'lucide-react'
 import * as Utils from '@app/pages/utils/index.ts'
 import type * as Types from '@app/pages/Types.ts'
 
@@ -186,6 +186,16 @@ export default function VolumeAnalysisView({ data, loading, error, onRefetch, on
         </select>
         <button type='button' className='idx-btn idx-btn-sm idx-btn-icon' onClick={onRefetch} title='Refresh'>
           <RefreshCw size={14} />
+        </button>
+        <button
+          type='button'
+          className='idx-btn idx-btn-sm idx-btn-icon'
+          title='Export PDF'
+          disabled={!data || filtered.length === 0}
+          onClick={() => data && Utils.exportVcpPdf(data, signalFilter, filtered)}
+        >
+          <FileDown size={14} aria-hidden />
+          <span>PDF</span>
         </button>
       </div>
 

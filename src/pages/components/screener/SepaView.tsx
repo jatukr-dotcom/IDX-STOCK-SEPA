@@ -7,7 +7,7 @@
  */
 
 import React, { useMemo, useState } from 'react'
-import { ChevronDown, ChevronUp, Zap } from 'lucide-react'
+import { ChevronDown, ChevronUp, FileDown, Zap } from 'lucide-react'
 import * as Utils from '@app/pages/utils/index.ts'
 import type * as Types from '@app/pages/Types.ts'
 
@@ -280,6 +280,16 @@ export default function SepaView({ data, loading, error, onRefetch }: Types.Sepa
             </button>
           ))}
           <span className='idx-p-muted'>Tampil: {filtered.length}</span>
+          <button
+            type='button'
+            className='idx-btn idx-btn-sm idx-btn-icon'
+            title='Export PDF'
+            disabled={filtered.length === 0}
+            onClick={() => data && Utils.exportSepaPdf(data, { minTrend, minRs }, filtered)}
+          >
+            <FileDown size={14} aria-hidden />
+            <span>PDF</span>
+          </button>
         </div>
       </div>
       {filtered.length === 0
