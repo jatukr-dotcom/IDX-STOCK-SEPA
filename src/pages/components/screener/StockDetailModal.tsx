@@ -74,23 +74,17 @@ function calcQuarterlyEps(data: Types.FinancialHistoryRow[], year: number, quart
   }
   const row = byKey.get(`${year}_${quarter}`)
   if (!row || row.profitAttrOwner == null || row.eps == null) return null
-  // Derive shares from profitAttrOwner / eps (uses attr-owner profit for correct per-share basis)
-  // Try current year Q4 first, then previous year Q4 (for mid-year when Q4 not yet available)
+  // Shares = profitAttrOwner_Q4 / eps_Q4 (year-end basis only, NOT weighted-avg from interim quarters)
+  // Try current year Q4 first, then previous year Q4
   let shares: number | null = null
-  for (let q = 4; q >= 1; q--) {
-    const r = byKey.get(`${year}_${q}`)
-    if (r?.profitAttrOwner != null && r?.eps != null && r.eps !== 0) {
-      shares = r.profitAttrOwner / r.eps
-      break
-    }
+  const q4Current = byKey.get(`${year}_4`)
+  if (q4Current?.profitAttrOwner != null && q4Current.eps != null && q4Current.eps !== 0) {
+    shares = q4Current.profitAttrOwner / q4Current.eps
   }
   if (shares == null || shares === 0) {
-    for (let q = 4; q >= 1; q--) {
-      const r = byKey.get(`${year - 1}_${q}`)
-      if (r?.profitAttrOwner != null && r?.eps != null && r.eps !== 0) {
-        shares = r.profitAttrOwner / r.eps
-        break
-      }
+    const q4Prev = byKey.get(`${year - 1}_4`)
+    if (q4Prev?.profitAttrOwner != null && q4Prev.eps != null && q4Prev.eps !== 0) {
+      shares = q4Prev.profitAttrOwner / q4Prev.eps
     }
   }
   if (shares == null || shares === 0) return null

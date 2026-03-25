@@ -14,11 +14,12 @@ Screener saham Indonesia dengan metode Minervini SEPA: analisis pakai data, buka
 - **Trend Template** — Daftar saham yang memenuhi 8 kriteria trend template Minervini (MA50 > MA150 > MA200, harga di atas semua MA, dll).
 - **RS Ranking** — Peringkat kekuatan relatif (Relative Strength) saham terhadap seluruh pasar IDX.
 - **New Highs 52W** — Daftar saham yang mencetak harga tertinggi 52 minggu.
+- **Volume Akumulasi/Distribusi** — Analisis volume berbasis indikator Chaikin Money Flow (CMF), Money Flow Index (MFI), On-Balance Volume (OBV), dan net foreign flow. Dilengkapi deteksi **VCP (Volatility Contraction Pattern)** otomatis sesuai metode Minervini.
 - **Screener** — Filter saham fundamental dan momentum, eksklusi risiko, pagination.
 - **Skor komposit** — Skor gabungan value, quality, momentum; bobot diatur; peringkat sektor.
 - **Kekuatan sektor** — Pie chart kekuatan sektor, periode 26 atau 52 minggu.
-- **Detail saham** — Modal tab fundamental, teknikal (OHLC, RSI, foreign flow), dan EPS historis.
-- **EPS Historis** — Data EPS per kuartal (Q1–Q4) tahun 2022–2025, dihitung dari `profitAttrOwner / shares` untuk akurasi per saham.
+- **Detail saham** — Modal tab fundamental, teknikal (OHLC, RSI, foreign flow), EPS historis, dan Volume A/D (ADL, OBV, CMF, MFI chart).
+- **EPS Historis** — Data EPS per kuartal (Q1–Q4) tahun 2022–2025, dihitung dari `profitAttrOwner / shares` (year-end basis) untuk akurasi per saham.
 - **Watchlist** — Simpan saham favorit pakai bintang, untuk akses data yang lebih cepat.
 - **API + SQLite** — Backend Deno, data di SQLite, cron tiap jam fetch data IDX.
 
