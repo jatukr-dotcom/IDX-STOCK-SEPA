@@ -520,3 +520,52 @@ export interface SepaResponse {
   totalCount: number
   data: SepaCandidateRow[]
 }
+
+export interface VcpResult {
+  isVcp: boolean
+  contractions: number
+  volumeDrying: boolean
+}
+
+export interface VolumeAnalysisSeriesRow {
+  date: number
+  close: number
+  volume: number
+  adLine: number
+  obv: number
+  cmf: number | null
+  mfi: number | null
+  netForeign: number
+}
+
+export interface VolumeAnalysisResponse {
+  code: string
+  series: VolumeAnalysisSeriesRow[]
+  signal: 'accumulation' | 'distribution' | 'neutral'
+  cmfCurrent: number | null
+  mfiCurrent: number | null
+  obvTrend: 'up' | 'down' | 'flat'
+  volSurgePct: number | null
+  vcp: VcpResult
+}
+
+export interface VolumeScreenerRow {
+  code: string
+  name: string | null
+  sector: string | null
+  close: number
+  cmf: number | null
+  mfi: number | null
+  obvTrend: 'up' | 'down' | 'flat'
+  signal: 'accumulation' | 'distribution' | 'neutral'
+  foreignNetPct: number | null
+  volSurgePct: number | null
+  criteriaCount: number
+  vcp: VcpResult
+}
+
+export interface VolumeScreenerResponse {
+  date: number
+  totalCount: number
+  data: VolumeScreenerRow[]
+}

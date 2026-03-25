@@ -94,7 +94,7 @@ export interface DashboardHeaderProps {
   loading?: boolean
 }
 
-export type DetailTab = 'fundamental' | 'technical' | 'eps'
+export type DetailTab = 'fundamental' | 'technical' | 'eps' | 'volume'
 
 export interface FilterPanelProps {
   params: CandidatesParams
@@ -171,7 +171,7 @@ export interface HistorySectorAggregate {
 
 export type HomeTab = 'methodology' | 'score' | 'filter' | 'howTo'
 
-export type MainAnalysisTab = 'fundamental' | 'technical' | 'watchlist' | 'trendTemplate' | 'rsRanking' | 'newHighs' | 'sepa'
+export type MainAnalysisTab = 'fundamental' | 'technical' | 'watchlist' | 'trendTemplate' | 'rsRanking' | 'newHighs' | 'sepa' | 'volumeAnalysis'
 
 export interface OhlcApiRow extends StockDetailOhlcRow {
   bidVolume: number | null
@@ -447,6 +447,62 @@ export interface SepaResponse {
 
 export interface SepaViewProps {
   data: SepaResponse | null
+  loading: boolean
+  error: string | null
+  onRefetch: () => void
+}
+
+export interface VcpResult {
+  isVcp: boolean
+  contractions: number
+  volumeDrying: boolean
+}
+
+export interface VolumeAnalysisSeriesRow {
+  date: number
+  close: number
+  volume: number
+  adLine: number
+  obv: number
+  cmf: number | null
+  mfi: number | null
+  netForeign: number
+}
+
+export interface VolumeAnalysisResponse {
+  code: string
+  series: VolumeAnalysisSeriesRow[]
+  signal: 'accumulation' | 'distribution' | 'neutral'
+  cmfCurrent: number | null
+  mfiCurrent: number | null
+  obvTrend: 'up' | 'down' | 'flat'
+  volSurgePct: number | null
+  vcp: VcpResult
+}
+
+export interface VolumeScreenerRow {
+  code: string
+  name: string | null
+  sector: string | null
+  close: number
+  cmf: number | null
+  mfi: number | null
+  obvTrend: 'up' | 'down' | 'flat'
+  signal: 'accumulation' | 'distribution' | 'neutral'
+  foreignNetPct: number | null
+  volSurgePct: number | null
+  criteriaCount: number
+  vcp: VcpResult
+}
+
+export interface VolumeScreenerResponse {
+  date: number
+  totalCount: number
+  data: VolumeScreenerRow[]
+}
+
+export interface VolumeAnalysisViewProps {
+  data: VolumeScreenerResponse | null
   loading: boolean
   error: string | null
   onRefetch: () => void

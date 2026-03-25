@@ -7,7 +7,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { BarChart2, BookOpen, LineChart as LineChartIcon, TrendingUp, X } from 'lucide-react'
+import { Activity, BarChart2, BookOpen, LineChart as LineChartIcon, TrendingUp, X } from 'lucide-react'
 import {
   Area,
   AreaChart,
@@ -147,6 +147,7 @@ export default function StockDetailModal({
   onClose
 }: Types.StockDetailModalProps) {
   const [activeTab, setActiveTab] = useState<Types.DetailTab>('fundamental')
+  const { data: volumeData, loading: volumeLoading } = Hooks.useVolumeAnalysis(detail?.code ?? null, 3)
   const [foreignPeriodDays, setForeignPeriodDays] = useState<Types.ForeignPeriodDays>(90)
   const closeButtonRef = useRef<HTMLButtonElement>(null)
   const previousActiveRef = useRef<HTMLElement | null>(null)
@@ -260,6 +261,14 @@ export default function StockDetailModal({
                 >
                   <BookOpen size={16} aria-hidden />
                   <span>EPS Historis</span>
+                </button>
+                <button
+                  type='button'
+                  className={`idx-tab idx-tab-inline ${activeTab === 'volume' ? 'idx-tab-active' : ''}`}
+                  onClick={() => setActiveTab('volume')}
+                >
+                  <Activity size={16} aria-hidden />
+                  <span>Volume A/D</span>
                 </button>
               </div>
               {activeTab === 'fundamental' && (
@@ -461,6 +470,160 @@ export default function StockDetailModal({
                     financialHistoryData.data.length > 0
                       ? <EpsHistoryTable data={financialHistoryData.data} />
                       : <p className='idx-p-muted'>Data EPS historis belum tersedia. Jalankan server untuk mengambil data dari IDX.</p>
+                  )}
+                </div>
+              )}
+              {activeTab === 'volume' && (
+                <div>
+                  {volumeLoading && <div className='idx-loading'>Menghitung indikator volume...</div>}
+                  {!volumeLoading && volumeData && (
+                    <>
+                      <div className='idx-vol-modal-summary'>
+                        <div className={`idx-vol-modal-signal idx-vol-signal-${volumeData.signal}`}>
+                          {volumeData.signal === 'accumulation' ? 'AKUMULASI' : volumeData.signal === 'distribution' ? 'DISTRIBUSI' : 'NETRAL'}
+                        </div>
+                        {volumeData.vcp.isVcp && (
+                          <div className='idx-vol-modal-vcp'>
+                            VCP — {volumeData.vcp.contractions} kontraksi{volumeData.vcp.volumeDrying ? ', volume menyusut' : ''}
+                          </div>
+                        )}
+                        <div className='idx-vol-modal-metrics'>
+                          <div className='idx-vol-modal-metric'>
+                            <span className='idx-vol-modal-metric-label'>CMF(20)</span>
+                            <span className={`idx-vol-modal-metric-val ${(volumeData.cmfCurrent ?? 0) >= 0 ? 'idx-color-up' : 'idx-color-down'}`}>
+                              {volumeData.cmfCurrent != null ? ((volumeData.cmfCurrent > 0 ? '+' : '') + Utils.Format.formatNum(volumeData.cmfCurrent, 3)) : '—'}
+                            </span>
+                          </div>
+                          <div className='idx-vol-modal-metric'>
+                            <span className='idx-vol-modal-metric-label'>MFI(14)</span>
+                            <span style={{ color: (volumeData.mfiCurrent ?? 50) >= 70 ? 'var(--idx-up)' : (volumeData.mfiCurrent ?? 50) <= 30 ? 'var(--idx-down)' : 'var(--idx-accent)', fontWeight: 600 }}>
+                              {volumeData.mfiCurrent != null ? Utils.Format.formatNum(volumeData.mfiCurrent, 1) : '—'}
+                            </span>
+                          </div>
+                          <div className='idx-vol-modal-metric'>
+                            <span className='idx-vol-modal-metric-label'>OBV Tren</span>
+                            <span className={volumeData.obvTrend === 'up' ? 'idx-color-up' : volumeData.obvTrend === 'down' ? 'idx-color-down' : ''}>
+                              {volumeData.obvTrend === 'up' ? '↑ Naik' : volumeData.obvTrend === 'down' ? '↓ Turun' : '— Flat'}
+                            </span>
+                          </div>
+                          <div className='idx-vol-modal-metric'>
+                            <span className='idx-vol-modal-metric-label'>Vol Surge</span>
+                            <span className={(volumeData.volSurgePct ?? 0) >= 0 ? 'idx-color-up' : 'idx-color-down'}>
+                              {volumeData.volSurgePct != null ? ((volumeData.volSurgePct > 0 ? '+' : '') + Utils.Format.formatNum(volumeData.volSurgePct, 1) + '%') : '—'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      {volumeData.series.length > 0 && (
+                        <>
+                          <div className='idx-detail-block idx-mb-16'>
+                            <label className='idx-form-label'>A/D Line & OBV</label>
+                            <div className='idx-chart-container'>
+                              <ResponsiveContainer width='100%' height='100%'>
+                                <LineChart
+                                  data={volumeData.series.map((r) => ({
+                                    date: Utils.Format.formatDateInt(r.date),
+                                    adLine: r.adLine,
+                                    obv: r.obv
+                                  }))}
+                                  margin={{ top: 8, right: 8, bottom: 8, left: 8 }}
+                                >
+                                  <XAxis dataKey='date' axisLine={false} tickLine={false} tick={{ fill: 'var(--idx-text-muted)', fontSize: 10 }} />
+                                  <YAxis orientation='right' axisLine={false} tickLine={false} tick={{ fill: 'var(--idx-text-muted)', fontSize: 10 }} tickFormatter={(v) => Utils.Format.formatNum(v, 0)} />
+                                  <Tooltip
+                                    content={({ active, payload, label }) => {
+                                      if (!active || !payload?.length || !label) return null
+                                      return (
+                                        <div className='idx-tooltip'>
+                                          <div className='idx-tooltip-label'>{label}</div>
+                                          {payload.map((p) => (
+                                            <div key={p.dataKey as string} className='idx-tooltip-row'>
+                                              <span style={{ color: p.color }}>{p.name}</span>
+                                              <span>{Utils.Format.formatNum(p.value as number, 0)}</span>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )
+                                    }}
+                                  />
+                                  <Line type='monotone' dataKey='adLine' name='A/D Line' stroke='var(--idx-primary)' strokeWidth={2} dot={false} isAnimationActive={false} />
+                                  <Line type='monotone' dataKey='obv' name='OBV' stroke='var(--idx-accent)' strokeWidth={1.5} strokeDasharray='4 2' dot={false} isAnimationActive={false} />
+                                </LineChart>
+                              </ResponsiveContainer>
+                            </div>
+                          </div>
+                          <div className='idx-detail-block idx-mb-16'>
+                            <label className='idx-form-label'>CMF(20) — Chaikin Money Flow</label>
+                            <div className='idx-chart-container'>
+                              <ResponsiveContainer width='100%' height='100%'>
+                                <BarChart
+                                  data={volumeData.series.map((r) => ({ date: Utils.Format.formatDateInt(r.date), cmf: r.cmf ?? 0 }))}
+                                  margin={{ top: 8, right: 8, bottom: 8, left: 8 }}
+                                >
+                                  <XAxis dataKey='date' axisLine={false} tickLine={false} tick={{ fill: 'var(--idx-text-muted)', fontSize: 10 }} />
+                                  <YAxis orientation='right' axisLine={false} tickLine={false} tick={{ fill: 'var(--idx-text-muted)', fontSize: 10 }} tickFormatter={(v) => Utils.Format.formatNum(v, 2)} />
+                                  <ReferenceLine y={0} stroke='var(--idx-border)' />
+                                  <Tooltip
+                                    content={({ active, payload, label }) => {
+                                      if (!active || !payload?.length || !label) return null
+                                      const val = payload[0]?.value as number
+                                      return (
+                                        <div className='idx-tooltip'>
+                                          <div className='idx-tooltip-label'>{label}</div>
+                                          <div className='idx-tooltip-row'>
+                                            <span>CMF</span>
+                                            <span style={{ color: val >= 0 ? 'var(--idx-up)' : 'var(--idx-down)' }}>{Utils.Format.formatNum(val, 3)}</span>
+                                          </div>
+                                        </div>
+                                      )
+                                    }}
+                                  />
+                                  <Bar dataKey='cmf' name='CMF' isAnimationActive={false} radius={[2, 2, 0, 0]}>
+                                    {volumeData.series.map((r) => (
+                                      <Cell key={r.date} fill={(r.cmf ?? 0) >= 0 ? 'var(--idx-up)' : 'var(--idx-down)'} />
+                                    ))}
+                                  </Bar>
+                                </BarChart>
+                              </ResponsiveContainer>
+                            </div>
+                          </div>
+                          <div className='idx-detail-block idx-mb-12'>
+                            <label className='idx-form-label'>MFI(14) — Money Flow Index</label>
+                            <div className='idx-chart-container'>
+                              <ResponsiveContainer width='100%' height='100%'>
+                                <LineChart
+                                  data={volumeData.series.map((r) => ({ date: Utils.Format.formatDateInt(r.date), mfi: r.mfi ?? null }))}
+                                  margin={{ top: 8, right: 8, bottom: 8, left: 8 }}
+                                >
+                                  <XAxis dataKey='date' axisLine={false} tickLine={false} tick={{ fill: 'var(--idx-text-muted)', fontSize: 10 }} />
+                                  <YAxis orientation='right' domain={[0, 100]} axisLine={false} tickLine={false} tick={{ fill: 'var(--idx-text-muted)', fontSize: 10 }} />
+                                  <ReferenceLine y={70} stroke='var(--idx-down)' strokeDasharray='3 3' label={{ value: 'OB', fill: 'var(--idx-down)', fontSize: 10 }} />
+                                  <ReferenceLine y={30} stroke='var(--idx-up)' strokeDasharray='3 3' label={{ value: 'OS', fill: 'var(--idx-up)', fontSize: 10 }} />
+                                  <Tooltip
+                                    content={({ active, payload, label }) => {
+                                      if (!active || !payload?.length || !label) return null
+                                      return (
+                                        <div className='idx-tooltip'>
+                                          <div className='idx-tooltip-label'>{label}</div>
+                                          <div className='idx-tooltip-row'>
+                                            <span>MFI</span>
+                                            <span>{Utils.Format.formatNum(payload[0]?.value as number, 1)}</span>
+                                          </div>
+                                        </div>
+                                      )
+                                    }}
+                                  />
+                                  <Line type='monotone' dataKey='mfi' name='MFI' stroke='var(--idx-accent)' strokeWidth={2} dot={false} isAnimationActive={false} connectNulls />
+                                </LineChart>
+                              </ResponsiveContainer>
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </>
+                  )}
+                  {!volumeLoading && !volumeData && (
+                    <p className='idx-p-muted'>Data volume tidak tersedia.</p>
                   )}
                 </div>
               )}

@@ -17,3 +17,4 @@ export { default as RsRankingView } from '@app/pages/components/screener/RsRanki
 export { default as SepaView } from '@app/pages/components/screener/SepaView.tsx'
 export { default as StockDetailModal } from '@app/pages/components/screener/StockDetailModal.tsx'
 export { default as TrendTemplateView } from '@app/pages/components/screener/TrendTemplateView.tsx'
+export { default as VolumeAnalysisView } from '@app/pages/components/screener/VolumeAnalysisView.tsx'

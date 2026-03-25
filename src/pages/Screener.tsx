@@ -7,7 +7,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { BarChart2, BookOpen, Flame, Medal, Star, TrendingUp, Zap } from 'lucide-react'
+import { Activity, BarChart2, BookOpen, Flame, Medal, Star, TrendingUp, Zap } from 'lucide-react'
 import * as ScreenerComps from '@app/pages/components/screener/index.ts'
 import * as Hooks from '@app/pages/hooks/index.ts'
 import * as Utils from '@app/pages/utils/index.ts'
@@ -117,6 +117,12 @@ export default function Screener() {
     error: sepaError,
     refetch: refetchSepa
   } = Hooks.useSepa()
+  const {
+    data: volumeData,
+    loading: volumeLoading,
+    error: volumeError,
+    refetch: refetchVolume
+  } = Hooks.useVolumeScreener()
   const {
     data: detailData,
     loading: detailLoading,
@@ -263,6 +269,14 @@ export default function Screener() {
             <Zap size={16} aria-hidden />
             <span>SEPA</span>
           </button>
+          <button
+            type='button'
+            className={`idx-tab idx-tab-inline ${mainTab === 'volumeAnalysis' ? 'idx-tab-active' : ''}`}
+            onClick={() => setMainTab('volumeAnalysis')}
+          >
+            <Activity size={16} aria-hidden />
+            <span>Volume A/D</span>
+          </button>
         </div>
         {mainTab === 'fundamental' && (
           <div className='idx-grid-main'>
@@ -360,6 +374,17 @@ export default function Screener() {
               loading={sepaLoading}
               error={sepaError}
               onRefetch={refetchSepa}
+            />
+          </div>
+        )}
+        {mainTab === 'volumeAnalysis' && (
+          <div className='idx-mt-24'>
+            <ScreenerComps.VolumeAnalysisView
+              data={volumeData}
+              loading={volumeLoading}
+              error={volumeError}
+              onRefetch={refetchVolume}
+              onRowClick={handleRowClick}
             />
           </div>
         )}
