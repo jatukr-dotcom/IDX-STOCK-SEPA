@@ -135,18 +135,20 @@ function detectVCP(
   // Check each window is tighter than previous (contraction)
   let contractions = 0
   for (let i = 1; i < analyzed.length; i++) {
-    if (analyzed[i].range < analyzed[i - 1].range * 0.85) {
+    const cur = analyzed[i]
+    const prev = analyzed[i - 1]
+    if (cur && prev && cur.range < prev.range * 0.85) {
       contractions++
     }
   }
 
   // Volume drying up: last window avg vol < first window avg vol
-  const volumeDrying = analyzed[2].avgVol < analyzed[0].avgVol * 0.75
+  const volumeDrying = (analyzed[2]?.avgVol ?? 0) < (analyzed[0]?.avgVol ?? 0) * 0.75
 
   // Price near 52w high (within 20%)
   const last252 = rows.slice(Math.max(0, rows.length - 252))
   const high52w = Math.max(...last252.map((r) => r.high))
-  const currentClose = rows[rows.length - 1].close
+  const currentClose = rows[rows.length - 1]?.close ?? 0
   const pctFromHigh = high52w > 0 ? ((currentClose - high52w) / high52w) * 100 : -100
   const nearHighs = pctFromHigh >= -20
 
@@ -239,6 +241,9 @@ export async function GET(ctx: Context) {
 
   for (let i = 0; i < clean.length; i++) {
     const r = clean[i]
+    if (!r) {
+      continue
+    }
     // ADL
     const mfm = calcMFM(r.high, r.low, r.close)
     cumulativeAdl += mfm * r.volume
@@ -261,7 +266,7 @@ export async function GET(ctx: Context) {
       close: Utils.round3(r.close),
       volume: r.volume,
       adLine: Utils.round3(cumulativeAdl),
-      obv: Math.round(obvFull[i]),
+      obv: Math.round(obvFull[i] ?? 0),
       cmf: cmf20 != null ? Utils.round3(cmf20) : null,
       mfi: mfi14 != null ? Utils.round3(mfi14) : null,
       netForeign: Math.round(cumulativeNetForeign)

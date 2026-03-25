@@ -117,7 +117,8 @@ export function exportAiReportPdf(
     margin: { left: 10, right: 10 }
   })
 
-  const finalY = (doc as any).lastAutoTable.finalY || 200
+  const finalY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY ||
+    200
 
   // Add Claude narrative if present
   if (data?.claudeNarrative) {

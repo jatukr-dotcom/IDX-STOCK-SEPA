@@ -7,7 +7,7 @@ import React, { useMemo, useState } from 'react'
 import { FileDown, RefreshCw, TrendingUp } from 'lucide-react'
 import * as Hooks from '@app/pages/hooks/index.ts'
 import * as Utils from '@app/pages/utils/index.ts'
-import type * as Types from '@app/pages/Types.ts'
+import type * as _Types from '@app/pages/Types.ts'
 
 export default function RsLineView({ onRowClick }: { onRowClick: (code: string) => void }) {
   const [onlyNewHigh, setOnlyNewHigh] = useState(false)

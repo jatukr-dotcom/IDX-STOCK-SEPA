@@ -20,7 +20,7 @@ export function exportVcpPdf(
   rows: Types.VolumeScreenerRow[]
 ): void {
   const doc = createDoc('l') // landscape
-  const pw = doc.internal.pageSize.getWidth()
+  const _pw = doc.internal.pageSize.getWidth()
   const today = new Date()
   const dateStr = `${String(today.getDate()).padStart(2, '0')}/${
     String(today.getMonth() + 1).padStart(2, '0')

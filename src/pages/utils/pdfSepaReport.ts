@@ -16,12 +16,12 @@ import {
 } from '@app/pages/utils/pdf.ts'
 
 export function exportSepaPdf(
-  data: Types.SepaResponse,
+  _data: Types.SepaResponse,
   filters: { minTrend: number; minRs: number },
   rows: Types.SepaCandidateRow[]
 ): void {
   const doc = createDoc('l') // landscape
-  const pw = doc.internal.pageSize.getWidth()
+  const _pw = doc.internal.pageSize.getWidth()
   const today = new Date()
   const dateStr = `${String(today.getDate()).padStart(2, '0')}/${
     String(today.getMonth() + 1).padStart(2, '0')

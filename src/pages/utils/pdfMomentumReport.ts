@@ -9,7 +9,7 @@ import type * as Types from '@app/pages/Types.ts'
 import {
   addFooter,
   addHeader,
-  addSectionTitle,
+  addSectionTitle as _addSectionTitle,
   createDoc,
   fmtDate,
   fmtN,
