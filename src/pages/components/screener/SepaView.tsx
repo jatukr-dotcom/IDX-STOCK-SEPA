@@ -33,7 +33,9 @@ function SepaScoreBar({ score }: { score: number }) {
           style={{ width: `${pct}%`, background: color }}
         />
       </div>
-      <span className='idx-sepa-score-label' style={{ color }}>{Utils.Format.formatNum(score, 1)}</span>
+      <span className='idx-sepa-score-label' style={{ color }}>
+        {Utils.Format.formatNum(score, 1)}
+      </span>
     </div>
   )
 }
@@ -78,18 +80,26 @@ function SepaRow({ row }: { row: Types.SepaCandidateRow }) {
           <SepaScoreBar score={row.sepaScore} />
         </td>
         <td className='idx-table-td-right'>
-          <span style={{
-            color: row.rsRank >= 90 ? 'var(--idx-up)' : row.rsRank >= 70 ? 'var(--idx-deep)' : 'var(--idx-text-muted)',
-            fontWeight: 700
-          }}>
+          <span
+            style={{
+              color: row.rsRank >= 90
+                ? 'var(--idx-up)'
+                : row.rsRank >= 70
+                ? 'var(--idx-deep)'
+                : 'var(--idx-text-muted)',
+              fontWeight: 700
+            }}
+          >
             {row.rsRank}
           </span>
         </td>
         <td className='idx-table-td-right'>
-          <span style={{
-            color: row.trendCriteriaCount === 8 ? 'var(--idx-up)' : 'var(--idx-deep)',
-            fontWeight: 600
-          }}>
+          <span
+            style={{
+              color: row.trendCriteriaCount === 8 ? 'var(--idx-up)' : 'var(--idx-deep)',
+              fontWeight: 600
+            }}
+          >
             {row.trendCriteriaCount}/8
           </span>
         </td>
@@ -100,16 +110,19 @@ function SepaRow({ row }: { row: Types.SepaCandidateRow }) {
           {row.return3m != null
             ? (
               <span className={row.return3m >= 0 ? 'idx-pct-up' : 'idx-pct-down'}>
-                {row.return3m >= 0 ? '+' : ''}{Utils.Format.formatNum(row.return3m, 1)}%
+                {row.return3m >= 0 ? '+' : ''}
+                {Utils.Format.formatNum(row.return3m, 1)}%
               </span>
             )
             : '-'}
         </td>
         <td className='idx-table-td-right'>
           {row.pctFrom52wHigh != null
-            ? <span style={{ color: row.pctFrom52wHigh >= -5 ? 'var(--idx-up)' : undefined }}>
+            ? (
+              <span style={{ color: row.pctFrom52wHigh >= -5 ? 'var(--idx-up)' : undefined }}>
                 {Utils.Format.formatNum(row.pctFrom52wHigh, 1)}%
               </span>
+            )
             : '-'}
         </td>
         <td className='idx-table-td-right'>
@@ -152,7 +165,9 @@ function SepaRow({ row }: { row: Types.SepaCandidateRow }) {
               </div>
               <div className='idx-sepa-detail-group'>
                 <span className='idx-p-muted'>Return 6m</span>
-                <strong>{row.return6m != null ? `${Utils.Format.formatNum(row.return6m, 1)}%` : '-'}</strong>
+                <strong>
+                  {row.return6m != null ? `${Utils.Format.formatNum(row.return6m, 1)}%` : '-'}
+                </strong>
               </div>
               <div className='idx-sepa-detail-group'>
                 <span className='idx-p-muted'>RS Score</span>
@@ -169,19 +184,37 @@ function SepaRow({ row }: { row: Types.SepaCandidateRow }) {
               <div className='idx-sepa-divider' />
               <div className='idx-sepa-detail-group'>
                 <span className='idx-p-muted'>EPS Growth YoY</span>
-                <strong style={{ color: row.epsGrowthPct != null && row.epsGrowthPct >= 25 ? 'var(--idx-up)' : row.epsGrowthPct != null && row.epsGrowthPct >= 0 ? 'var(--idx-accent)' : 'var(--idx-down)' }}>
-                  {row.epsGrowthPct != null ? `${row.epsGrowthPct >= 0 ? '+' : ''}${Utils.Format.formatNum(row.epsGrowthPct, 1)}%` : '-'}
+                <strong
+                  style={{
+                    color: row.epsGrowthPct != null && row.epsGrowthPct >= 25
+                      ? 'var(--idx-up)'
+                      : row.epsGrowthPct != null && row.epsGrowthPct >= 0
+                      ? 'var(--idx-accent)'
+                      : 'var(--idx-down)'
+                  }}
+                >
+                  {row.epsGrowthPct != null
+                    ? `${row.epsGrowthPct >= 0 ? '+' : ''}${
+                      Utils.Format.formatNum(row.epsGrowthPct, 1)
+                    }%`
+                    : '-'}
                 </strong>
               </div>
               <div className='idx-sepa-detail-group'>
                 <span className='idx-p-muted'>EPS Akselerasi</span>
-                <strong style={{ color: row.epsAcceleration ? 'var(--idx-up)' : 'var(--idx-text-muted)' }}>
+                <strong
+                  style={{ color: row.epsAcceleration ? 'var(--idx-up)' : 'var(--idx-text-muted)' }}
+                >
                   {row.epsAcceleration ? '✓ Ya' : '✗ Tidak'}
                 </strong>
               </div>
               <div className='idx-sepa-detail-group'>
                 <span className='idx-p-muted'>Kuartal Positif</span>
-                <strong style={{ color: row.epsConsecutiveGrowth >= 2 ? 'var(--idx-up)' : 'var(--idx-text-muted)' }}>
+                <strong
+                  style={{
+                    color: row.epsConsecutiveGrowth >= 2 ? 'var(--idx-up)' : 'var(--idx-text-muted)'
+                  }}
+                >
                   {row.epsConsecutiveGrowth}Q berturut
                 </strong>
               </div>
@@ -189,14 +222,20 @@ function SepaRow({ row }: { row: Types.SepaCandidateRow }) {
             <div className='idx-trend-criteria-detail' style={{ marginTop: 8 }}>
               {(Object.keys(CRITERIA_SHORT) as (keyof Types.TrendTemplateCriteria)[]).map((key) => (
                 <div key={key} className='idx-trend-criteria-item'>
-                  <span style={{
-                    color: row.criteria[key] ? 'var(--idx-up)' : 'var(--idx-text-muted)',
-                    fontWeight: 700,
-                    fontSize: 14
-                  }}>
+                  <span
+                    style={{
+                      color: row.criteria[key] ? 'var(--idx-up)' : 'var(--idx-text-muted)',
+                      fontWeight: 700,
+                      fontSize: 14
+                    }}
+                  >
                     {row.criteria[key] ? '✓' : '✗'}
                   </span>
-                  <span style={{ color: row.criteria[key] ? 'var(--idx-deep)' : 'var(--idx-text-muted)' }}>
+                  <span
+                    style={{
+                      color: row.criteria[key] ? 'var(--idx-deep)' : 'var(--idx-text-muted)'
+                    }}
+                  >
                     {CRITERIA_SHORT[key]}
                   </span>
                 </div>
@@ -214,7 +253,9 @@ export default function SepaView({ data, loading, error, onRefetch }: Types.Sepa
   const [minRs, setMinRs] = useState(70)
 
   const filtered = useMemo(() => {
-    if (!data?.data) return []
+    if (!data?.data) {
+      return []
+    }
     return data.data.filter((r) => r.trendCriteriaCount >= minTrend && r.rsRank >= minRs)
   }, [data, minTrend, minRs])
 
@@ -235,7 +276,9 @@ export default function SepaView({ data, loading, error, onRefetch }: Types.Sepa
       </div>
     )
   }
-  if (!data) return null
+  if (!data) {
+    return null
+  }
 
   const fullSepa = data.data.filter((r) => r.trendCriteriaCount === 8).length
 
@@ -249,8 +292,7 @@ export default function SepaView({ data, loading, error, onRefetch }: Types.Sepa
           </h3>
           <div className='idx-trend-stats'>
             <span className='idx-p-muted'>
-              SEPA Penuh:{' '}
-              <strong style={{ color: 'var(--idx-up)' }}>{fullSepa}</strong>
+              SEPA Penuh: <strong style={{ color: 'var(--idx-up)' }}>{fullSepa}</strong>
             </span>
             <span className='idx-p-muted'>Lolos filter: {data.totalCount}</span>
           </div>
@@ -318,16 +360,14 @@ export default function SepaView({ data, loading, error, onRefetch }: Types.Sepa
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((row) => (
-                  <SepaRow key={row.code} row={row} />
-                ))}
+                {filtered.map((row) => <SepaRow key={row.code} row={row} />)}
               </tbody>
             </table>
           </div>
         )}
       <div className='idx-px-24 idx-py-12 idx-p-muted idx-text-xs'>
-        SEPA Score = 40%×Trend Template + 35%×RS Rank + 25%×Kualitas Fundamental (ROE, NPM).
-        Klik baris untuk detail lengkap MA, 52w high/low, dan semua kriteria.
+        SEPA Score = 40%×Trend Template + 35%×RS Rank + 25%×Kualitas Fundamental (ROE, NPM). Klik
+        baris untuk detail lengkap MA, 52w high/low, dan semua kriteria.
       </div>
     </div>
   )

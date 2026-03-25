@@ -20,18 +20,22 @@ const SETUP_LABELS: Record<Types.PowerPlaySetupType, string> = {
   'none': 'None'
 }
 
-function SetupBadge({ type, nearBreakout }: { type: Types.PowerPlaySetupType; nearBreakout: boolean }) {
+function SetupBadge(
+  { type, nearBreakout }: { type: Types.PowerPlaySetupType; nearBreakout: boolean }
+) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-      <span style={{
-        display: 'inline-block',
-        padding: '2px 7px',
-        borderRadius: 4,
-        fontSize: 11,
-        fontWeight: 600,
-        color: SETUP_COLORS[type],
-        background: `${SETUP_COLORS[type]}1a`
-      }}>
+      <span
+        style={{
+          display: 'inline-block',
+          padding: '2px 7px',
+          borderRadius: 4,
+          fontSize: 11,
+          fontWeight: 600,
+          color: SETUP_COLORS[type],
+          background: `${SETUP_COLORS[type]}1a`
+        }}
+      >
         {SETUP_LABELS[type]}
       </span>
       {nearBreakout && (
@@ -58,17 +62,29 @@ export default function PowerPlayView({ onRowClick }: { onRowClick: (code: strin
     filter === 'all' ? undefined : filter as Types.PowerPlaySetupType
   )
   const rows = useMemo(() => data?.data ?? [], [data])
-  const ppCount = useMemo(() => (data?.data ?? []).filter((r) => r.setupType === 'power-play').length, [data])
-  const lcCount = useMemo(() => (data?.data ?? []).filter((r) => r.setupType === 'low-cheat').length, [data])
-  const breakoutCount = useMemo(() => (data?.data ?? []).filter((r) => r.nearBreakout).length, [data])
+  const ppCount = useMemo(
+    () => (data?.data ?? []).filter((r) => r.setupType === 'power-play').length,
+    [data]
+  )
+  const lcCount = useMemo(
+    () => (data?.data ?? []).filter((r) => r.setupType === 'low-cheat').length,
+    [data]
+  )
+  const breakoutCount = useMemo(() => (data?.data ?? []).filter((r) => r.nearBreakout).length, [
+    data
+  ])
 
   return (
     <div className='idx-card'>
       <div className='idx-card-header'>
         <div>
           <div className='idx-card-title'>Power Play / Low Cheat</div>
-          <div className='idx-card-subtitle' style={{ fontSize: 12, color: 'var(--idx-text-muted)', marginTop: 2 }}>
-            Minervini Setup · Power Play: {ppCount} · Low Cheat: {lcCount} · Near Breakout: {breakoutCount}
+          <div
+            className='idx-card-subtitle'
+            style={{ fontSize: 12, color: 'var(--idx-text-muted)', marginTop: 2 }}
+          >
+            Minervini Setup · Power Play: {ppCount} · Low Cheat: {lcCount} · Near Breakout:{' '}
+            {breakoutCount}
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -80,9 +96,11 @@ export default function PowerPlayView({ onRowClick }: { onRowClick: (code: strin
               onClick={() => setFilter(f)}
               style={f !== 'all' ? { color: SETUP_COLORS[f as Types.PowerPlaySetupType] } : {}}
             >
-              {f === 'all' ? `Semua (${data?.totalCount ?? 0})` :
-               f === 'power-play' ? `Power Play (${ppCount})` :
-               `Low Cheat (${lcCount})`}
+              {f === 'all'
+                ? `Semua (${data?.totalCount ?? 0})`
+                : f === 'power-play'
+                ? `Power Play (${ppCount})`
+                : `Low Cheat (${lcCount})`}
             </button>
           ))}
           <button
@@ -94,7 +112,12 @@ export default function PowerPlayView({ onRowClick }: { onRowClick: (code: strin
             <FileDown size={14} aria-hidden />
             <span>PDF</span>
           </button>
-          <button type='button' className='idx-btn idx-btn-sm idx-btn-icon' onClick={refetch} disabled={loading}>
+          <button
+            type='button'
+            className='idx-btn idx-btn-sm idx-btn-icon'
+            onClick={refetch}
+            disabled={loading}
+          >
             <RefreshCw size={14} className={loading ? 'idx-spin' : ''} aria-hidden />
           </button>
         </div>
@@ -120,32 +143,69 @@ export default function PowerPlayView({ onRowClick }: { onRowClick: (code: strin
           </thead>
           <tbody>
             {loading && rows.length === 0 && (
-              <tr><td colSpan={10} className='idx-text-center idx-text-muted' style={{ padding: 24 }}>Memuat...</td></tr>
+              <tr>
+                <td colSpan={10} className='idx-text-center idx-text-muted' style={{ padding: 24 }}>
+                  Memuat...
+                </td>
+              </tr>
             )}
             {!loading && rows.length === 0 && (
-              <tr><td colSpan={10} className='idx-text-center idx-text-muted' style={{ padding: 24 }}>Tidak ada setup aktif</td></tr>
+              <tr>
+                <td colSpan={10} className='idx-text-center idx-text-muted' style={{ padding: 24 }}>
+                  Tidak ada setup aktif
+                </td>
+              </tr>
             )}
             {rows.map((r) => (
-              <tr key={r.code} className='idx-row-clickable' onClick={() => onRowClick(r.code)}>
+              <tr
+                key={r.code}
+                className='idx-row-clickable'
+                onClick={() => onRowClick(r.code)}
+              >
                 <td>
                   <div className='idx-candidate-code'>{r.code}</div>
                   {r.name && <div className='idx-candidate-name'>{r.name}</div>}
                   {r.sector && <div className='idx-candidate-sector'>{r.sector}</div>}
                 </td>
-                <td><SetupBadge type={r.setupType} nearBreakout={r.nearBreakout} /></td>
+                <td>
+                  <SetupBadge type={r.setupType} nearBreakout={r.nearBreakout} />
+                </td>
                 <td className='idx-text-center'>
-                  <span style={{ fontWeight: 700, color: STAGE_COLORS[r.stage], fontSize: 12 }}>S{r.stage}</span>
+                  <span style={{ fontWeight: 700, color: STAGE_COLORS[r.stage], fontSize: 12 }}>
+                    S{r.stage}
+                  </span>
                 </td>
                 <td className='idx-text-right'>{Utils.Format.formatNum(r.price, 0)}</td>
-                <td className='idx-text-right' style={{ color: (r.tightRangePct ?? 99) <= 2 ? 'var(--idx-up)' : 'var(--idx-accent)' }}>
+                <td
+                  className='idx-text-right'
+                  style={{
+                    color: (r.tightRangePct ?? 99) <= 2 ? 'var(--idx-up)' : 'var(--idx-accent)'
+                  }}
+                >
                   {r.tightRangePct != null ? `${Utils.Format.formatNum(r.tightRangePct, 2)}%` : '—'}
                 </td>
                 <td className='idx-text-right'>{r.consolidationDays}h</td>
-                <td className='idx-text-right' style={{ color: (r.volumeDryUpPct ?? 0) >= 40 ? 'var(--idx-up)' : 'var(--idx-text-muted)' }}>
-                  {r.volumeDryUpPct != null ? `${Utils.Format.formatNum(r.volumeDryUpPct, 1)}%` : '—'}
+                <td
+                  className='idx-text-right'
+                  style={{
+                    color: (r.volumeDryUpPct ?? 0) >= 40 ? 'var(--idx-up)' : 'var(--idx-text-muted)'
+                  }}
+                >
+                  {r.volumeDryUpPct != null
+                    ? `${Utils.Format.formatNum(r.volumeDryUpPct, 1)}%`
+                    : '—'}
                 </td>
-                <td className='idx-text-right' style={{ color: (r.pctFrom52wHigh ?? -99) >= -10 ? 'var(--idx-up)' : 'var(--idx-text-muted)' }}>
-                  {r.pctFrom52wHigh != null ? `${Utils.Format.formatNum(r.pctFrom52wHigh, 1)}%` : '—'}
+                <td
+                  className='idx-text-right'
+                  style={{
+                    color: (r.pctFrom52wHigh ?? -99) >= -10
+                      ? 'var(--idx-up)'
+                      : 'var(--idx-text-muted)'
+                  }}
+                >
+                  {r.pctFrom52wHigh != null
+                    ? `${Utils.Format.formatNum(r.pctFrom52wHigh, 1)}%`
+                    : '—'}
                 </td>
                 <td className='idx-text-right'>{r.rsRank ?? '—'}</td>
                 <td className='idx-text-right'>{r.trendCriteriaCount}/8</td>
@@ -155,8 +215,17 @@ export default function PowerPlayView({ onRowClick }: { onRowClick: (code: strin
         </table>
       </div>
 
-      <div style={{ marginTop: 12, padding: '8px 0', borderTop: '1px solid var(--idx-border)', fontSize: 11, color: 'var(--idx-text-muted)' }}>
-        Power Play: range &lt;3% selama 3-5 hari, volume kering · Low Cheat: range &lt;5%, harga dekat base low · BREAKOUT = harga di tepi atas range
+      <div
+        style={{
+          marginTop: 12,
+          padding: '8px 0',
+          borderTop: '1px solid var(--idx-border)',
+          fontSize: 11,
+          color: 'var(--idx-text-muted)'
+        }}
+      >
+        Power Play: range &lt;3% selama 3-5 hari, volume kering · Low Cheat: range &lt;5%, harga
+        dekat base low · BREAKOUT = harga di tepi atas range
       </div>
     </div>
   )

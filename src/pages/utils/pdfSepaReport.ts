@@ -6,8 +6,13 @@
 import autoTable from 'jspdf-autotable'
 import type * as Types from '@app/pages/Types.ts'
 import {
-  PDF_COLORS, addFooter, addHeader, addSectionTitle,
-  createDoc, fmtN, fmtPct
+  addFooter,
+  addHeader,
+  addSectionTitle,
+  createDoc,
+  fmtN,
+  fmtPct,
+  PDF_COLORS
 } from '@app/pages/utils/pdf.ts'
 
 export function exportSepaPdf(
@@ -18,7 +23,9 @@ export function exportSepaPdf(
   const doc = createDoc('l') // landscape
   const pw = doc.internal.pageSize.getWidth()
   const today = new Date()
-  const dateStr = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear()}`
+  const dateStr = `${String(today.getDate()).padStart(2, '0')}/${
+    String(today.getMonth() + 1).padStart(2, '0')
+  }/${today.getFullYear()}`
 
   let y = addHeader(
     doc,
@@ -40,7 +47,11 @@ export function exportSepaPdf(
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(8)
   doc.setTextColor(...PDF_COLORS.text)
-  doc.text(`SEPA Penuh (8/8): ${fullSepa}   |   EPS Akselerasi: ${withAccel}   |   Total Ditampilkan: ${rows.length}`, 10, y)
+  doc.text(
+    `SEPA Penuh (8/8): ${fullSepa}   |   EPS Akselerasi: ${withAccel}   |   Total Ditampilkan: ${rows.length}`,
+    10,
+    y
+  )
   y += 6
 
   // Sector distribution
@@ -55,8 +66,19 @@ export function exportSepaPdf(
 
   // Main table
   const head = [[
-    'Kode', 'Nama', 'Sektor', 'SEPA\nScore', 'Trend\n(dari 8)', 'RS\nRank',
-    'EPS YoY', 'Aksel', 'Q+', 'ROE', 'PER', 'Ret 3m', '% High\n52w'
+    'Kode',
+    'Nama',
+    'Sektor',
+    'SEPA\nScore',
+    'Trend\n(dari 8)',
+    'RS\nRank',
+    'EPS YoY',
+    'Aksel',
+    'Q+',
+    'ROE',
+    'PER',
+    'Ret 3m',
+    '% High\n52w'
   ]]
   const body = rows.map((r) => [
     r.code,
@@ -110,8 +132,11 @@ export function exportSepaPdf(
         // Color SEPA score
         if (col === 3) {
           const n = parseFloat(val)
-          if (n >= 75) data.cell.styles.textColor = PDF_COLORS.up
-          else if (n >= 55) data.cell.styles.textColor = PDF_COLORS.accent
+          if (n >= 75) {
+            data.cell.styles.textColor = PDF_COLORS.up
+          } else if (n >= 55) {
+            data.cell.styles.textColor = PDF_COLORS.accent
+          }
         }
         // Color EPS YoY
         if (col === 6 && val !== '-') {
@@ -132,8 +157,11 @@ export function exportSepaPdf(
         // RS Rank
         if (col === 5) {
           const n = parseInt(val)
-          if (n >= 90) data.cell.styles.textColor = PDF_COLORS.up
-          else if (n >= 70) data.cell.styles.textColor = PDF_COLORS.primary
+          if (n >= 90) {
+            data.cell.styles.textColor = PDF_COLORS.up
+          } else if (n >= 70) {
+            data.cell.styles.textColor = PDF_COLORS.primary
+          }
         }
       }
     }

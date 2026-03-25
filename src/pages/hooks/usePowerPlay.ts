@@ -19,16 +19,30 @@ export function usePowerPlay(setup?: Types.PowerPlaySetupType) {
     setLoading(true)
     setError(null)
     const query: Record<string, string | number> = {}
-    if (setup != null) query.setup = setup
+    if (setup != null) {
+      query.setup = setup
+    }
     const opts = signal ? { signal } : undefined
     Hooks.fetchApi<Types.PowerPlayResponse>('/api/screener/power-play', query, opts)
-      .then((result) => { if (requestIdRef.current === myId) setData(result) })
+      .then((result) => {
+        if (requestIdRef.current === myId) {
+          setData(result)
+        }
+      })
       .catch((err: unknown) => {
-        if (requestIdRef.current !== myId) return
-        if (err != null && typeof err === 'object' && (err as Error).name === 'AbortError') return
+        if (requestIdRef.current !== myId) {
+          return
+        }
+        if (err != null && typeof err === 'object' && (err as Error).name === 'AbortError') {
+          return
+        }
         setError(err instanceof Error ? err.message : String(err))
       })
-      .finally(() => { if (requestIdRef.current === myId) setLoading(false) })
+      .finally(() => {
+        if (requestIdRef.current === myId) {
+          setLoading(false)
+        }
+      })
   }, [setup])
 
   useEffect(() => {

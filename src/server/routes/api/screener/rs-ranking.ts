@@ -14,13 +14,17 @@ import * as Schemas from '@app/server/schemas/index.ts'
 import type * as Types from '@app/server/Types.ts'
 
 function calcMA(prices: number[], period: number): number | null {
-  if (prices.length < period) return null
+  if (prices.length < period) {
+    return null
+  }
   const slice = prices.slice(prices.length - period)
   return slice.reduce((a, b) => a + b, 0) / period
 }
 
 function returnPct(current: number, past: number): number | null {
-  if (past <= 0 || !Number.isFinite(past) || !Number.isFinite(current)) return null
+  if (past <= 0 || !Number.isFinite(past) || !Number.isFinite(current)) {
+    return null
+  }
   return ((current - past) / past) * 100
 }
 
@@ -55,7 +59,9 @@ export async function GET(ctx: Context) {
     const close = row.priceClose != null && Number.isFinite(Number(row.priceClose))
       ? Number(row.priceClose)
       : null
-    if (close == null || close <= 0) continue
+    if (close == null || close <= 0) {
+      continue
+    }
     const high = row.priceHigh != null && Number.isFinite(Number(row.priceHigh))
       ? Number(row.priceHigh)
       : close
@@ -96,7 +102,9 @@ export async function GET(ctx: Context) {
   const rsEntries: RsEntry[] = []
 
   for (const [code, rows] of ohlcByCode.entries()) {
-    if (rows.length < 20) continue
+    if (rows.length < 20) {
+      continue
+    }
     const price = rows[rows.length - 1].close
 
     const r3m = rows.length >= 63
@@ -105,21 +113,31 @@ export async function GET(ctx: Context) {
     const r6m = rows.length >= 126
       ? returnPct(price, rows[rows.length - 126].close)
       : returnPct(price, rows[0].close)
-    const r9m = rows.length >= 189
-      ? returnPct(price, rows[rows.length - 189].close)
-      : null
-    const r12m = rows.length >= 252
-      ? returnPct(price, rows[rows.length - 252].close)
-      : null
+    const r9m = rows.length >= 189 ? returnPct(price, rows[rows.length - 189].close) : null
+    const r12m = rows.length >= 252 ? returnPct(price, rows[rows.length - 252].close) : null
 
     // Weighted RS Score
     let rsScore = 0
     let weightUsed = 0
-    if (r3m != null) { rsScore += r3m * 0.4; weightUsed += 0.4 }
-    if (r6m != null) { rsScore += r6m * 0.2; weightUsed += 0.2 }
-    if (r9m != null) { rsScore += r9m * 0.2; weightUsed += 0.2 }
-    if (r12m != null) { rsScore += r12m * 0.2; weightUsed += 0.2 }
-    if (weightUsed < 0.4) continue // need at least 3m data
+    if (r3m != null) {
+      rsScore += r3m * 0.4
+      weightUsed += 0.4
+    }
+    if (r6m != null) {
+      rsScore += r6m * 0.2
+      weightUsed += 0.2
+    }
+    if (r9m != null) {
+      rsScore += r9m * 0.2
+      weightUsed += 0.2
+    }
+    if (r12m != null) {
+      rsScore += r12m * 0.2
+      weightUsed += 0.2
+    }
+    if (weightUsed < 0.4) {
+      continue // need at least 3m data
+    }
     if (weightUsed < 1) {
       rsScore = rsScore / weightUsed // normalise if partial
     }
@@ -131,11 +149,21 @@ export async function GET(ctx: Context) {
     const ma200 = calcMA(closes, 200)
     let trendCriteriaCount = 0
     if (ma50 != null && ma150 != null) {
-      if (price > ma150) trendCriteriaCount++
-      if (ma200 != null && price > ma200) trendCriteriaCount++
-      if (ma200 != null && ma150 > ma200) trendCriteriaCount++
-      if (ma50 > ma150) trendCriteriaCount++
-      if (price > ma50) trendCriteriaCount++
+      if (price > ma150) {
+        trendCriteriaCount++
+      }
+      if (ma200 != null && price > ma200) {
+        trendCriteriaCount++
+      }
+      if (ma200 != null && ma150 > ma200) {
+        trendCriteriaCount++
+      }
+      if (ma50 > ma150) {
+        trendCriteriaCount++
+      }
+      if (price > ma50) {
+        trendCriteriaCount++
+      }
     }
 
     rsEntries.push({

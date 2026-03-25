@@ -11,13 +11,17 @@ import * as Schemas from '@app/server/schemas/index.ts'
 import type * as Types from '@app/server/Types.ts'
 
 function calcMA(prices: number[], period: number): number | null {
-  if (prices.length < period) return null
+  if (prices.length < period) {
+    return null
+  }
   const slice = prices.slice(prices.length - period)
   return slice.reduce((a, b) => a + b, 0) / period
 }
 
 function returnPct(current: number, past: number): number | null {
-  if (past <= 0 || !Number.isFinite(past) || !Number.isFinite(current)) return null
+  if (past <= 0 || !Number.isFinite(past) || !Number.isFinite(current)) {
+    return null
+  }
   return ((current - past) / past) * 100
 }
 
@@ -29,14 +33,18 @@ function determineStage(
   ma200SlopePct: number | null
 ): { stage: Types.StageNumber; label: string } {
   if (ma200 == null) {
-    if (ma50 != null && price > ma50 && (ma150 == null || ma50 > ma150)) return { stage: 2, label: 'Stage 2: Advancing' }
+    if (ma50 != null && price > ma50 && (ma150 == null || ma50 > ma150)) {
+      return { stage: 2, label: 'Stage 2: Advancing' }
+    }
     return { stage: 1, label: 'Stage 1: Basing' }
   }
   const ma200up = ma200SlopePct != null && ma200SlopePct > 0
   if (ma50 != null && ma150 != null && price > ma50 && ma50 > ma150 && ma150 > ma200 && ma200up) {
     return { stage: 2, label: 'Stage 2: Advancing' }
   }
-  if (price < ma200 && !ma200up) return { stage: 4, label: 'Stage 4: Declining' }
+  if (price < ma200 && !ma200up) {
+    return { stage: 4, label: 'Stage 4: Declining' }
+  }
   if (ma50 != null && (price < ma50 || (ma150 != null && ma150 < ma200))) {
     return { stage: 3, label: 'Stage 3: Topping' }
   }
@@ -71,14 +79,31 @@ export async function GET(ctx: Context) {
     .where(and(gte(Schemas.summary.date, dateStart), lte(Schemas.summary.date, dateRef)))
     .orderBy(asc(Schemas.summary.stockCode), asc(Schemas.summary.date))
 
-  type OhlcEntry = { date: number; close: number; high: number; low: number; volume: number; value: number }
+  type OhlcEntry = {
+    date: number
+    close: number
+    high: number
+    low: number
+    volume: number
+    value: number
+  }
   const ohlcByCode = new Map<string, OhlcEntry[]>()
   for (const row of summaryRows) {
-    const close = row.priceClose != null && Number.isFinite(Number(row.priceClose)) ? Number(row.priceClose) : null
-    if (close == null || close <= 0) continue
-    const high = row.priceHigh != null && Number.isFinite(Number(row.priceHigh)) ? Number(row.priceHigh) : close
-    const low = row.priceLow != null && Number.isFinite(Number(row.priceLow)) ? Number(row.priceLow) : close
-    const volume = row.volume != null && Number.isFinite(Number(row.volume)) ? Number(row.volume) : 0
+    const close = row.priceClose != null && Number.isFinite(Number(row.priceClose))
+      ? Number(row.priceClose)
+      : null
+    if (close == null || close <= 0) {
+      continue
+    }
+    const high = row.priceHigh != null && Number.isFinite(Number(row.priceHigh))
+      ? Number(row.priceHigh)
+      : close
+    const low = row.priceLow != null && Number.isFinite(Number(row.priceLow))
+      ? Number(row.priceLow)
+      : close
+    const volume = row.volume != null && Number.isFinite(Number(row.volume))
+      ? Number(row.volume)
+      : 0
     const value = row.value != null && Number.isFinite(Number(row.value)) ? Number(row.value) : 0
     const list = ohlcByCode.get(row.stockCode) ?? []
     list.push({ date: Number(row.date), close, high, low, volume, value })
@@ -99,18 +124,36 @@ export async function GET(ctx: Context) {
   type RsEntry = { code: string; rsScore: number }
   const rsEntries: RsEntry[] = []
   for (const [code, rows] of ohlcByCode.entries()) {
-    if (rows.length < 20) continue
+    if (rows.length < 20) {
+      continue
+    }
     const price = rows[rows.length - 1].close
-    const r3m = rows.length >= 63 ? returnPct(price, rows[rows.length - 63].close) : returnPct(price, rows[0].close)
-    if (r3m == null) continue
+    const r3m = rows.length >= 63
+      ? returnPct(price, rows[rows.length - 63].close)
+      : returnPct(price, rows[0].close)
+    if (r3m == null) {
+      continue
+    }
     const r6m = rows.length >= 126 ? returnPct(price, rows[rows.length - 126].close) : null
     const r9m = rows.length >= 189 ? returnPct(price, rows[rows.length - 189].close) : null
     const r12m = rows.length >= 252 ? returnPct(price, rows[rows.length - 252].close) : null
-    let rsScore = r3m * 0.4; let w = 0.4
-    if (r6m != null) { rsScore += r6m * 0.2; w += 0.2 }
-    if (r9m != null) { rsScore += r9m * 0.2; w += 0.2 }
-    if (r12m != null) { rsScore += r12m * 0.2; w += 0.2 }
-    if (w < 1) rsScore = rsScore / w
+    let rsScore = r3m * 0.4
+    let w = 0.4
+    if (r6m != null) {
+      rsScore += r6m * 0.2
+      w += 0.2
+    }
+    if (r9m != null) {
+      rsScore += r9m * 0.2
+      w += 0.2
+    }
+    if (r12m != null) {
+      rsScore += r12m * 0.2
+      w += 0.2
+    }
+    if (w < 1) {
+      rsScore = rsScore / w
+    }
     rsEntries.push({ code, rsScore })
   }
   rsEntries.sort((a, b) => a.rsScore - b.rsScore)
@@ -123,13 +166,17 @@ export async function GET(ctx: Context) {
   const results: Types.StageAnalysisRow[] = []
 
   for (const [code, rows] of ohlcByCode.entries()) {
-    if (rows.length < 50) continue
+    if (rows.length < 50) {
+      continue
+    }
     const closes = rows.map((r) => r.close)
     const price = closes[closes.length - 1]
     const ma50 = calcMA(closes, 50)
     const ma150 = calcMA(closes, 150)
     const ma200 = calcMA(closes, 200)
-    if (ma50 == null) continue
+    if (ma50 == null) {
+      continue
+    }
 
     let ma200SlopePct: number | null = null
     if (ma200 != null && closes.length >= 222) {
@@ -142,7 +189,9 @@ export async function GET(ctx: Context) {
 
     const { stage, label: stageLabel } = determineStage(price, ma50, ma150, ma200, ma200SlopePct)
 
-    if (stageFilter != null && stageFilter !== '' && stageFilter !== String(stage)) continue
+    if (stageFilter != null && stageFilter !== '' && stageFilter !== String(stage)) {
+      continue
+    }
 
     const last252 = rows.slice(Math.max(0, rows.length - 252))
     const high52w = Math.max(...last252.map((r) => r.high))
@@ -164,8 +213,12 @@ export async function GET(ctx: Context) {
     ].filter(Boolean).length
 
     const last20 = rows.slice(-20)
-    const avgVolume20d = last20.length > 0 ? last20.reduce((s, r) => s + r.volume, 0) / last20.length : null
-    const avgValue20d = last20.length > 0 ? last20.reduce((s, r) => s + r.value, 0) / last20.length : null
+    const avgVolume20d = last20.length > 0
+      ? last20.reduce((s, r) => s + r.volume, 0) / last20.length
+      : null
+    const avgValue20d = last20.length > 0
+      ? last20.reduce((s, r) => s + r.value, 0) / last20.length
+      : null
 
     const info = screenerMap.get(code)
     results.push({
@@ -190,7 +243,9 @@ export async function GET(ctx: Context) {
 
   // Sort: Stage 2 first, then by RS rank descending
   results.sort((a, b) => {
-    if (a.stage !== b.stage) return a.stage - b.stage
+    if (a.stage !== b.stage) {
+      return a.stage - b.stage
+    }
     return (b.rsRank ?? 0) - (a.rsRank ?? 0)
   })
 

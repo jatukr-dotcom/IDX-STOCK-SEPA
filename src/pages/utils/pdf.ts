@@ -20,30 +20,44 @@ export const PDF_COLORS = {
 }
 
 export function fmtN(v: number | null | undefined, d = 2): string {
-  if (v == null || !Number.isFinite(v)) return '-'
+  if (v == null || !Number.isFinite(v)) {
+    return '-'
+  }
   return v.toFixed(d)
 }
 
 export function fmtPct(v: number | null | undefined, d = 1): string {
-  if (v == null || !Number.isFinite(v)) return '-'
+  if (v == null || !Number.isFinite(v)) {
+    return '-'
+  }
   return `${v >= 0 ? '+' : ''}${v.toFixed(d)}%`
 }
 
 export function fmtDate(dateInt: number): string {
   const s = String(dateInt)
-  if (s.length !== 8) return s
+  if (s.length !== 8) {
+    return s
+  }
   return `${s.slice(6, 8)}/${s.slice(4, 6)}/${s.slice(0, 4)}`
 }
 
 export function colorForPct(v: number | null): [number, number, number] {
-  if (v == null) return PDF_COLORS.muted
-  if (v >= 0) return PDF_COLORS.up
+  if (v == null) {
+    return PDF_COLORS.muted
+  }
+  if (v >= 0) {
+    return PDF_COLORS.up
+  }
   return PDF_COLORS.down
 }
 
 export function colorForSignal(signal: string): [number, number, number] {
-  if (signal === 'accumulation') return PDF_COLORS.up
-  if (signal === 'distribution') return PDF_COLORS.down
+  if (signal === 'accumulation') {
+    return PDF_COLORS.up
+  }
+  if (signal === 'distribution') {
+    return PDF_COLORS.down
+  }
   return PDF_COLORS.muted
 }
 

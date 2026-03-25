@@ -14,12 +14,16 @@ import * as Schemas from '@app/server/schemas/index.ts'
 import type * as Types from '@app/server/Types.ts'
 
 function returnPct(current: number, past: number): number | null {
-  if (past <= 0 || !Number.isFinite(past) || !Number.isFinite(current)) return null
+  if (past <= 0 || !Number.isFinite(past) || !Number.isFinite(current)) {
+    return null
+  }
   return ((current - past) / past) * 100
 }
 
 function calcMA(prices: number[], period: number): number | null {
-  if (prices.length < period) return null
+  if (prices.length < period) {
+    return null
+  }
   const slice = prices.slice(prices.length - period)
   return slice.reduce((a, b) => a + b, 0) / period
 }
@@ -84,10 +88,18 @@ export async function GET(ctx: Context) {
   type OhlcEntry = { date: number; close: number; high: number; low: number }
   const ohlcByCode = new Map<string, OhlcEntry[]>()
   for (const row of summaryRows) {
-    const close = row.priceClose != null && Number.isFinite(Number(row.priceClose)) ? Number(row.priceClose) : null
-    if (close == null || close <= 0) continue
-    const high = row.priceHigh != null && Number.isFinite(Number(row.priceHigh)) ? Number(row.priceHigh) : close
-    const low = row.priceLow != null && Number.isFinite(Number(row.priceLow)) ? Number(row.priceLow) : close
+    const close = row.priceClose != null && Number.isFinite(Number(row.priceClose))
+      ? Number(row.priceClose)
+      : null
+    if (close == null || close <= 0) {
+      continue
+    }
+    const high = row.priceHigh != null && Number.isFinite(Number(row.priceHigh))
+      ? Number(row.priceHigh)
+      : close
+    const low = row.priceLow != null && Number.isFinite(Number(row.priceLow))
+      ? Number(row.priceLow)
+      : close
     const list = ohlcByCode.get(row.stockCode) ?? []
     list.push({ date: Number(row.date), close, high, low })
     ohlcByCode.set(row.stockCode, list)
@@ -99,24 +111,44 @@ export async function GET(ctx: Context) {
     sector: Schemas.screener.sector
   }).from(Schemas.screener)
   const screenerMap = new Map<string, { name: string | null; sector: string | null }>()
-  for (const row of screenerRows) screenerMap.set(row.code, { name: row.name ?? null, sector: row.sector ?? null })
+  for (const row of screenerRows) {
+    screenerMap.set(row.code, { name: row.name ?? null, sector: row.sector ?? null })
+  }
 
   // Compute RS ranks
   type RsEntry = { code: string; rsScore: number }
   const rsEntries: RsEntry[] = []
   for (const [code, rows] of ohlcByCode.entries()) {
-    if (rows.length < 20) continue
+    if (rows.length < 20) {
+      continue
+    }
     const price = rows[rows.length - 1].close
-    const r3m = rows.length >= 63 ? returnPct(price, rows[rows.length - 63].close) : returnPct(price, rows[0].close)
-    if (r3m == null) continue
+    const r3m = rows.length >= 63
+      ? returnPct(price, rows[rows.length - 63].close)
+      : returnPct(price, rows[0].close)
+    if (r3m == null) {
+      continue
+    }
     const r6m = rows.length >= 126 ? returnPct(price, rows[rows.length - 126].close) : null
     const r9m = rows.length >= 189 ? returnPct(price, rows[rows.length - 189].close) : null
     const r12m = rows.length >= 252 ? returnPct(price, rows[rows.length - 252].close) : null
-    let rsScore = r3m * 0.4; let w = 0.4
-    if (r6m != null) { rsScore += r6m * 0.2; w += 0.2 }
-    if (r9m != null) { rsScore += r9m * 0.2; w += 0.2 }
-    if (r12m != null) { rsScore += r12m * 0.2; w += 0.2 }
-    if (w < 1) rsScore = rsScore / w
+    let rsScore = r3m * 0.4
+    let w = 0.4
+    if (r6m != null) {
+      rsScore += r6m * 0.2
+      w += 0.2
+    }
+    if (r9m != null) {
+      rsScore += r9m * 0.2
+      w += 0.2
+    }
+    if (r12m != null) {
+      rsScore += r12m * 0.2
+      w += 0.2
+    }
+    if (w < 1) {
+      rsScore = rsScore / w
+    }
     rsEntries.push({ code, rsScore })
   }
   rsEntries.sort((a, b) => a.rsScore - b.rsScore)
@@ -129,7 +161,9 @@ export async function GET(ctx: Context) {
   const results: Types.RsLineRow[] = []
 
   for (const [code, rows] of ohlcByCode.entries()) {
-    if (rows.length < 50) continue
+    if (rows.length < 50) {
+      continue
+    }
 
     // Build RS Line series: rsLine[i] = stockClose[i] / ihsgClose[i]
     // Normalize: first value = 100
@@ -137,15 +171,22 @@ export async function GET(ctx: Context) {
     let firstRs: number | null = null
     for (const r of rows) {
       const ihsg = ihsgByDate.get(r.date)
-      if (ihsg == null || ihsg <= 0) { rsLineSeries.push(NaN); continue }
+      if (ihsg == null || ihsg <= 0) {
+        rsLineSeries.push(NaN)
+        continue
+      }
       const raw = r.close / ihsg
-      if (firstRs == null) firstRs = raw
+      if (firstRs == null) {
+        firstRs = raw
+      }
       rsLineSeries.push(firstRs > 0 ? (raw / firstRs) * 100 : NaN)
     }
 
     // Filter to valid entries
     const validRs = rsLineSeries.filter((v) => Number.isFinite(v))
-    if (validRs.length < 20) continue
+    if (validRs.length < 20) {
+      continue
+    }
 
     const currentRs = validRs[validRs.length - 1]
 
@@ -153,23 +194,29 @@ export async function GET(ctx: Context) {
     const rs252 = validRs.slice(-252)
     const rsHigh52w = Math.max(...rs252)
 
-    const rsLineNewHigh = currentRs >= rsHigh52w * 0.999  // within 0.1% counts as new high
+    const rsLineNewHigh = currentRs >= rsHigh52w * 0.999 // within 0.1% counts as new high
     const rsLinePctFrom52wHigh = rsHigh52w > 0 ? ((currentRs - rsHigh52w) / rsHigh52w) * 100 : null
 
-    if (onlyNewHigh && !rsLineNewHigh) continue
+    if (onlyNewHigh && !rsLineNewHigh) {
+      continue
+    }
 
     const closes = rows.map((r) => r.close)
     const price = closes[closes.length - 1]
     const ma50 = calcMA(closes, 50)
     const ma150 = calcMA(closes, 150)
     const ma200 = calcMA(closes, 200)
-    if (ma50 == null) continue
+    if (ma50 == null) {
+      continue
+    }
 
     let ma200SlopePct: number | null = null
     if (ma200 != null && closes.length >= 222) {
       const olderCloses = closes.slice(0, closes.length - 22)
       const ma200older = calcMA(olderCloses, 200)
-      if (ma200older != null && ma200older > 0) ma200SlopePct = ((ma200 - ma200older) / ma200older) * 100
+      if (ma200older != null && ma200older > 0) {
+        ma200SlopePct = ((ma200 - ma200older) / ma200older) * 100
+      }
     }
 
     const last252 = rows.slice(Math.max(0, rows.length - 252))
@@ -199,7 +246,9 @@ export async function GET(ctx: Context) {
       price: Utils.round3(price),
       rsLineValue: Math.round(currentRs * 100) / 100,
       rsLineNewHigh,
-      rsLinePctFrom52wHigh: rsLinePctFrom52wHigh != null ? Utils.round3(rsLinePctFrom52wHigh) : null,
+      rsLinePctFrom52wHigh: rsLinePctFrom52wHigh != null
+        ? Utils.round3(rsLinePctFrom52wHigh)
+        : null,
       rsRank,
       pctFrom52wHigh: pctFrom52wHigh != null ? Utils.round3(pctFrom52wHigh) : null,
       trendCriteriaCount
@@ -208,7 +257,9 @@ export async function GET(ctx: Context) {
 
   // Sort: RS Line New High first, then by RS rank descending
   results.sort((a, b) => {
-    if (a.rsLineNewHigh !== b.rsLineNewHigh) return a.rsLineNewHigh ? -1 : 1
+    if (a.rsLineNewHigh !== b.rsLineNewHigh) {
+      return a.rsLineNewHigh ? -1 : 1
+    }
     return (b.rsLinePctFrom52wHigh ?? -999) - (a.rsLinePctFrom52wHigh ?? -999)
   })
 

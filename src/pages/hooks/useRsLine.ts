@@ -20,15 +20,29 @@ export function useRsLine(onlyNewHigh = false) {
     setError(null)
     const opts = signal ? { signal } : undefined
     const query: Record<string, string | number> = {}
-    if (onlyNewHigh) query.onlyNewHigh = '1'
+    if (onlyNewHigh) {
+      query.onlyNewHigh = '1'
+    }
     Hooks.fetchApi<Types.RsLineResponse>('/api/screener/rs-line', query, opts)
-      .then((result) => { if (requestIdRef.current === myId) setData(result) })
+      .then((result) => {
+        if (requestIdRef.current === myId) {
+          setData(result)
+        }
+      })
       .catch((err: unknown) => {
-        if (requestIdRef.current !== myId) return
-        if (err != null && typeof err === 'object' && (err as Error).name === 'AbortError') return
+        if (requestIdRef.current !== myId) {
+          return
+        }
+        if (err != null && typeof err === 'object' && (err as Error).name === 'AbortError') {
+          return
+        }
         setError(err instanceof Error ? err.message : String(err))
       })
-      .finally(() => { if (requestIdRef.current === myId) setLoading(false) })
+      .finally(() => {
+        if (requestIdRef.current === myId) {
+          setLoading(false)
+        }
+      })
   }, [onlyNewHigh])
 
   useEffect(() => {

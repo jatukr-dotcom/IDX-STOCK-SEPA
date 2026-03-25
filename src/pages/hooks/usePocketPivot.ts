@@ -20,13 +20,25 @@ export function usePocketPivot(lookback = 5) {
     setError(null)
     const opts = signal ? { signal } : undefined
     Hooks.fetchApi<Types.PocketPivotResponse>('/api/screener/pocket-pivot', { lookback }, opts)
-      .then((result) => { if (requestIdRef.current === myId) setData(result) })
+      .then((result) => {
+        if (requestIdRef.current === myId) {
+          setData(result)
+        }
+      })
       .catch((err: unknown) => {
-        if (requestIdRef.current !== myId) return
-        if (err != null && typeof err === 'object' && (err as Error).name === 'AbortError') return
+        if (requestIdRef.current !== myId) {
+          return
+        }
+        if (err != null && typeof err === 'object' && (err as Error).name === 'AbortError') {
+          return
+        }
         setError(err instanceof Error ? err.message : String(err))
       })
-      .finally(() => { if (requestIdRef.current === myId) setLoading(false) })
+      .finally(() => {
+        if (requestIdRef.current === myId) {
+          setLoading(false)
+        }
+      })
   }, [lookback])
 
   useEffect(() => {

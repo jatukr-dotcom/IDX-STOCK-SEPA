@@ -2,21 +2,22 @@
  * Copyright (c) 2026 IDX Screener by @NeaByteLab (https://neabyte.com)
  * SPDX-License-Identifier: MIT
  *
- * Open to remote work & consulting.
- * Fullstack developer with a focus on security and experience in trading systems.
+ * Hook for AI Recommendation endpoint
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as Hooks from '@app/pages/hooks/index.ts'
 import type * as Types from '@app/pages/Types.ts'
 
-export interface SepaParams {
-  minTrend?: number
-  minRs?: number
+export interface AiRecommendationParams {
+  mode?: Types.AiRecommendationMode
+  limit?: number
+  minTechScore?: number
+  minFundScore?: number
 }
 
-export function useSepa(params: SepaParams = {}) {
-  const [data, setData] = useState<Types.SepaResponse | null>(null)
+export function useAiRecommendation(params: AiRecommendationParams = {}) {
+  const [data, setData] = useState<Types.AiRecommendationResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const requestIdRef = useRef(0)
@@ -27,15 +28,20 @@ export function useSepa(params: SepaParams = {}) {
       requestIdRef.current = myId
       setLoading(true)
       setError(null)
-      const query: Record<string, string | number> = {}
-      if (params.minTrend != null) {
-        query.minTrend = params.minTrend
+      const query: Record<string, string | number> = {
+        mode: params.mode ?? 'combined'
       }
-      if (params.minRs != null) {
-        query.minRs = params.minRs
+      if (params.limit != null) {
+        query.limit = params.limit
+      }
+      if (params.minTechScore != null) {
+        query.minTechScore = params.minTechScore
+      }
+      if (params.minFundScore != null) {
+        query.minFundScore = params.minFundScore
       }
       const opts = signal ? { signal } : undefined
-      Hooks.fetchApi<Types.SepaResponse>('/api/screener/sepa', query, opts)
+      Hooks.fetchApi<Types.AiRecommendationResponse>('/api/screener/ai-recommendation', query, opts)
         .then((result) => {
           if (requestIdRef.current === myId) {
             setData(result)
@@ -56,7 +62,7 @@ export function useSepa(params: SepaParams = {}) {
           }
         })
     },
-    [params.minTrend, params.minRs]
+    [params.mode, params.limit, params.minTechScore, params.minFundScore]
   )
 
   useEffect(() => {

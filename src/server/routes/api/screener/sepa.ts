@@ -17,7 +17,9 @@ type HistRow = { year: number; quarter: number; eps: number | null; profitAttrOw
 
 function calcQEps(byKey: Map<string, HistRow>, year: number, quarter: number): number | null {
   const row = byKey.get(`${year}_${quarter}`)
-  if (!row || row.profitAttrOwner == null || row.eps == null) return null
+  if (!row || row.profitAttrOwner == null || row.eps == null) {
+    return null
+  }
   let shares: number | null = null
   const q4c = byKey.get(`${year}_4`)
   if (q4c?.profitAttrOwner != null && q4c.eps != null && q4c.eps !== 0) {
@@ -29,7 +31,9 @@ function calcQEps(byKey: Map<string, HistRow>, year: number, quarter: number): n
       shares = q4p.profitAttrOwner / q4p.eps
     }
   }
-  if (shares == null || shares === 0) return null
+  if (shares == null || shares === 0) {
+    return null
+  }
   const prev = quarter > 1 ? byKey.get(`${year}_${quarter - 1}`) : null
   const prevProfit = prev?.profitAttrOwner ?? 0
   return (row.profitAttrOwner - prevProfit) / shares
@@ -42,7 +46,9 @@ function calcEpsScore(histRows: HistRow[]): {
   consecutiveGrowthQ: number
 } {
   const byKey = new Map<string, HistRow>()
-  for (const r of histRows) byKey.set(`${r.year}_${r.quarter}`, r)
+  for (const r of histRows) {
+    byKey.set(`${r.year}_${r.quarter}`, r)
+  }
 
   // Find most recent quarter with data
   let latestYear: number | null = null
@@ -50,7 +56,9 @@ function calcEpsScore(histRows: HistRow[]): {
   outer: for (const y of [2025, 2024, 2023, 2022]) {
     for (const q of [4, 3, 2, 1]) {
       if (byKey.get(`${y}_${q}`)?.profitAttrOwner != null) {
-        latestYear = y; latestQ = q; break outer
+        latestYear = y
+        latestQ = q
+        break outer
       }
     }
   }
@@ -74,40 +82,61 @@ function calcEpsScore(histRows: HistRow[]): {
   if (prevCurEps != null && prevPyEps != null && prevPyEps !== 0) {
     prevGrowthPct = ((prevCurEps - prevPyEps) / Math.abs(prevPyEps)) * 100
   }
-  const acceleration = latestGrowthPct != null && prevGrowthPct != null && latestGrowthPct > prevGrowthPct
+  const acceleration = latestGrowthPct != null && prevGrowthPct != null &&
+    latestGrowthPct > prevGrowthPct
 
   // Count consecutive quarters of positive YoY growth
   let consecutiveGrowthQ = 0
-  let cy = latestYear; let cq = latestQ
+  let cy = latestYear
+  let cq = latestQ
   for (let i = 0; i < 4; i++) {
     const ce = calcQEps(byKey, cy, cq)
     const pe = calcQEps(byKey, cy - 1, cq)
-    if (ce != null && pe != null && ce > pe) consecutiveGrowthQ++
-    else break
-    cq--; if (cq === 0) { cq = 4; cy-- }
+    if (ce != null && pe != null && ce > pe) {
+      consecutiveGrowthQ++
+    } else {
+      break
+    }
+    cq--
+    if (cq === 0) {
+      cq = 4
+      cy--
+    }
   }
 
   // Score (0–15): growth 8pts + acceleration 4pts + streak 3pts
   let score = 0
   if (latestGrowthPct != null) {
-    if (latestGrowthPct >= 25) score += 8
-    else if (latestGrowthPct >= 10) score += 5
-    else if (latestGrowthPct >= 0) score += 2
+    if (latestGrowthPct >= 25) {
+      score += 8
+    } else if (latestGrowthPct >= 10) {
+      score += 5
+    } else if (latestGrowthPct >= 0) {
+      score += 2
+    }
   }
-  if (acceleration) score += 4
-  if (consecutiveGrowthQ >= 2) score += 3
+  if (acceleration) {
+    score += 4
+  }
+  if (consecutiveGrowthQ >= 2) {
+    score += 3
+  }
 
   return { score, latestGrowthPct, acceleration, consecutiveGrowthQ }
 }
 
 function calcMA(prices: number[], period: number): number | null {
-  if (prices.length < period) return null
+  if (prices.length < period) {
+    return null
+  }
   const slice = prices.slice(prices.length - period)
   return slice.reduce((a, b) => a + b, 0) / period
 }
 
 function returnPct(current: number, past: number): number | null {
-  if (past <= 0 || !Number.isFinite(past) || !Number.isFinite(current)) return null
+  if (past <= 0 || !Number.isFinite(past) || !Number.isFinite(current)) {
+    return null
+  }
   return ((current - past) / past) * 100
 }
 
@@ -119,13 +148,21 @@ function determineStage(
   ma200SlopePct: number | null
 ): Types.StageNumber {
   if (ma200 == null) {
-    if (ma50 != null && price > ma50 && (ma150 == null || ma50 > ma150)) return 2
+    if (ma50 != null && price > ma50 && (ma150 == null || ma50 > ma150)) {
+      return 2
+    }
     return 1
   }
   const ma200up = ma200SlopePct != null && ma200SlopePct > 0
-  if (ma50 != null && ma150 != null && price > ma50 && ma50 > ma150 && ma150 > ma200 && ma200up) return 2
-  if (price < ma200 && !ma200up) return 4
-  if (ma50 != null && (price < ma50 || (ma150 != null && ma150 < ma200))) return 3
+  if (ma50 != null && ma150 != null && price > ma50 && ma50 > ma150 && ma150 > ma200 && ma200up) {
+    return 2
+  }
+  if (price < ma200 && !ma200up) {
+    return 4
+  }
+  if (ma50 != null && (price < ma50 || (ma150 != null && ma150 < ma200))) {
+    return 3
+  }
   return 1
 }
 
@@ -166,20 +203,31 @@ export async function GET(ctx: Context) {
     .where(and(gte(Schemas.summary.date, dateStart), lte(Schemas.summary.date, dateRef)))
     .orderBy(asc(Schemas.summary.stockCode), asc(Schemas.summary.date))
 
-  type OhlcEntry = { date: number; close: number; high: number; low: number; volume: number; value: number }
+  type OhlcEntry = {
+    date: number
+    close: number
+    high: number
+    low: number
+    volume: number
+    value: number
+  }
   const ohlcByCode = new Map<string, OhlcEntry[]>()
   for (const row of summaryRows) {
     const close = row.priceClose != null && Number.isFinite(Number(row.priceClose))
       ? Number(row.priceClose)
       : null
-    if (close == null || close <= 0) continue
+    if (close == null || close <= 0) {
+      continue
+    }
     const high = row.priceHigh != null && Number.isFinite(Number(row.priceHigh))
       ? Number(row.priceHigh)
       : close
     const low = row.priceLow != null && Number.isFinite(Number(row.priceLow))
       ? Number(row.priceLow)
       : close
-    const volume = row.volume != null && Number.isFinite(Number(row.volume)) ? Number(row.volume) : 0
+    const volume = row.volume != null && Number.isFinite(Number(row.volume))
+      ? Number(row.volume)
+      : 0
     const value = row.value != null && Number.isFinite(Number(row.value)) ? Number(row.value) : 0
     const list = ohlcByCode.get(row.stockCode) ?? []
     list.push({ date: Number(row.date), close, high, low, volume, value })
@@ -197,7 +245,14 @@ export async function GET(ctx: Context) {
     npm: Schemas.screener.npm
   }).from(Schemas.screener)
 
-  type FundRow = { name: string | null; sector: string | null; per: unknown; roe: unknown; der: unknown; npm: unknown }
+  type FundRow = {
+    name: string | null
+    sector: string | null
+    per: unknown
+    roe: unknown
+    der: unknown
+    npm: unknown
+  }
   const screenerMap = new Map<string, FundRow>()
   for (const row of screenerRows) {
     screenerMap.set(row.code, {
@@ -235,27 +290,36 @@ export async function GET(ctx: Context) {
   type RsEntry = { code: string; rsScore: number }
   const rsEntries: RsEntry[] = []
   for (const [code, rows] of ohlcByCode.entries()) {
-    if (rows.length < 20) continue
+    if (rows.length < 20) {
+      continue
+    }
     const price = rows[rows.length - 1].close
     const r3m = rows.length >= 63
       ? returnPct(price, rows[rows.length - 63].close)
       : returnPct(price, rows[0].close)
-    const r6m = rows.length >= 126
-      ? returnPct(price, rows[rows.length - 126].close)
-      : null
-    const r9m = rows.length >= 189
-      ? returnPct(price, rows[rows.length - 189].close)
-      : null
-    const r12m = rows.length >= 252
-      ? returnPct(price, rows[rows.length - 252].close)
-      : null
-    if (r3m == null) continue
+    const r6m = rows.length >= 126 ? returnPct(price, rows[rows.length - 126].close) : null
+    const r9m = rows.length >= 189 ? returnPct(price, rows[rows.length - 189].close) : null
+    const r12m = rows.length >= 252 ? returnPct(price, rows[rows.length - 252].close) : null
+    if (r3m == null) {
+      continue
+    }
     let rsScore = r3m * 0.4
     let w = 0.4
-    if (r6m != null) { rsScore += r6m * 0.2; w += 0.2 }
-    if (r9m != null) { rsScore += r9m * 0.2; w += 0.2 }
-    if (r12m != null) { rsScore += r12m * 0.2; w += 0.2 }
-    if (w < 1) rsScore = rsScore / w
+    if (r6m != null) {
+      rsScore += r6m * 0.2
+      w += 0.2
+    }
+    if (r9m != null) {
+      rsScore += r9m * 0.2
+      w += 0.2
+    }
+    if (r12m != null) {
+      rsScore += r12m * 0.2
+      w += 0.2
+    }
+    if (w < 1) {
+      rsScore = rsScore / w
+    }
     rsEntries.push({ code, rsScore })
   }
   rsEntries.sort((a, b) => a.rsScore - b.rsScore)
@@ -271,7 +335,9 @@ export async function GET(ctx: Context) {
   const results: Types.SepaCandidateRow[] = []
 
   for (const [code, rows] of ohlcByCode.entries()) {
-    if (rows.length < 50) continue
+    if (rows.length < 50) {
+      continue
+    }
 
     // Liquidity pre-filter: avg volume + avg value over last 20 days
     const last20 = rows.slice(-20)
@@ -281,18 +347,26 @@ export async function GET(ctx: Context) {
     const avgValue20d = last20.length > 0
       ? last20.reduce((s, r) => s + r.value, 0) / last20.length
       : null
-    if (avgVolume20d != null && avgVolume20d < minAvgVolume) continue
-    if (avgValue20d != null && avgValue20d < minAvgValue) continue
+    if (avgVolume20d != null && avgVolume20d < minAvgVolume) {
+      continue
+    }
+    if (avgValue20d != null && avgValue20d < minAvgValue) {
+      continue
+    }
 
     const rsRank = rsRankByCode.get(code) ?? 0
-    if (rsRank < rsThreshold) continue
+    if (rsRank < rsThreshold) {
+      continue
+    }
 
     const closes = rows.map((r) => r.close)
     const price = closes[closes.length - 1]
     const ma50 = calcMA(closes, 50)
     const ma150 = calcMA(closes, 150)
     const ma200 = calcMA(closes, 200)
-    if (ma50 == null || ma150 == null) continue
+    if (ma50 == null || ma150 == null) {
+      continue
+    }
 
     // MA200 trend
     let ma200Trending = false
@@ -325,15 +399,15 @@ export async function GET(ctx: Context) {
       rsRank70: rsRank >= 70
     }
     const trendCriteriaCount = Object.values(criteria).filter(Boolean).length
-    if (trendCriteriaCount < trendThreshold) continue
+    if (trendCriteriaCount < trendThreshold) {
+      continue
+    }
 
     // RS multi-period returns
     const r3m = rows.length >= 63
       ? returnPct(price, rows[rows.length - 63].close)
       : returnPct(price, rows[0].close)
-    const r6m = rows.length >= 126
-      ? returnPct(price, rows[rows.length - 126].close)
-      : null
+    const r6m = rows.length >= 126 ? returnPct(price, rows[rows.length - 126].close) : null
 
     // Fundamentals
     const fund = screenerMap.get(code)
@@ -349,10 +423,14 @@ export async function GET(ctx: Context) {
     // 40% Trend Template | 30% RS Rank | 15% EPS Growth | 15% Fundamental Quality
     const trendScore = (trendCriteriaCount / 8) * 40
     const rsScore30 = (rsRank / 99) * 30
-    const epsScore = epsResult.score  // max 15
+    const epsScore = epsResult.score // max 15
     let fundScore = 0
-    if (roe != null && roe > 0) fundScore += Math.min(roe / 30, 1) * 9  // ROE up to 30% → 9pts
-    if (npm != null && npm > 0) fundScore += Math.min(npm / 20, 1) * 6  // NPM up to 20% → 6pts
+    if (roe != null && roe > 0) {
+      fundScore += Math.min(roe / 30, 1) * 9 // ROE up to 30% → 9pts
+    }
+    if (npm != null && npm > 0) {
+      fundScore += Math.min(npm / 20, 1) * 6 // NPM up to 20% → 6pts
+    }
     const sepaScore = trendScore + rsScore30 + epsScore + fundScore
 
     results.push({
@@ -377,7 +455,9 @@ export async function GET(ctx: Context) {
       roe,
       der,
       npm,
-      epsGrowthPct: epsResult.latestGrowthPct != null ? Utils.round3(epsResult.latestGrowthPct) : null,
+      epsGrowthPct: epsResult.latestGrowthPct != null
+        ? Utils.round3(epsResult.latestGrowthPct)
+        : null,
       epsAcceleration: epsResult.acceleration,
       epsConsecutiveGrowth: epsResult.consecutiveGrowthQ,
       avgVolume20d: avgVolume20d != null ? Math.round(avgVolume20d) : null,

@@ -19,16 +19,30 @@ export function useStageAnalysis(stage?: Types.StageNumber) {
     setLoading(true)
     setError(null)
     const query: Record<string, string | number> = {}
-    if (stage != null) query.stage = stage
+    if (stage != null) {
+      query.stage = stage
+    }
     const opts = signal ? { signal } : undefined
     Hooks.fetchApi<Types.StageAnalysisResponse>('/api/screener/stage-analysis', query, opts)
-      .then((result) => { if (requestIdRef.current === myId) setData(result) })
+      .then((result) => {
+        if (requestIdRef.current === myId) {
+          setData(result)
+        }
+      })
       .catch((err: unknown) => {
-        if (requestIdRef.current !== myId) return
-        if (err != null && typeof err === 'object' && (err as Error).name === 'AbortError') return
+        if (requestIdRef.current !== myId) {
+          return
+        }
+        if (err != null && typeof err === 'object' && (err as Error).name === 'AbortError') {
+          return
+        }
         setError(err instanceof Error ? err.message : String(err))
       })
-      .finally(() => { if (requestIdRef.current === myId) setLoading(false) })
+      .finally(() => {
+        if (requestIdRef.current === myId) {
+          setLoading(false)
+        }
+      })
   }, [stage])
 
   useEffect(() => {

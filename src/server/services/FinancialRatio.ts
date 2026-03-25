@@ -31,8 +31,7 @@ export class FinancialRatio {
       const date = new Date(now.getFullYear(), now.getMonth() - offset, 1)
       const year = date.getFullYear()
       const month = date.getMonth() + 1
-      const url =
-        `${FinancialRatio.baseUrl}?urlName=LINK_FINANCIAL_DATA_RATIO` +
+      const url = `${FinancialRatio.baseUrl}?urlName=LINK_FINANCIAL_DATA_RATIO` +
         `&periodYear=${year}&periodMonth=${month}&periodType=monthly&isPrint=False&cumulative=false`
       const response = await client.get(url)
       if (!response.ok) {

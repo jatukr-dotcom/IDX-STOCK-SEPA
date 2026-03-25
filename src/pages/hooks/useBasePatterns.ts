@@ -19,16 +19,30 @@ export function useBasePatterns(pattern?: Types.BasePatternType) {
     setLoading(true)
     setError(null)
     const query: Record<string, string | number> = {}
-    if (pattern != null) query.pattern = pattern
+    if (pattern != null) {
+      query.pattern = pattern
+    }
     const opts = signal ? { signal } : undefined
     Hooks.fetchApi<Types.BasePatternsResponse>('/api/screener/base-patterns', query, opts)
-      .then((result) => { if (requestIdRef.current === myId) setData(result) })
+      .then((result) => {
+        if (requestIdRef.current === myId) {
+          setData(result)
+        }
+      })
       .catch((err: unknown) => {
-        if (requestIdRef.current !== myId) return
-        if (err != null && typeof err === 'object' && (err as Error).name === 'AbortError') return
+        if (requestIdRef.current !== myId) {
+          return
+        }
+        if (err != null && typeof err === 'object' && (err as Error).name === 'AbortError') {
+          return
+        }
         setError(err instanceof Error ? err.message : String(err))
       })
-      .finally(() => { if (requestIdRef.current === myId) setLoading(false) })
+      .finally(() => {
+        if (requestIdRef.current === myId) {
+          setLoading(false)
+        }
+      })
   }, [pattern])
 
   useEffect(() => {

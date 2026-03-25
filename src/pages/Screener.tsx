@@ -7,7 +7,18 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Activity, BarChart2, BookOpen, Flame, Medal, Rocket, Star, TrendingUp, Zap } from 'lucide-react'
+import {
+  Activity,
+  BarChart2,
+  BookOpen,
+  Brain,
+  Flame,
+  Medal,
+  Rocket,
+  Star,
+  TrendingUp,
+  Zap
+} from 'lucide-react'
 import * as ScreenerComps from '@app/pages/components/screener/index.ts'
 import * as Hooks from '@app/pages/hooks/index.ts'
 import * as Utils from '@app/pages/utils/index.ts'
@@ -41,6 +52,7 @@ export default function Screener() {
   const [detailCode, setDetailCode] = useState<string | null>(null)
   const [mainTab, setMainTab] = useState<Types.MainAnalysisTab>('fundamental')
   const [momentumSubTab, setMomentumSubTab] = useState<Types.MomentumSubTab>('stage')
+  const [aiRecMode, setAiRecMode] = useState<Types.AiRecommendationMode>('combined')
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastSearchForRequestRef = useRef<string>('')
   const { data: generalData } = Hooks.useGeneral()
@@ -131,6 +143,12 @@ export default function Screener() {
     fetchDetail,
     clearDetail
   } = Hooks.useStockDetail()
+  const {
+    data: aiRecData,
+    loading: aiRecLoading,
+    error: aiRecError,
+    refetch: refetchAiRec
+  } = Hooks.useAiRecommendation({ mode: aiRecMode })
 
   const handleParamsChange = useCallback((partial: Partial<Types.CandidatesParams>) => {
     setParams((prevParams: Types.CandidatesParams) => ({ ...prevParams, ...partial, offset: 0 }))
@@ -272,7 +290,9 @@ export default function Screener() {
           </button>
           <button
             type='button'
-            className={`idx-tab idx-tab-inline ${mainTab === 'volumeAnalysis' ? 'idx-tab-active' : ''}`}
+            className={`idx-tab idx-tab-inline ${
+              mainTab === 'volumeAnalysis' ? 'idx-tab-active' : ''
+            }`}
             onClick={() => setMainTab('volumeAnalysis')}
           >
             <Activity size={16} aria-hidden />
@@ -285,6 +305,14 @@ export default function Screener() {
           >
             <Rocket size={16} aria-hidden />
             <span>Momentum Masters</span>
+          </button>
+          <button
+            type='button'
+            className={`idx-tab idx-tab-inline ${mainTab === 'aiRec' ? 'idx-tab-active' : ''}`}
+            onClick={() => setMainTab('aiRec')}
+          >
+            <Brain size={16} aria-hidden />
+            <span>AI Rekomendasi</span>
           </button>
         </div>
         {mainTab === 'fundamental' && (
@@ -399,7 +427,10 @@ export default function Screener() {
         )}
         {mainTab === 'momentum' && (
           <div className='idx-mt-24'>
-            <div className='idx-tabs idx-mb-16' style={{ borderBottom: '1px solid var(--idx-border)', paddingBottom: 8 }}>
+            <div
+              className='idx-tabs idx-mb-16'
+              style={{ borderBottom: '1px solid var(--idx-border)', paddingBottom: 8 }}
+            >
               {([
                 { key: 'stage', label: 'Stage Analysis' },
                 { key: 'pocketPivot', label: 'Pocket Pivot' },
@@ -410,18 +441,42 @@ export default function Screener() {
                 <button
                   key={t.key}
                   type='button'
-                  className={`idx-tab idx-tab-inline ${momentumSubTab === t.key ? 'idx-tab-active' : ''}`}
+                  className={`idx-tab idx-tab-inline ${
+                    momentumSubTab === t.key ? 'idx-tab-active' : ''
+                  }`}
                   onClick={() => setMomentumSubTab(t.key)}
                 >
                   {t.label}
                 </button>
               ))}
             </div>
-            {momentumSubTab === 'stage' && <ScreenerComps.StageAnalysisView onRowClick={handleRowClick} />}
-            {momentumSubTab === 'pocketPivot' && <ScreenerComps.PocketPivotView onRowClick={handleRowClick} />}
-            {momentumSubTab === 'rsLine' && <ScreenerComps.RsLineView onRowClick={handleRowClick} />}
-            {momentumSubTab === 'basePatterns' && <ScreenerComps.BasePatternsView onRowClick={handleRowClick} />}
-            {momentumSubTab === 'powerPlay' && <ScreenerComps.PowerPlayView onRowClick={handleRowClick} />}
+            {momentumSubTab === 'stage' && (
+              <ScreenerComps.StageAnalysisView onRowClick={handleRowClick} />
+            )}
+            {momentumSubTab === 'pocketPivot' && (
+              <ScreenerComps.PocketPivotView onRowClick={handleRowClick} />
+            )}
+            {momentumSubTab === 'rsLine' && (
+              <ScreenerComps.RsLineView onRowClick={handleRowClick} />
+            )}
+            {momentumSubTab === 'basePatterns' && (
+              <ScreenerComps.BasePatternsView onRowClick={handleRowClick} />
+            )}
+            {momentumSubTab === 'powerPlay' && (
+              <ScreenerComps.PowerPlayView onRowClick={handleRowClick} />
+            )}
+          </div>
+        )}
+        {mainTab === 'aiRec' && (
+          <div className='idx-mt-24'>
+            <ScreenerComps.AiRecommendationView
+              data={aiRecData}
+              loading={aiRecLoading}
+              error={aiRecError}
+              onRefetch={refetchAiRec}
+              mode={aiRecMode}
+              onModeChange={setAiRecMode}
+            />
           </div>
         )}
         {mainTab === 'watchlist' && (

@@ -339,6 +339,75 @@ Minervini mensyaratkan EPS growth minimal **25% YoY** selama setidaknya 2 kuarta
 
 ---
 
+### AI Rekomendasi Saham
+
+Fitur AI Rekomendasi menggabungkan **semua sinyal teknikal dan fundamental** menjadi satu skor terpadu, membantu pengguna menemukan kandidat saham terbaik tanpa harus menganalisis setiap tab secara manual. Sistem ini dilengkapi dengan:
+
+1. **Tiga Mode Rekomendasi:**
+   - **Teknikal**: Fokus pada SEPA score, Stage analysis, RS Line, Pocket Pivot, dan pattern recognition
+   - **Fundamental**: Fokus pada EPS growth, ROE, NPM, DER, dan revenue growth
+   - **Kombinasi**: Gabungan 60% teknikal + 40% fundamental (default)
+
+2. **Skor Teknikal (0–100 pts):**
+
+| Komponen | Bobot | Penjelasan |
+|---|---|---|
+| SEPA Score (normalized) | 50% | Tren + RS + EPS + ROE/NPM |
+| Stage 2 Bonus | 20% | Stage 2 → +20 pts, Stage 1 → +10 pts |
+| RS Line New High | 10% | Jika mencetak new high 52w → +10 pts |
+| Pocket Pivot | 10% | Jika terdeteksi dalam 5 hari terakhir → +10 pts |
+| Base Pattern | 6% | HTF=6, Cup-Handle=4, Flat=2 pts |
+| Power Play/Low Cheat | 4% | Power Play=4, Low Cheat=2 pts |
+
+3. **Skor Fundamental (0–100 pts):**
+
+| Komponen | Bobot | Penjelasan |
+|---|---|---|
+| EPS Growth YoY | 25% | ≥25%=25pts, ≥10%=18pts, ≥0%=10pts |
+| EPS Acceleration | 10% | Kuartal ini > kuartal lalu → +10 pts |
+| Consecutive Growth | 5% | ≥3Q berturut → 5pts, 2Q → 3pts, 1Q → 1pt |
+| ROE | 20% | min(roe/25, 1) × 20 — capped di 25% |
+| NPM | 15% | min(npm/20, 1) × 15 — capped di 20% |
+| DER (lower = better) | 10% | ≤0.5=10pts, ≤1.0=7pts, ≤2.0=4pts |
+| Revenue Growth YoY | 10% | ≥15%=10pts, ≥5%=6pts, ≥0%=2pts |
+| PER | 5% | 5–20=5pts, 20–30=3pts, 30–50=1pt |
+
+4. **Filter Gorengan — Mandatory Safety Filter**
+
+Untuk melindungi pengguna dari saham spekulatif (gorengan), sistem secara otomatis menghapus saham dengan kondisi:
+
+| Kriteria | Tindakan |
+|---|---|
+| Notation "X" (mark spekulatif IDX) | Exclude (pengecualian tidak bisa ditolak) |
+| UMA flag aktif (≤30 hari) | Exclude — Unusual Market Activity warning |
+| Market cap < 100B IDR | High risk — exclude (25 pts penalty) |
+| Market cap 100B–500B IDR | Medium risk — 15 pts penalty |
+| Free float ratio < 20% | Thin float risk — dapat di-corner, 15 pts penalty |
+| Volume anomali (>10× 20d avg) | Pump indicator — 10 pts penalty |
+| Tanpa data EPS | Tidak cukup data fundamental — 5 pts penalty |
+
+**Gorengan Score ≥ 60 = otomatis dikecualikan, tidak bisa diubah.**
+
+5. **Claude AI Narrative (Opsional)**
+
+Jika `ANTHROPIC_API_KEY` env var diset, sistem akan:
+- Mengirimkan top 10 rekomendasi ke Claude API
+- Menghasilkan narasi pasar 3–4 paragraf dalam Bahasa Indonesia
+- Mengidentifikasi sektor kuat dan setup individual yang perlu diperhatikan
+- **Cache hasil selama 1 jam** untuk menghindari biaya API berlebihan
+- Menampilkan dengan disclaimer jelas: "Bukan rekomendasi investasi"
+
+6. **Output & Export**
+
+Setiap rekomendasi menampilkan:
+- **Skor keseluruhan** (berkode warna: hijau ≥75, kuning ≥55, abu-abu <55)
+- **Breakdown sinyal**: Stage, RS Rank, EPS Growth, ROE, DER
+- **Daftar alasan terperinci**: semua sinyal yang berkontribusi ke skor (klik baris untuk expand)
+- **Gorengan Score**: transparansi filter keamanan
+- **PDF Export**: landscape A4 dengan tabel lengkap + narasi AI di halaman kedua (jika tersedia)
+
+---
+
 ## Instalasi
 
 **Prasyarat:** [Git](https://git-scm.com/install/windows) dan [Deno](https://docs.deno.com/runtime/getting_started/installation/)

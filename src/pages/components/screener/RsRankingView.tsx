@@ -12,13 +12,19 @@ import * as Utils from '@app/pages/utils/index.ts'
 import type * as Types from '@app/pages/Types.ts'
 
 function rsRankColor(rank: number): string {
-  if (rank >= 90) return 'var(--idx-up)'
-  if (rank >= 70) return 'var(--idx-deep)'
+  if (rank >= 90) {
+    return 'var(--idx-up)'
+  }
+  if (rank >= 70) {
+    return 'var(--idx-deep)'
+  }
   return 'var(--idx-text-muted)'
 }
 
 function pctCell(value: number | null): React.ReactNode {
-  if (value == null) return <span className='idx-p-muted'>-</span>
+  if (value == null) {
+    return <span className='idx-p-muted'>-</span>
+  }
   const cls = value >= 0 ? 'idx-pct-up' : 'idx-pct-down'
   const sign = value >= 0 ? '+' : ''
   return <span className={cls}>{sign}{Utils.Format.formatNum(value, 1)}%</span>
@@ -34,10 +40,16 @@ export default function RsRankingView({
   const [onlyTrending, setOnlyTrending] = useState(false)
 
   const filtered = useMemo(() => {
-    if (!data?.data) return []
+    if (!data?.data) {
+      return []
+    }
     return data.data.filter((r) => {
-      if (r.rsRank < minRank) return false
-      if (onlyTrending && r.trendCriteriaCount < 5) return false
+      if (r.rsRank < minRank) {
+        return false
+      }
+      if (onlyTrending && r.trendCriteriaCount < 5) {
+        return false
+      }
       return true
     })
   }, [data, minRank, onlyTrending])
@@ -59,7 +71,9 @@ export default function RsRankingView({
       </div>
     )
   }
-  if (!data) return null
+  if (!data) {
+    return null
+  }
 
   const top90 = data.data.filter((r) => r.rsRank >= 90).length
 
@@ -73,8 +87,7 @@ export default function RsRankingView({
           </h3>
           <div className='idx-trend-stats'>
             <span className='idx-p-muted'>
-              RS ≥90:{' '}
-              <strong style={{ color: 'var(--idx-up)' }}>{top90}</strong>
+              RS ≥90: <strong style={{ color: 'var(--idx-up)' }}>{top90}</strong>
             </span>
             <span className='idx-p-muted'>Total: {data.totalCount}</span>
           </div>
@@ -133,13 +146,17 @@ export default function RsRankingView({
                       <div className='idx-trend-code'>
                         <span className='idx-table-code-bold'>{row.code}</span>
                         {row.rsRank >= 90 && (
-                          <span className='idx-badge idx-badge-up'>Top 10%</span>
+                          <span className='idx-badge idx-badge-up'>
+                            Top 10%
+                          </span>
                         )}
                       </div>
                       <div style={{ fontSize: 'var(--idx-text-sm)', marginTop: 2 }}>
                         {row.name ?? '-'}
                       </div>
-                      <div style={{ fontSize: 'var(--idx-text-xs)', color: 'var(--idx-text-muted)' }}>
+                      <div
+                        style={{ fontSize: 'var(--idx-text-xs)', color: 'var(--idx-text-muted)' }}
+                      >
                         {row.sector ?? '-'}
                       </div>
                     </td>
@@ -159,10 +176,14 @@ export default function RsRankingView({
                     <td className='idx-table-td-right'>{pctCell(row.return9m)}</td>
                     <td className='idx-table-td-right'>{pctCell(row.return12m)}</td>
                     <td className='idx-table-td-right'>
-                      <span style={{
-                        color: row.trendCriteriaCount >= 5 ? 'var(--idx-up)' : 'var(--idx-text-muted)',
-                        fontWeight: 600
-                      }}>
+                      <span
+                        style={{
+                          color: row.trendCriteriaCount >= 5
+                            ? 'var(--idx-up)'
+                            : 'var(--idx-text-muted)',
+                          fontWeight: 600
+                        }}
+                      >
                         {row.trendCriteriaCount}/5
                       </span>
                     </td>

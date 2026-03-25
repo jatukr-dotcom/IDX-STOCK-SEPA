@@ -692,3 +692,35 @@ export interface PowerPlayResponse {
   totalCount: number
   data: PowerPlayRow[]
 }
+
+export type AiRecommendationMode = 'technical' | 'fundamental' | 'combined'
+
+export interface AiRecommendationRow {
+  code: string
+  name: string | null
+  sector: string | null
+  price: number | null
+  techScore: number
+  fundScore: number
+  combinedScore: number
+  gorenganScore: number
+  stage: StageNumber
+  rsRank: number
+  sepaScore: number
+  epsGrowthPct: number | null
+  roe: number | null
+  der: number | null
+  hasRsLineNewHigh: boolean
+  hasPocketPivot: boolean
+  patternType: BasePatternType
+  setupType: PowerPlaySetupType
+  reasons: string[]
+}
+
+export interface AiRecommendationResponse {
+  date: number
+  mode: AiRecommendationMode
+  totalCount: number
+  data: AiRecommendationRow[]
+  claudeNarrative?: string
+}

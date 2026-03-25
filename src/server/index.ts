@@ -57,6 +57,6 @@ router
     await initDb()
     await runFetchData()
   })
-  .catch(error => {
+  .catch((error) => {
     console.error('[server] Error serving router:', error)
   })

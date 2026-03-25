@@ -14,12 +14,18 @@ import * as Schemas from '@app/server/schemas/index.ts'
 import type * as Types from '@app/server/Types.ts'
 
 function calcMFM(high: number, low: number, close: number): number {
-  if (high === low) return 0
+  if (high === low) {
+    return 0
+  }
   return ((close - low) - (high - close)) / (high - low)
 }
 
-function calcCMF20(rows: { high: number; low: number; close: number; volume: number }[]): number | null {
-  if (rows.length < 20) return null
+function calcCMF20(
+  rows: { high: number; low: number; close: number; volume: number }[]
+): number | null {
+  if (rows.length < 20) {
+    return null
+  }
   const slice = rows.slice(-20)
   let sumMFV = 0
   let sumVol = 0
@@ -27,12 +33,18 @@ function calcCMF20(rows: { high: number; low: number; close: number; volume: num
     sumMFV += calcMFM(r.high, r.low, r.close) * r.volume
     sumVol += r.volume
   }
-  if (sumVol === 0) return null
+  if (sumVol === 0) {
+    return null
+  }
   return sumMFV / sumVol
 }
 
-function calcMFI14(rows: { high: number; low: number; close: number; volume: number }[]): number | null {
-  if (rows.length < 15) return null
+function calcMFI14(
+  rows: { high: number; low: number; close: number; volume: number }[]
+): number | null {
+  if (rows.length < 15) {
+    return null
+  }
   const slice = rows.slice(-15)
   let posFlow = 0
   let negFlow = 0
@@ -40,21 +52,34 @@ function calcMFI14(rows: { high: number; low: number; close: number; volume: num
     const tp = (slice[i].high + slice[i].low + slice[i].close) / 3
     const prevTp = (slice[i - 1].high + slice[i - 1].low + slice[i - 1].close) / 3
     const mf = tp * slice[i].volume
-    if (tp > prevTp) posFlow += mf
-    else negFlow += mf
+    if (tp > prevTp) {
+      posFlow += mf
+    } else {
+      negFlow += mf
+    }
   }
-  if (negFlow === 0) return 100
+  if (negFlow === 0) {
+    return 100
+  }
   return 100 - (100 / (1 + posFlow / negFlow))
 }
 
 function calcOBVTrend(rows: { close: number; volume: number }[]): 'up' | 'down' | 'flat' {
-  if (rows.length < 20) return 'flat'
+  if (rows.length < 20) {
+    return 'flat'
+  }
   let obv = 0
   const obvSeries: number[] = []
   for (let i = 0; i < rows.length; i++) {
-    if (i === 0) { obvSeries.push(0); continue }
-    if (rows[i].close > rows[i - 1].close) obv += rows[i].volume
-    else if (rows[i].close < rows[i - 1].close) obv -= rows[i].volume
+    if (i === 0) {
+      obvSeries.push(0)
+      continue
+    }
+    if (rows[i].close > rows[i - 1].close) {
+      obv += rows[i].volume
+    } else if (rows[i].close < rows[i - 1].close) {
+      obv -= rows[i].volume
+    }
     obvSeries.push(obv)
   }
   const recent = obvSeries.slice(-20)
@@ -62,13 +87,21 @@ function calcOBVTrend(rows: { close: number; volume: number }[]): 'up' | 'down' 
   const last = recent[recent.length - 1]
   const scale = Math.abs(first) || 1
   const pct = (last - first) / scale
-  if (pct > 0.05) return 'up'
-  if (pct < -0.05) return 'down'
+  if (pct > 0.05) {
+    return 'up'
+  }
+  if (pct < -0.05) {
+    return 'down'
+  }
   return 'flat'
 }
 
-function detectVCP(rows: { high: number; low: number; close: number; volume: number }[]): Types.VcpResult {
-  if (rows.length < 60) return { isVcp: false, contractions: 0, volumeDrying: false }
+function detectVCP(
+  rows: { high: number; low: number; close: number; volume: number }[]
+): Types.VcpResult {
+  if (rows.length < 60) {
+    return { isVcp: false, contractions: 0, volumeDrying: false }
+  }
 
   const windows = [
     rows.slice(rows.length - 60, rows.length - 40),
@@ -87,7 +120,9 @@ function detectVCP(rows: { high: number; low: number; close: number; volume: num
 
   let contractions = 0
   for (let i = 1; i < analyzed.length; i++) {
-    if (analyzed[i].range < analyzed[i - 1].range * 0.85) contractions++
+    if (analyzed[i].range < analyzed[i - 1].range * 0.85) {
+      contractions++
+    }
   }
 
   const volumeDrying = analyzed[2].avgVol < analyzed[0].avgVol * 0.75
@@ -133,11 +168,23 @@ export async function GET(ctx: Context) {
     .where(and(gte(Schemas.summary.date, dateStart), lte(Schemas.summary.date, dateRef)))
     .orderBy(asc(Schemas.summary.stockCode), asc(Schemas.summary.date))
 
-  type OhlcvEntry = { date: number; high: number; low: number; close: number; volume: number; foreignBuy: number; foreignSell: number }
+  type OhlcvEntry = {
+    date: number
+    high: number
+    low: number
+    close: number
+    volume: number
+    foreignBuy: number
+    foreignSell: number
+  }
   const byCode = new Map<string, OhlcvEntry[]>()
   for (const r of summaryRows) {
-    const close = r.priceClose != null && Number.isFinite(Number(r.priceClose)) ? Number(r.priceClose) : null
-    if (close == null || close <= 0) continue
+    const close = r.priceClose != null && Number.isFinite(Number(r.priceClose))
+      ? Number(r.priceClose)
+      : null
+    if (close == null || close <= 0) {
+      continue
+    }
     const entry: OhlcvEntry = {
       date: Number(r.date),
       high: r.priceHigh != null ? Number(r.priceHigh) : close,
@@ -167,7 +214,9 @@ export async function GET(ctx: Context) {
   const results: Types.VolumeScreenerRow[] = []
 
   for (const [code, rows] of byCode.entries()) {
-    if (rows.length < 25) continue
+    if (rows.length < 25) {
+      continue
+    }
 
     const cmf = calcCMF20(rows)
     const mfi = calcMFI14(rows)
@@ -185,9 +234,9 @@ export async function GET(ctx: Context) {
     const foreignNetPct = totalVol20 > 0 ? (totalForeignNet / totalVol20) * 100 : null
 
     // 5 Accumulation criteria
-    const c1 = cmf != null && cmf > 0       // CMF positive
+    const c1 = cmf != null && cmf > 0 // CMF positive
     const c2 = mfi != null && mfi >= 40 && mfi <= 80 // MFI healthy
-    const c3 = obvTrend === 'up'              // OBV trending up
+    const c3 = obvTrend === 'up' // OBV trending up
     const c4 = volSurgePct != null && volSurgePct > 20 // Volume surge
     const c5 = foreignNetPct != null && foreignNetPct > 0 // Foreign net buy
     const criteriaCount = [c1, c2, c3, c4, c5].filter(Boolean).length
@@ -198,8 +247,11 @@ export async function GET(ctx: Context) {
     const distC3 = obvTrend === 'down'
     const accumScore = [c1, c3, cmf != null && cmf > 0.05].filter(Boolean).length
     const distScore = [distC1, distC2, distC3].filter(Boolean).length
-    if (accumScore >= 2) signal = 'accumulation'
-    else if (distScore >= 2) signal = 'distribution'
+    if (accumScore >= 2) {
+      signal = 'accumulation'
+    } else if (distScore >= 2) {
+      signal = 'distribution'
+    }
 
     const fund = screenerMap.get(code)
     const currentClose = rows[rows.length - 1].close
@@ -222,8 +274,12 @@ export async function GET(ctx: Context) {
 
   // Sort: VCP first, then by criteriaCount desc, then CMF desc
   results.sort((a, b) => {
-    if (a.vcp.isVcp !== b.vcp.isVcp) return a.vcp.isVcp ? -1 : 1
-    if (b.criteriaCount !== a.criteriaCount) return b.criteriaCount - a.criteriaCount
+    if (a.vcp.isVcp !== b.vcp.isVcp) {
+      return a.vcp.isVcp ? -1 : 1
+    }
+    if (b.criteriaCount !== a.criteriaCount) {
+      return b.criteriaCount - a.criteriaCount
+    }
     const aCmf = a.cmf ?? -99
     const bCmf = b.cmf ?? -99
     return bCmf - aCmf

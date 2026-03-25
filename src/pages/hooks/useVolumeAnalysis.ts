@@ -18,7 +18,11 @@ export function useVolumeAnalysis(code: string | null, months = 3) {
 
   const fetchData = useCallback(
     (signal?: AbortSignal) => {
-      if (!code) { setData(null); setLoading(false); return }
+      if (!code) {
+        setData(null)
+        setLoading(false)
+        return
+      }
       const myId = requestIdRef.current + 1
       requestIdRef.current = myId
       setLoading(true)
@@ -26,15 +30,23 @@ export function useVolumeAnalysis(code: string | null, months = 3) {
       const opts = signal ? { signal } : undefined
       Hooks.fetchApi<Types.VolumeAnalysisResponse>(`/api/${code}/volume-analysis`, { months }, opts)
         .then((result) => {
-          if (requestIdRef.current === myId) setData(result)
+          if (requestIdRef.current === myId) {
+            setData(result)
+          }
         })
         .catch((err: unknown) => {
-          if (requestIdRef.current !== myId) return
-          if (err != null && typeof err === 'object' && (err as Error).name === 'AbortError') return
+          if (requestIdRef.current !== myId) {
+            return
+          }
+          if (err != null && typeof err === 'object' && (err as Error).name === 'AbortError') {
+            return
+          }
           setError(err instanceof Error ? err.message : String(err))
         })
         .finally(() => {
-          if (requestIdRef.current === myId) setLoading(false)
+          if (requestIdRef.current === myId) {
+            setLoading(false)
+          }
         })
     },
     [code, months]
@@ -64,15 +76,23 @@ export function useVolumeScreener() {
     const opts = signal ? { signal } : undefined
     Hooks.fetchApi<Types.VolumeScreenerResponse>('/api/screener/volume-analysis', {}, opts)
       .then((result) => {
-        if (requestIdRef.current === myId) setData(result)
+        if (requestIdRef.current === myId) {
+          setData(result)
+        }
       })
       .catch((err: unknown) => {
-        if (requestIdRef.current !== myId) return
-        if (err != null && typeof err === 'object' && (err as Error).name === 'AbortError') return
+        if (requestIdRef.current !== myId) {
+          return
+        }
+        if (err != null && typeof err === 'object' && (err as Error).name === 'AbortError') {
+          return
+        }
         setError(err instanceof Error ? err.message : String(err))
       })
       .finally(() => {
-        if (requestIdRef.current === myId) setLoading(false)
+        if (requestIdRef.current === myId) {
+          setLoading(false)
+        }
       })
   }, [])
 

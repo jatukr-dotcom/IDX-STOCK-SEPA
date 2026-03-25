@@ -7,7 +7,15 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Activity, BarChart2, BookOpen, FileDown, LineChart as LineChartIcon, TrendingUp, X } from 'lucide-react'
+import {
+  Activity,
+  BarChart2,
+  BookOpen,
+  FileDown,
+  LineChart as LineChartIcon,
+  TrendingUp,
+  X
+} from 'lucide-react'
 import {
   Area,
   AreaChart,
@@ -67,13 +75,19 @@ function buildRsiChartData(rsiData: Types.RsiResponse | null): {
   return { chartData, hasSector }
 }
 
-function calcQuarterlyEps(data: Types.FinancialHistoryRow[], year: number, quarter: number): number | null {
+function calcQuarterlyEps(
+  data: Types.FinancialHistoryRow[],
+  year: number,
+  quarter: number
+): number | null {
   const byKey = new Map<string, Types.FinancialHistoryRow>()
   for (const row of data) {
     byKey.set(`${row.year}_${row.quarter}`, row)
   }
   const row = byKey.get(`${year}_${quarter}`)
-  if (!row || row.profitAttrOwner == null || row.eps == null) return null
+  if (!row || row.profitAttrOwner == null || row.eps == null) {
+    return null
+  }
   // Shares = profitAttrOwner_Q4 / eps_Q4 (year-end basis only, NOT weighted-avg from interim quarters)
   // Try current year Q4 first, then previous year Q4
   let shares: number | null = null
@@ -87,7 +101,9 @@ function calcQuarterlyEps(data: Types.FinancialHistoryRow[], year: number, quart
       shares = q4Prev.profitAttrOwner / q4Prev.eps
     }
   }
-  if (shares == null || shares === 0) return null
+  if (shares == null || shares === 0) {
+    return null
+  }
   const prevRow = quarter > 1 ? byKey.get(`${year}_${quarter - 1}`) : null
   const prevProfit = prevRow?.profitAttrOwner ?? 0
   return (row.profitAttrOwner - prevProfit) / shares
@@ -111,14 +127,21 @@ function EpsHistoryTable({ data }: { data: Types.FinancialHistoryRow[] }) {
         <tbody>
           {years.map((year) => (
             <tr key={year}>
-              <td><strong>{year}</strong></td>
+              <td>
+                <strong>{year}</strong>
+              </td>
               {quarters.map((q) => {
                 const eps = calcQuarterlyEps(data, year, q)
                 return (
                   <td key={q} className='idx-table-td-right'>
                     {eps != null
                       ? (
-                        <span style={{ color: eps >= 0 ? 'var(--idx-up)' : 'var(--idx-down)', fontWeight: 600 }}>
+                        <span
+                          style={{
+                            color: eps >= 0 ? 'var(--idx-up)' : 'var(--idx-down)',
+                            fontWeight: 600
+                          }}
+                        >
                           {Utils.Format.formatNum(eps, 2)}
                         </span>
                       )
@@ -141,7 +164,10 @@ export default function StockDetailModal({
   onClose
 }: Types.StockDetailModalProps) {
   const [activeTab, setActiveTab] = useState<Types.DetailTab>('fundamental')
-  const { data: volumeData, loading: volumeLoading } = Hooks.useVolumeAnalysis(detail?.code ?? null, 3)
+  const { data: volumeData, loading: volumeLoading } = Hooks.useVolumeAnalysis(
+    detail?.code ?? null,
+    3
+  )
   const [foreignPeriodDays, setForeignPeriodDays] = useState<Types.ForeignPeriodDays>(90)
   const closeButtonRef = useRef<HTMLButtonElement>(null)
   const previousActiveRef = useRef<HTMLElement | null>(null)
@@ -160,8 +186,8 @@ export default function StockDetailModal({
     loading: foreignLoading,
     error: foreignError
   } = Hooks.useForeign(detail?.code ?? null, foreignPeriodDays)
-  const { data: financialHistoryData, loading: financialHistoryLoading } =
-    Hooks.useFinancialHistory(detail?.code ?? null)
+  const { data: financialHistoryData, loading: financialHistoryLoading } = Hooks
+    .useFinancialHistory(detail?.code ?? null)
   const chartData = detail?.ohlc?.map((ohlcRow: Types.StockDetailOhlcRow) => ({
     date: Utils.Format.formatDateInt(ohlcRow.date),
     close: ohlcRow.close ?? 0
@@ -218,7 +244,8 @@ export default function StockDetailModal({
                 type='button'
                 className='idx-btn idx-btn-sm idx-btn-icon'
                 title='Download PDF'
-                onClick={() => Utils.exportStockPdf(detail, volumeData ?? null, financialHistoryData ?? null)}
+                onClick={() =>
+                  Utils.exportStockPdf(detail, volumeData ?? null, financialHistoryData ?? null)}
               >
                 <FileDown size={15} aria-hidden />
                 <span>PDF</span>
@@ -263,7 +290,9 @@ export default function StockDetailModal({
                 </button>
                 <button
                   type='button'
-                  className={`idx-tab idx-tab-inline ${activeTab === 'eps' ? 'idx-tab-active' : ''}`}
+                  className={`idx-tab idx-tab-inline ${
+                    activeTab === 'eps' ? 'idx-tab-active' : ''
+                  }`}
                   onClick={() => setActiveTab('eps')}
                 >
                   <BookOpen size={16} aria-hidden />
@@ -271,7 +300,9 @@ export default function StockDetailModal({
                 </button>
                 <button
                   type='button'
-                  className={`idx-tab idx-tab-inline ${activeTab === 'volume' ? 'idx-tab-active' : ''}`}
+                  className={`idx-tab idx-tab-inline ${
+                    activeTab === 'volume' ? 'idx-tab-active' : ''
+                  }`}
                   onClick={() => setActiveTab('volume')}
                 >
                   <Activity size={16} aria-hidden />
@@ -303,11 +334,17 @@ export default function StockDetailModal({
                         </div>
                         <div className='idx-detail-item'>
                           <label>EPS</label>
-                          <span>{detail.eps != null ? Utils.Format.formatNum(detail.eps, 0) : '-'}</span>
+                          <span>
+                            {detail.eps != null ? Utils.Format.formatNum(detail.eps, 0) : '-'}
+                          </span>
                         </div>
                         <div className='idx-detail-item'>
                           <label>Book Value</label>
-                          <span>{detail.bookValue != null ? Utils.Format.formatNum(detail.bookValue, 0) : '-'}</span>
+                          <span>
+                            {detail.bookValue != null
+                              ? Utils.Format.formatNum(detail.bookValue, 0)
+                              : '-'}
+                          </span>
                         </div>
                       </div>
                     </section>
@@ -476,47 +513,96 @@ export default function StockDetailModal({
                   {!financialHistoryLoading && financialHistoryData && (
                     financialHistoryData.data.length > 0
                       ? <EpsHistoryTable data={financialHistoryData.data} />
-                      : <p className='idx-p-muted'>Data EPS historis belum tersedia. Jalankan server untuk mengambil data dari IDX.</p>
+                      : (
+                        <p className='idx-p-muted'>
+                          Data EPS historis belum tersedia. Jalankan server untuk mengambil data
+                          dari IDX.
+                        </p>
+                      )
                   )}
                 </div>
               )}
               {activeTab === 'volume' && (
                 <div>
-                  {volumeLoading && <div className='idx-loading'>Menghitung indikator volume...</div>}
+                  {volumeLoading && (
+                    <div className='idx-loading'>Menghitung indikator volume...</div>
+                  )}
                   {!volumeLoading && volumeData && (
                     <>
                       <div className='idx-vol-modal-summary'>
                         <div className={`idx-vol-modal-signal idx-vol-signal-${volumeData.signal}`}>
-                          {volumeData.signal === 'accumulation' ? 'AKUMULASI' : volumeData.signal === 'distribution' ? 'DISTRIBUSI' : 'NETRAL'}
+                          {volumeData.signal === 'accumulation'
+                            ? 'AKUMULASI'
+                            : volumeData.signal === 'distribution'
+                            ? 'DISTRIBUSI'
+                            : 'NETRAL'}
                         </div>
                         {volumeData.vcp.isVcp && (
                           <div className='idx-vol-modal-vcp'>
-                            VCP — {volumeData.vcp.contractions} kontraksi{volumeData.vcp.volumeDrying ? ', volume menyusut' : ''}
+                            VCP — {volumeData.vcp.contractions}{' '}
+                            kontraksi{volumeData.vcp.volumeDrying ? ', volume menyusut' : ''}
                           </div>
                         )}
                         <div className='idx-vol-modal-metrics'>
                           <div className='idx-vol-modal-metric'>
                             <span className='idx-vol-modal-metric-label'>CMF(20)</span>
-                            <span className={`idx-vol-modal-metric-val ${(volumeData.cmfCurrent ?? 0) >= 0 ? 'idx-color-up' : 'idx-color-down'}`}>
-                              {volumeData.cmfCurrent != null ? ((volumeData.cmfCurrent > 0 ? '+' : '') + Utils.Format.formatNum(volumeData.cmfCurrent, 3)) : '—'}
+                            <span
+                              className={`idx-vol-modal-metric-val ${
+                                (volumeData.cmfCurrent ?? 0) >= 0
+                                  ? 'idx-color-up'
+                                  : 'idx-color-down'
+                              }`}
+                            >
+                              {volumeData.cmfCurrent != null
+                                ? ((volumeData.cmfCurrent > 0 ? '+' : '') +
+                                  Utils.Format.formatNum(volumeData.cmfCurrent, 3))
+                                : '—'}
                             </span>
                           </div>
                           <div className='idx-vol-modal-metric'>
                             <span className='idx-vol-modal-metric-label'>MFI(14)</span>
-                            <span style={{ color: (volumeData.mfiCurrent ?? 50) >= 70 ? 'var(--idx-up)' : (volumeData.mfiCurrent ?? 50) <= 30 ? 'var(--idx-down)' : 'var(--idx-accent)', fontWeight: 600 }}>
-                              {volumeData.mfiCurrent != null ? Utils.Format.formatNum(volumeData.mfiCurrent, 1) : '—'}
+                            <span
+                              style={{
+                                color: (volumeData.mfiCurrent ?? 50) >= 70
+                                  ? 'var(--idx-up)'
+                                  : (volumeData.mfiCurrent ?? 50) <= 30
+                                  ? 'var(--idx-down)'
+                                  : 'var(--idx-accent)',
+                                fontWeight: 600
+                              }}
+                            >
+                              {volumeData.mfiCurrent != null
+                                ? Utils.Format.formatNum(volumeData.mfiCurrent, 1)
+                                : '—'}
                             </span>
                           </div>
                           <div className='idx-vol-modal-metric'>
                             <span className='idx-vol-modal-metric-label'>OBV Tren</span>
-                            <span className={volumeData.obvTrend === 'up' ? 'idx-color-up' : volumeData.obvTrend === 'down' ? 'idx-color-down' : ''}>
-                              {volumeData.obvTrend === 'up' ? '↑ Naik' : volumeData.obvTrend === 'down' ? '↓ Turun' : '— Flat'}
+                            <span
+                              className={volumeData.obvTrend === 'up'
+                                ? 'idx-color-up'
+                                : volumeData.obvTrend === 'down'
+                                ? 'idx-color-down'
+                                : ''}
+                            >
+                              {volumeData.obvTrend === 'up'
+                                ? '↑ Naik'
+                                : volumeData.obvTrend === 'down'
+                                ? '↓ Turun'
+                                : '— Flat'}
                             </span>
                           </div>
                           <div className='idx-vol-modal-metric'>
                             <span className='idx-vol-modal-metric-label'>Vol Surge</span>
-                            <span className={(volumeData.volSurgePct ?? 0) >= 0 ? 'idx-color-up' : 'idx-color-down'}>
-                              {volumeData.volSurgePct != null ? ((volumeData.volSurgePct > 0 ? '+' : '') + Utils.Format.formatNum(volumeData.volSurgePct, 1) + '%') : '—'}
+                            <span
+                              className={(volumeData.volSurgePct ?? 0) >= 0
+                                ? 'idx-color-up'
+                                : 'idx-color-down'}
+                            >
+                              {volumeData.volSurgePct != null
+                                ? ((volumeData.volSurgePct > 0 ? '+' : '') +
+                                  Utils.Format.formatNum(volumeData.volSurgePct, 1) + '%')
+                                : '—'}
                             </span>
                           </div>
                         </div>
@@ -535,26 +621,61 @@ export default function StockDetailModal({
                                   }))}
                                   margin={{ top: 8, right: 8, bottom: 8, left: 8 }}
                                 >
-                                  <XAxis dataKey='date' axisLine={false} tickLine={false} tick={{ fill: 'var(--idx-text-muted)', fontSize: 10 }} />
-                                  <YAxis orientation='right' axisLine={false} tickLine={false} tick={{ fill: 'var(--idx-text-muted)', fontSize: 10 }} tickFormatter={(v) => Utils.Format.formatNum(v, 0)} />
+                                  <XAxis
+                                    dataKey='date'
+                                    axisLine={false}
+                                    tickLine={false}
+                                    tick={{ fill: 'var(--idx-text-muted)', fontSize: 10 }}
+                                  />
+                                  <YAxis
+                                    orientation='right'
+                                    axisLine={false}
+                                    tickLine={false}
+                                    tick={{ fill: 'var(--idx-text-muted)', fontSize: 10 }}
+                                    tickFormatter={(v) => Utils.Format.formatNum(v, 0)}
+                                  />
                                   <Tooltip
                                     content={({ active, payload, label }) => {
-                                      if (!active || !payload?.length || !label) return null
+                                      if (!active || !payload?.length || !label) {
+                                        return null
+                                      }
                                       return (
                                         <div className='idx-tooltip'>
                                           <div className='idx-tooltip-label'>{label}</div>
                                           {payload.map((p) => (
-                                            <div key={p.dataKey as string} className='idx-tooltip-row'>
+                                            <div
+                                              key={p.dataKey as string}
+                                              className='idx-tooltip-row'
+                                            >
                                               <span style={{ color: p.color }}>{p.name}</span>
-                                              <span>{Utils.Format.formatNum(p.value as number, 0)}</span>
+                                              <span>
+                                                {Utils.Format.formatNum(p.value as number, 0)}
+                                              </span>
                                             </div>
                                           ))}
                                         </div>
                                       )
                                     }}
                                   />
-                                  <Line type='monotone' dataKey='adLine' name='A/D Line' stroke='var(--idx-primary)' strokeWidth={2} dot={false} isAnimationActive={false} />
-                                  <Line type='monotone' dataKey='obv' name='OBV' stroke='var(--idx-accent)' strokeWidth={1.5} strokeDasharray='4 2' dot={false} isAnimationActive={false} />
+                                  <Line
+                                    type='monotone'
+                                    dataKey='adLine'
+                                    name='A/D Line'
+                                    stroke='var(--idx-primary)'
+                                    strokeWidth={2}
+                                    dot={false}
+                                    isAnimationActive={false}
+                                  />
+                                  <Line
+                                    type='monotone'
+                                    dataKey='obv'
+                                    name='OBV'
+                                    stroke='var(--idx-accent)'
+                                    strokeWidth={1.5}
+                                    strokeDasharray='4 2'
+                                    dot={false}
+                                    isAnimationActive={false}
+                                  />
                                 </LineChart>
                               </ResponsiveContainer>
                             </div>
@@ -564,30 +685,64 @@ export default function StockDetailModal({
                             <div className='idx-chart-container'>
                               <ResponsiveContainer width='100%' height='100%'>
                                 <BarChart
-                                  data={volumeData.series.map((r) => ({ date: Utils.Format.formatDateInt(r.date), cmf: r.cmf ?? 0 }))}
+                                  data={volumeData.series.map((r) => ({
+                                    date: Utils.Format.formatDateInt(r.date),
+                                    cmf: r.cmf ?? 0
+                                  }))}
                                   margin={{ top: 8, right: 8, bottom: 8, left: 8 }}
                                 >
-                                  <XAxis dataKey='date' axisLine={false} tickLine={false} tick={{ fill: 'var(--idx-text-muted)', fontSize: 10 }} />
-                                  <YAxis orientation='right' axisLine={false} tickLine={false} tick={{ fill: 'var(--idx-text-muted)', fontSize: 10 }} tickFormatter={(v) => Utils.Format.formatNum(v, 2)} />
+                                  <XAxis
+                                    dataKey='date'
+                                    axisLine={false}
+                                    tickLine={false}
+                                    tick={{ fill: 'var(--idx-text-muted)', fontSize: 10 }}
+                                  />
+                                  <YAxis
+                                    orientation='right'
+                                    axisLine={false}
+                                    tickLine={false}
+                                    tick={{ fill: 'var(--idx-text-muted)', fontSize: 10 }}
+                                    tickFormatter={(v) => Utils.Format.formatNum(v, 2)}
+                                  />
                                   <ReferenceLine y={0} stroke='var(--idx-border)' />
                                   <Tooltip
                                     content={({ active, payload, label }) => {
-                                      if (!active || !payload?.length || !label) return null
+                                      if (!active || !payload?.length || !label) {
+                                        return null
+                                      }
                                       const val = payload[0]?.value as number
                                       return (
                                         <div className='idx-tooltip'>
                                           <div className='idx-tooltip-label'>{label}</div>
                                           <div className='idx-tooltip-row'>
                                             <span>CMF</span>
-                                            <span style={{ color: val >= 0 ? 'var(--idx-up)' : 'var(--idx-down)' }}>{Utils.Format.formatNum(val, 3)}</span>
+                                            <span
+                                              style={{
+                                                color: val >= 0
+                                                  ? 'var(--idx-up)'
+                                                  : 'var(--idx-down)'
+                                              }}
+                                            >
+                                              {Utils.Format.formatNum(val, 3)}
+                                            </span>
                                           </div>
                                         </div>
                                       )
                                     }}
                                   />
-                                  <Bar dataKey='cmf' name='CMF' isAnimationActive={false} radius={[2, 2, 0, 0]}>
+                                  <Bar
+                                    dataKey='cmf'
+                                    name='CMF'
+                                    isAnimationActive={false}
+                                    radius={[2, 2, 0, 0]}
+                                  >
                                     {volumeData.series.map((r) => (
-                                      <Cell key={r.date} fill={(r.cmf ?? 0) >= 0 ? 'var(--idx-up)' : 'var(--idx-down)'} />
+                                      <Cell
+                                        key={r.date}
+                                        fill={(r.cmf ?? 0) >= 0
+                                          ? 'var(--idx-up)'
+                                          : 'var(--idx-down)'}
+                                      />
                                     ))}
                                   </Bar>
                                 </BarChart>
@@ -599,28 +754,68 @@ export default function StockDetailModal({
                             <div className='idx-chart-container'>
                               <ResponsiveContainer width='100%' height='100%'>
                                 <LineChart
-                                  data={volumeData.series.map((r) => ({ date: Utils.Format.formatDateInt(r.date), mfi: r.mfi ?? null }))}
+                                  data={volumeData.series.map((r) => ({
+                                    date: Utils.Format.formatDateInt(r.date),
+                                    mfi: r.mfi ?? null
+                                  }))}
                                   margin={{ top: 8, right: 8, bottom: 8, left: 8 }}
                                 >
-                                  <XAxis dataKey='date' axisLine={false} tickLine={false} tick={{ fill: 'var(--idx-text-muted)', fontSize: 10 }} />
-                                  <YAxis orientation='right' domain={[0, 100]} axisLine={false} tickLine={false} tick={{ fill: 'var(--idx-text-muted)', fontSize: 10 }} />
-                                  <ReferenceLine y={70} stroke='var(--idx-down)' strokeDasharray='3 3' label={{ value: 'OB', fill: 'var(--idx-down)', fontSize: 10 }} />
-                                  <ReferenceLine y={30} stroke='var(--idx-up)' strokeDasharray='3 3' label={{ value: 'OS', fill: 'var(--idx-up)', fontSize: 10 }} />
+                                  <XAxis
+                                    dataKey='date'
+                                    axisLine={false}
+                                    tickLine={false}
+                                    tick={{ fill: 'var(--idx-text-muted)', fontSize: 10 }}
+                                  />
+                                  <YAxis
+                                    orientation='right'
+                                    domain={[0, 100]}
+                                    axisLine={false}
+                                    tickLine={false}
+                                    tick={{ fill: 'var(--idx-text-muted)', fontSize: 10 }}
+                                  />
+                                  <ReferenceLine
+                                    y={70}
+                                    stroke='var(--idx-down)'
+                                    strokeDasharray='3 3'
+                                    label={{ value: 'OB', fill: 'var(--idx-down)', fontSize: 10 }}
+                                  />
+                                  <ReferenceLine
+                                    y={30}
+                                    stroke='var(--idx-up)'
+                                    strokeDasharray='3 3'
+                                    label={{ value: 'OS', fill: 'var(--idx-up)', fontSize: 10 }}
+                                  />
                                   <Tooltip
                                     content={({ active, payload, label }) => {
-                                      if (!active || !payload?.length || !label) return null
+                                      if (!active || !payload?.length || !label) {
+                                        return null
+                                      }
                                       return (
                                         <div className='idx-tooltip'>
                                           <div className='idx-tooltip-label'>{label}</div>
                                           <div className='idx-tooltip-row'>
                                             <span>MFI</span>
-                                            <span>{Utils.Format.formatNum(payload[0]?.value as number, 1)}</span>
+                                            <span>
+                                              {Utils.Format.formatNum(
+                                                payload[0]?.value as number,
+                                                1
+                                              )}
+                                            </span>
                                           </div>
                                         </div>
                                       )
                                     }}
                                   />
-                                  <Line type='monotone' dataKey='mfi' name='MFI' stroke='var(--idx-accent)' strokeWidth={2} dot={false} isAnimationActive={false} connectNulls />
+                                  <Line
+                                    type='monotone'
+                                    dataKey='mfi'
+                                    name='MFI'
+                                    stroke='var(--idx-accent)'
+                                    strokeWidth={2}
+                                    dot={false}
+                                    isAnimationActive={false}
+                                    connectNulls
+                                  />
                                 </LineChart>
                               </ResponsiveContainer>
                             </div>

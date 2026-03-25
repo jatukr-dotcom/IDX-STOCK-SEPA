@@ -14,12 +14,19 @@ import * as Schemas from '@app/server/schemas/index.ts'
 import type * as Types from '@app/server/Types.ts'
 
 function calcMFM(high: number, low: number, close: number): number {
-  if (high === low) return 0
+  if (high === low) {
+    return 0
+  }
   return ((close - low) - (high - close)) / (high - low)
 }
 
-function calcCMF(rows: { high: number; low: number; close: number; volume: number }[], period: number): number | null {
-  if (rows.length < period) return null
+function calcCMF(
+  rows: { high: number; low: number; close: number; volume: number }[],
+  period: number
+): number | null {
+  if (rows.length < period) {
+    return null
+  }
   const slice = rows.slice(rows.length - period)
   let sumMFV = 0
   let sumVol = 0
@@ -28,12 +35,19 @@ function calcCMF(rows: { high: number; low: number; close: number; volume: numbe
     sumMFV += mfm * r.volume
     sumVol += r.volume
   }
-  if (sumVol === 0) return null
+  if (sumVol === 0) {
+    return null
+  }
   return sumMFV / sumVol
 }
 
-function calcMFI(rows: { high: number; low: number; close: number; volume: number }[], period: number): number | null {
-  if (rows.length < period + 1) return null
+function calcMFI(
+  rows: { high: number; low: number; close: number; volume: number }[],
+  period: number
+): number | null {
+  if (rows.length < period + 1) {
+    return null
+  }
   const slice = rows.slice(rows.length - period - 1)
   let posFlow = 0
   let negFlow = 0
@@ -41,10 +55,15 @@ function calcMFI(rows: { high: number; low: number; close: number; volume: numbe
     const tp = (slice[i].high + slice[i].low + slice[i].close) / 3
     const prevTp = (slice[i - 1].high + slice[i - 1].low + slice[i - 1].close) / 3
     const mf = tp * slice[i].volume
-    if (tp > prevTp) posFlow += mf
-    else negFlow += mf
+    if (tp > prevTp) {
+      posFlow += mf
+    } else {
+      negFlow += mf
+    }
   }
-  if (negFlow === 0) return 100
+  if (negFlow === 0) {
+    return 100
+  }
   const ratio = posFlow / negFlow
   return 100 - (100 / (1 + ratio))
 }
@@ -53,30 +72,46 @@ function calcOBVSeries(rows: { close: number; volume: number }[]): number[] {
   const result: number[] = []
   let obv = 0
   for (let i = 0; i < rows.length; i++) {
-    if (i === 0) { result.push(0); continue }
-    if (rows[i].close > rows[i - 1].close) obv += rows[i].volume
-    else if (rows[i].close < rows[i - 1].close) obv -= rows[i].volume
+    if (i === 0) {
+      result.push(0)
+      continue
+    }
+    if (rows[i].close > rows[i - 1].close) {
+      obv += rows[i].volume
+    } else if (rows[i].close < rows[i - 1].close) {
+      obv -= rows[i].volume
+    }
     result.push(obv)
   }
   return result
 }
 
 function calcOBVTrend(obvSeries: number[]): 'up' | 'down' | 'flat' {
-  if (obvSeries.length < 20) return 'flat'
+  if (obvSeries.length < 20) {
+    return 'flat'
+  }
   const recent = obvSeries.slice(-20)
   const first = recent[0]
   const last = recent[recent.length - 1]
   const diff = last - first
   const scale = Math.abs(first) || 1
   const pct = diff / scale
-  if (pct > 0.05) return 'up'
-  if (pct < -0.05) return 'down'
+  if (pct > 0.05) {
+    return 'up'
+  }
+  if (pct < -0.05) {
+    return 'down'
+  }
   return 'flat'
 }
 
-function detectVCP(rows: { high: number; low: number; close: number; volume: number }[]): Types.VcpResult {
+function detectVCP(
+  rows: { high: number; low: number; close: number; volume: number }[]
+): Types.VcpResult {
   // Need at least 60 days for 3 contraction windows
-  if (rows.length < 60) return { isVcp: false, contractions: 0, volumeDrying: false }
+  if (rows.length < 60) {
+    return { isVcp: false, contractions: 0, volumeDrying: false }
+  }
 
   // Divide last 60 trading days into 3 windows of 20
   const windows = [
@@ -100,7 +135,9 @@ function detectVCP(rows: { high: number; low: number; close: number; volume: num
   // Check each window is tighter than previous (contraction)
   let contractions = 0
   for (let i = 1; i < analyzed.length; i++) {
-    if (analyzed[i].range < analyzed[i - 1].range * 0.85) contractions++
+    if (analyzed[i].range < analyzed[i - 1].range * 0.85) {
+      contractions++
+    }
   }
 
   // Volume drying up: last window avg vol < first window avg vol
@@ -162,11 +199,21 @@ export async function GET(ctx: Context) {
     )
     .orderBy(asc(Schemas.summary.date))
 
-  type OhlcvEntry = { date: number; high: number; low: number; close: number; volume: number; foreignBuy: number; foreignSell: number }
+  type OhlcvEntry = {
+    date: number
+    high: number
+    low: number
+    close: number
+    volume: number
+    foreignBuy: number
+    foreignSell: number
+  }
   const clean: OhlcvEntry[] = []
   for (const r of rows) {
     const close = r.close != null && Number.isFinite(Number(r.close)) ? Number(r.close) : null
-    if (close == null || close <= 0) continue
+    if (close == null || close <= 0) {
+      continue
+    }
     clean.push({
       date: Number(r.date),
       high: r.high != null && Number.isFinite(Number(r.high)) ? Number(r.high) : close,
@@ -196,20 +243,18 @@ export async function GET(ctx: Context) {
     const mfm = calcMFM(r.high, r.low, r.close)
     cumulativeAdl += mfm * r.volume
     // Net foreign
-    cumulativeNetForeign += (r.foreignBuy - r.foreignSell)
+    cumulativeNetForeign += r.foreignBuy - r.foreignSell
 
     // CMF(20): rolling 20-day
-    const cmf20 = i >= 19
-      ? calcCMF(clean.slice(i - 19, i + 1), 20)
-      : null
+    const cmf20 = i >= 19 ? calcCMF(clean.slice(i - 19, i + 1), 20) : null
 
     // MFI(14): rolling 14-day
-    const mfi14 = i >= 14
-      ? calcMFI(clean.slice(i - 14, i + 1), 14)
-      : null
+    const mfi14 = i >= 14 ? calcMFI(clean.slice(i - 14, i + 1), 14) : null
 
     // Only include in display range
-    if (r.date < dateStartDisplay) continue
+    if (r.date < dateStartDisplay) {
+      continue
+    }
 
     series.push({
       date: r.date,
@@ -245,8 +290,11 @@ export async function GET(ctx: Context) {
     mfiCurrent != null && mfiCurrent < 35,
     obvTrend === 'down'
   ].filter(Boolean).length
-  if (accumScore >= 2) signal = 'accumulation'
-  else if (distScore >= 2) signal = 'distribution'
+  if (accumScore >= 2) {
+    signal = 'accumulation'
+  } else if (distScore >= 2) {
+    signal = 'distribution'
+  }
 
   const response: Types.VolumeAnalysisResponse = {
     code: code.trim().toUpperCase(),

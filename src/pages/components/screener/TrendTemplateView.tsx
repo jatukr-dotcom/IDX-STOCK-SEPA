@@ -23,8 +23,12 @@ const CRITERIA_LABELS: Record<keyof Types.TrendTemplateCriteria, string> = {
 }
 
 function criteriaCountColor(count: number): string {
-  if (count === 8) return 'var(--idx-up)'
-  if (count >= 6) return 'var(--idx-deep)'
+  if (count === 8) {
+    return 'var(--idx-up)'
+  }
+  if (count >= 6) {
+    return 'var(--idx-deep)'
+  }
   return 'var(--idx-text-muted)'
 }
 
@@ -88,14 +92,10 @@ function TrendRow({ row }: { row: Types.TrendTemplateRow }) {
           {row.ma200 != null ? Utils.Format.formatNum(row.ma200) : '-'}
         </td>
         <td className='idx-table-td-right'>
-          {row.pctFrom52wLow != null
-            ? `+${Utils.Format.formatNum(row.pctFrom52wLow, 1)}%`
-            : '-'}
+          {row.pctFrom52wLow != null ? `+${Utils.Format.formatNum(row.pctFrom52wLow, 1)}%` : '-'}
         </td>
         <td className='idx-table-td-right'>
-          {row.pctFrom52wHigh != null
-            ? `${Utils.Format.formatNum(row.pctFrom52wHigh, 1)}%`
-            : '-'}
+          {row.pctFrom52wHigh != null ? `${Utils.Format.formatNum(row.pctFrom52wHigh, 1)}%` : '-'}
         </td>
         <td className='idx-table-td-right'>
           {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -121,7 +121,9 @@ export default function TrendTemplateView({
   const [minCriteria, setMinCriteria] = useState(6)
 
   const filtered = useMemo(() => {
-    if (!data?.data) return []
+    if (!data?.data) {
+      return []
+    }
     return data.data.filter((r) => r.criteriaCount >= minCriteria)
   }, [data, minCriteria])
 
@@ -158,8 +160,7 @@ export default function TrendTemplateView({
           </h3>
           <div className='idx-trend-stats'>
             <span className='idx-p-muted'>
-              Lolos 8/8:{' '}
-              <strong style={{ color: 'var(--idx-up)' }}>{passAll}</strong>
+              Lolos 8/8: <strong style={{ color: 'var(--idx-up)' }}>{passAll}</strong>
             </span>
             <span className='idx-p-muted'>Total: {data.totalCount}</span>
           </div>
@@ -205,18 +206,15 @@ export default function TrendTemplateView({
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((row) => (
-                  <TrendRow key={row.code} row={row} />
-                ))}
+                {filtered.map((row) => <TrendRow key={row.code} row={row} />)}
               </tbody>
             </table>
           </div>
         )}
       <div className='idx-px-24 idx-py-12 idx-p-muted idx-text-xs'>
-        Kriteria: (1) Harga &gt; MA150 &amp; MA200 · (2) MA150 &gt; MA200 ·
-        (3) MA200 naik 1 bulan · (4) MA50 &gt; MA150 &amp; MA200 · (5) Harga &gt; MA50 ·
-        (6) Harga ≥30% di atas Low 52w · (7) Dalam 25% dari High 52w · (8) RS Rank ≥70.
-        Klik baris untuk detail kriteria.
+        Kriteria: (1) Harga &gt; MA150 &amp; MA200 · (2) MA150 &gt; MA200 · (3) MA200 naik 1 bulan ·
+        (4) MA50 &gt; MA150 &amp; MA200 · (5) Harga &gt; MA50 · (6) Harga ≥30% di atas Low 52w · (7)
+        Dalam 25% dari High 52w · (8) RS Rank ≥70. Klik baris untuk detail kriteria.
       </div>
     </div>
   )

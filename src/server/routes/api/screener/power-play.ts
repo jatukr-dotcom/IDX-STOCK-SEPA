@@ -14,13 +14,17 @@ import * as Schemas from '@app/server/schemas/index.ts'
 import type * as Types from '@app/server/Types.ts'
 
 function calcMA(prices: number[], period: number): number | null {
-  if (prices.length < period) return null
+  if (prices.length < period) {
+    return null
+  }
   const slice = prices.slice(prices.length - period)
   return slice.reduce((a, b) => a + b, 0) / period
 }
 
 function returnPct(current: number, past: number): number | null {
-  if (past <= 0 || !Number.isFinite(past) || !Number.isFinite(current)) return null
+  if (past <= 0 || !Number.isFinite(past) || !Number.isFinite(current)) {
+    return null
+  }
   return ((current - past) / past) * 100
 }
 
@@ -32,13 +36,21 @@ function determineStage(
   ma200SlopePct: number | null
 ): Types.StageNumber {
   if (ma200 == null) {
-    if (ma50 != null && price > ma50 && (ma150 == null || ma50 > ma150)) return 2
+    if (ma50 != null && price > ma50 && (ma150 == null || ma50 > ma150)) {
+      return 2
+    }
     return 1
   }
   const ma200up = ma200SlopePct != null && ma200SlopePct > 0
-  if (ma50 != null && ma150 != null && price > ma50 && ma50 > ma150 && ma150 > ma200 && ma200up) return 2
-  if (price < ma200 && !ma200up) return 4
-  if (ma50 != null && (price < ma50 || (ma150 != null && ma150 < ma200))) return 3
+  if (ma50 != null && ma150 != null && price > ma50 && ma50 > ma150 && ma150 > ma200 && ma200up) {
+    return 2
+  }
+  if (price < ma200 && !ma200up) {
+    return 4
+  }
+  if (ma50 != null && (price < ma50 || (ma150 != null && ma150 < ma200))) {
+    return 3
+  }
   return 1
 }
 
@@ -53,26 +65,42 @@ interface SetupResult {
 }
 
 function detectSetup(rows: OhlcEntry[]): SetupResult {
-  const none: SetupResult = { setupType: 'none', tightRangePct: null, consolidationDays: 0, volumeDryUpPct: null, nearBreakout: false }
-  if (rows.length < 30) return none
+  const none: SetupResult = {
+    setupType: 'none',
+    tightRangePct: null,
+    consolidationDays: 0,
+    volumeDryUpPct: null,
+    nearBreakout: false
+  }
+  if (rows.length < 30) {
+    return none
+  }
 
   // Prior 20-day avg volume (before the consolidation window)
   function avgVol(slice: OhlcEntry[]): number {
-    if (slice.length === 0) return 0
+    if (slice.length === 0) {
+      return 0
+    }
     return slice.reduce((s, r) => s + r.volume, 0) / slice.length
   }
 
   // Try Power Play (3-5 days, range < 3%)
   for (let window = 3; window <= 5; window++) {
-    if (rows.length < window + 20) continue
+    if (rows.length < window + 20) {
+      continue
+    }
     const recent = rows.slice(-window)
     const prior = rows.slice(-(window + 20), -window)
     const wHigh = Math.max(...recent.map((r) => r.high))
     const wLow = Math.min(...recent.map((r) => r.low))
     const mid = (wHigh + wLow) / 2
-    if (mid <= 0) continue
+    if (mid <= 0) {
+      continue
+    }
     const rangePct = ((wHigh - wLow) / mid) * 100
-    if (rangePct > 3) continue
+    if (rangePct > 3) {
+      continue
+    }
 
     const avgPriorVol = avgVol(prior)
     const avgRecentVol = avgVol(recent)
@@ -92,19 +120,27 @@ function detectSetup(rows: OhlcEntry[]): SetupResult {
 
   // Try Low Cheat (5-10 days, range < 5%, price near base low)
   for (let window = 5; window <= 10; window++) {
-    if (rows.length < window + 20) continue
+    if (rows.length < window + 20) {
+      continue
+    }
     const recent = rows.slice(-window)
     const prior = rows.slice(-(window + 20), -window)
     const wHigh = Math.max(...recent.map((r) => r.high))
     const wLow = Math.min(...recent.map((r) => r.low))
     const mid = (wHigh + wLow) / 2
-    if (mid <= 0) continue
+    if (mid <= 0) {
+      continue
+    }
     const rangePct = ((wHigh - wLow) / mid) * 100
-    if (rangePct > 5) continue
+    if (rangePct > 5) {
+      continue
+    }
 
     const currentPrice = rows[rows.length - 1].close
     const pctAboveLow = wLow > 0 ? ((currentPrice - wLow) / wLow) * 100 : Infinity
-    if (pctAboveLow > 3) continue  // must be near base low
+    if (pctAboveLow > 3) {
+      continue // must be near base low
+    }
 
     const avgPriorVol = avgVol(prior)
     const avgRecentVol = avgVol(recent)
@@ -151,11 +187,21 @@ export async function GET(ctx: Context) {
 
   const ohlcByCode = new Map<string, OhlcEntry[]>()
   for (const row of summaryRows) {
-    const close = row.priceClose != null && Number.isFinite(Number(row.priceClose)) ? Number(row.priceClose) : null
-    if (close == null || close <= 0) continue
-    const high = row.priceHigh != null && Number.isFinite(Number(row.priceHigh)) ? Number(row.priceHigh) : close
-    const low = row.priceLow != null && Number.isFinite(Number(row.priceLow)) ? Number(row.priceLow) : close
-    const volume = row.volume != null && Number.isFinite(Number(row.volume)) ? Number(row.volume) : 0
+    const close = row.priceClose != null && Number.isFinite(Number(row.priceClose))
+      ? Number(row.priceClose)
+      : null
+    if (close == null || close <= 0) {
+      continue
+    }
+    const high = row.priceHigh != null && Number.isFinite(Number(row.priceHigh))
+      ? Number(row.priceHigh)
+      : close
+    const low = row.priceLow != null && Number.isFinite(Number(row.priceLow))
+      ? Number(row.priceLow)
+      : close
+    const volume = row.volume != null && Number.isFinite(Number(row.volume))
+      ? Number(row.volume)
+      : 0
     const list = ohlcByCode.get(row.stockCode) ?? []
     list.push({ date: Number(row.date), close, high, low, volume })
     ohlcByCode.set(row.stockCode, list)
@@ -167,24 +213,44 @@ export async function GET(ctx: Context) {
     sector: Schemas.screener.sector
   }).from(Schemas.screener)
   const screenerMap = new Map<string, { name: string | null; sector: string | null }>()
-  for (const row of screenerRows) screenerMap.set(row.code, { name: row.name ?? null, sector: row.sector ?? null })
+  for (const row of screenerRows) {
+    screenerMap.set(row.code, { name: row.name ?? null, sector: row.sector ?? null })
+  }
 
   // RS ranks
   type RsEntry = { code: string; rsScore: number }
   const rsEntries: RsEntry[] = []
   for (const [code, rows] of ohlcByCode.entries()) {
-    if (rows.length < 20) continue
+    if (rows.length < 20) {
+      continue
+    }
     const price = rows[rows.length - 1].close
-    const r3m = rows.length >= 63 ? returnPct(price, rows[rows.length - 63].close) : returnPct(price, rows[0].close)
-    if (r3m == null) continue
+    const r3m = rows.length >= 63
+      ? returnPct(price, rows[rows.length - 63].close)
+      : returnPct(price, rows[0].close)
+    if (r3m == null) {
+      continue
+    }
     const r6m = rows.length >= 126 ? returnPct(price, rows[rows.length - 126].close) : null
     const r9m = rows.length >= 189 ? returnPct(price, rows[rows.length - 189].close) : null
     const r12m = rows.length >= 252 ? returnPct(price, rows[rows.length - 252].close) : null
-    let rsScore = r3m * 0.4; let w = 0.4
-    if (r6m != null) { rsScore += r6m * 0.2; w += 0.2 }
-    if (r9m != null) { rsScore += r9m * 0.2; w += 0.2 }
-    if (r12m != null) { rsScore += r12m * 0.2; w += 0.2 }
-    if (w < 1) rsScore = rsScore / w
+    let rsScore = r3m * 0.4
+    let w = 0.4
+    if (r6m != null) {
+      rsScore += r6m * 0.2
+      w += 0.2
+    }
+    if (r9m != null) {
+      rsScore += r9m * 0.2
+      w += 0.2
+    }
+    if (r12m != null) {
+      rsScore += r12m * 0.2
+      w += 0.2
+    }
+    if (w < 1) {
+      rsScore = rsScore / w
+    }
     rsEntries.push({ code, rsScore })
   }
   rsEntries.sort((a, b) => a.rsScore - b.rsScore)
@@ -197,29 +263,44 @@ export async function GET(ctx: Context) {
   const results: Types.PowerPlayRow[] = []
 
   for (const [code, rows] of ohlcByCode.entries()) {
-    if (rows.length < 50) continue
+    if (rows.length < 50) {
+      continue
+    }
 
     const setup = detectSetup(rows)
-    if (setup.setupType === 'none') continue
-    if (setupFilter != null && setupFilter !== '' && setupFilter !== 'all' && setup.setupType !== setupFilter) continue
+    if (setup.setupType === 'none') {
+      continue
+    }
+    if (
+      setupFilter != null && setupFilter !== '' && setupFilter !== 'all' &&
+      setup.setupType !== setupFilter
+    ) {
+      continue
+    }
 
     const closes = rows.map((r) => r.close)
     const price = closes[closes.length - 1]
     const ma50 = calcMA(closes, 50)
     const ma150 = calcMA(closes, 150)
     const ma200 = calcMA(closes, 200)
-    if (ma50 == null) continue
+    if (ma50 == null) {
+      continue
+    }
 
     let ma200SlopePct: number | null = null
     if (ma200 != null && closes.length >= 222) {
       const olderCloses = closes.slice(0, closes.length - 22)
       const ma200older = calcMA(olderCloses, 200)
-      if (ma200older != null && ma200older > 0) ma200SlopePct = ((ma200 - ma200older) / ma200older) * 100
+      if (ma200older != null && ma200older > 0) {
+        ma200SlopePct = ((ma200 - ma200older) / ma200older) * 100
+      }
     }
     const stage = determineStage(price, ma50, ma150, ma200, ma200SlopePct)
 
     // Only show Stage 1-2 setups (declining stocks are noise)
-    if (stage === 4) continue
+    if (stage === 4) {
+      continue
+    }
 
     const ma200Trending = ma200SlopePct != null && ma200SlopePct > 0
     const last252 = rows.slice(Math.max(0, rows.length - 252))

@@ -14,7 +14,9 @@ import * as Schemas from '@app/server/schemas/index.ts'
 import type * as Types from '@app/server/Types.ts'
 
 function calcMA(prices: number[], period: number): number | null {
-  if (prices.length < period) return null
+  if (prices.length < period) {
+    return null
+  }
   const slice = prices.slice(prices.length - period)
   return slice.reduce((a, b) => a + b, 0) / period
 }
@@ -49,7 +51,9 @@ export async function GET(ctx: Context) {
     const close = row.priceClose != null && Number.isFinite(Number(row.priceClose))
       ? Number(row.priceClose)
       : null
-    if (close == null || close <= 0) continue
+    if (close == null || close <= 0) {
+      continue
+    }
     const high = row.priceHigh != null && Number.isFinite(Number(row.priceHigh))
       ? Number(row.priceHigh)
       : close
@@ -76,7 +80,9 @@ export async function GET(ctx: Context) {
   // Calculate RS Score for ranking
   const rsScoreByCode = new Map<string, number>()
   for (const [code, rows] of ohlcByCode.entries()) {
-    if (rows.length < 20) continue
+    if (rows.length < 20) {
+      continue
+    }
     const price = rows[rows.length - 1].close
     const r3m = rows.length >= 63
       ? ((price - rows[rows.length - 63].close) / rows[rows.length - 63].close) * 100
@@ -86,7 +92,10 @@ export async function GET(ctx: Context) {
       : null
     let rsScore = r3m * 0.4
     let w = 0.4
-    if (r6m != null) { rsScore += r6m * 0.2; w += 0.2 }
+    if (r6m != null) {
+      rsScore += r6m * 0.2
+      w += 0.2
+    }
     rsScoreByCode.set(code, w > 0 ? rsScore / w : rsScore)
   }
 
@@ -101,7 +110,9 @@ export async function GET(ctx: Context) {
   const results: Types.NewHighRow[] = []
 
   for (const [code, rows] of ohlcByCode.entries()) {
-    if (rows.length < 20) continue
+    if (rows.length < 20) {
+      continue
+    }
 
     const price = rows[rows.length - 1].close
     const last252 = rows.slice(Math.max(0, rows.length - 252))
@@ -112,7 +123,9 @@ export async function GET(ctx: Context) {
     const pctFromLow = low52w > 0 ? ((price - low52w) / low52w) * 100 : null
 
     // Only include stocks within 15% of 52-week high
-    if (pctFromHigh == null || pctFromHigh < -15) continue
+    if (pctFromHigh == null || pctFromHigh < -15) {
+      continue
+    }
 
     // Quick MA alignment count
     const closes = rows.map((r) => r.close)
@@ -121,11 +134,21 @@ export async function GET(ctx: Context) {
     const ma200 = calcMA(closes, 200)
     let trendCriteriaCount = 0
     if (ma50 != null && ma150 != null) {
-      if (price > ma150) trendCriteriaCount++
-      if (ma200 != null && price > ma200) trendCriteriaCount++
-      if (ma200 != null && ma150 > ma200) trendCriteriaCount++
-      if (ma50 > ma150) trendCriteriaCount++
-      if (price > ma50) trendCriteriaCount++
+      if (price > ma150) {
+        trendCriteriaCount++
+      }
+      if (ma200 != null && price > ma200) {
+        trendCriteriaCount++
+      }
+      if (ma200 != null && ma150 > ma200) {
+        trendCriteriaCount++
+      }
+      if (ma50 > ma150) {
+        trendCriteriaCount++
+      }
+      if (price > ma50) {
+        trendCriteriaCount++
+      }
     }
 
     const rsRank = rsRankByCode.get(code) ?? null

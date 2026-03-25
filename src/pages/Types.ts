@@ -171,7 +171,17 @@ export interface HistorySectorAggregate {
 
 export type HomeTab = 'methodology' | 'score' | 'filter' | 'howTo'
 
-export type MainAnalysisTab = 'fundamental' | 'technical' | 'watchlist' | 'trendTemplate' | 'rsRanking' | 'newHighs' | 'sepa' | 'volumeAnalysis' | 'momentum'
+export type MainAnalysisTab =
+  | 'fundamental'
+  | 'technical'
+  | 'watchlist'
+  | 'trendTemplate'
+  | 'rsRanking'
+  | 'newHighs'
+  | 'sepa'
+  | 'volumeAnalysis'
+  | 'momentum'
+  | 'aiRec'
 
 export interface OhlcApiRow extends StockDetailOhlcRow {
   bidVolume: number | null
@@ -563,6 +573,47 @@ export interface PowerPlayResponse {
 
 export interface MomentumViewProps {
   onRowClick: (code: string) => void
+}
+
+export type AiRecommendationMode = 'technical' | 'fundamental' | 'combined'
+
+export interface AiRecommendationRow {
+  code: string
+  name: string | null
+  sector: string | null
+  price: number | null
+  techScore: number
+  fundScore: number
+  combinedScore: number
+  gorenganScore: number
+  stage: StageNumber
+  rsRank: number
+  sepaScore: number
+  epsGrowthPct: number | null
+  roe: number | null
+  der: number | null
+  hasRsLineNewHigh: boolean
+  hasPocketPivot: boolean
+  patternType: BasePatternType
+  setupType: PowerPlaySetupType
+  reasons: string[]
+}
+
+export interface AiRecommendationResponse {
+  date: number
+  mode: AiRecommendationMode
+  totalCount: number
+  data: AiRecommendationRow[]
+  claudeNarrative?: string
+}
+
+export interface AiRecommendationViewProps {
+  data: AiRecommendationResponse | null
+  loading: boolean
+  error: string | null
+  onRefetch: () => void
+  mode: AiRecommendationMode
+  onModeChange: (mode: AiRecommendationMode) => void
 }
 
 export interface SepaResponse {

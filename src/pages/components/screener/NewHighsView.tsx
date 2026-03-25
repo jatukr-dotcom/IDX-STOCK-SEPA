@@ -12,7 +12,9 @@ import * as Utils from '@app/pages/utils/index.ts'
 import type * as Types from '@app/pages/Types.ts'
 
 function highBadge(pctFromHigh: number | null): React.ReactNode {
-  if (pctFromHigh == null) return null
+  if (pctFromHigh == null) {
+    return null
+  }
   if (pctFromHigh >= -1) {
     return <span className='idx-badge idx-badge-up'>ATH Zone</span>
   }
@@ -32,10 +34,16 @@ export default function NewHighsView({
   const [onlyTrending, setOnlyTrending] = useState(false)
 
   const filtered = useMemo(() => {
-    if (!data?.data) return []
+    if (!data?.data) {
+      return []
+    }
     return data.data.filter((r) => {
-      if (r.pctFrom52wHigh == null || r.pctFrom52wHigh < -maxPctFromHigh) return false
-      if (onlyTrending && r.trendCriteriaCount < 5) return false
+      if (r.pctFrom52wHigh == null || r.pctFrom52wHigh < -maxPctFromHigh) {
+        return false
+      }
+      if (onlyTrending && r.trendCriteriaCount < 5) {
+        return false
+      }
       return true
     })
   }, [data, maxPctFromHigh, onlyTrending])
@@ -57,7 +65,9 @@ export default function NewHighsView({
       </div>
     )
   }
-  if (!data) return null
+  if (!data) {
+    return null
+  }
 
   const atHigh = data.data.filter((r) => r.pctFrom52wHigh != null && r.pctFrom52wHigh >= -1).length
   const near5 = data.data.filter((r) => r.pctFrom52wHigh != null && r.pctFrom52wHigh >= -5).length
@@ -72,12 +82,10 @@ export default function NewHighsView({
           </h3>
           <div className='idx-trend-stats'>
             <span className='idx-p-muted'>
-              ATH Zone:{' '}
-              <strong style={{ color: 'var(--idx-up)' }}>{atHigh}</strong>
+              ATH Zone: <strong style={{ color: 'var(--idx-up)' }}>{atHigh}</strong>
             </span>
             <span className='idx-p-muted'>
-              ≤5%:{' '}
-              <strong style={{ color: 'var(--idx-up)' }}>{near5}</strong>
+              ≤5%: <strong style={{ color: 'var(--idx-up)' }}>{near5}</strong>
             </span>
           </div>
         </div>
@@ -138,7 +146,9 @@ export default function NewHighsView({
                       <div style={{ fontSize: 'var(--idx-text-sm)', marginTop: 2 }}>
                         {row.name ?? '-'}
                       </div>
-                      <div style={{ fontSize: 'var(--idx-text-xs)', color: 'var(--idx-text-muted)' }}>
+                      <div
+                        style={{ fontSize: 'var(--idx-text-xs)', color: 'var(--idx-text-muted)' }}
+                      >
                         {row.sector ?? '-'}
                       </div>
                     </td>
@@ -159,25 +169,37 @@ export default function NewHighsView({
                     </td>
                     <td className='idx-table-td-right'>
                       {row.pctFrom52wLow != null
-                        ? <span className='idx-pct-up'>+{Utils.Format.formatNum(row.pctFrom52wLow, 1)}%</span>
+                        ? (
+                          <span className='idx-pct-up'>
+                            +{Utils.Format.formatNum(row.pctFrom52wLow, 1)}%
+                          </span>
+                        )
                         : '-'}
                     </td>
                     <td className='idx-table-td-right'>
                       {row.low52w != null ? Utils.Format.formatNum(row.low52w) : '-'}
                     </td>
                     <td className='idx-table-td-right'>
-                      <span style={{
-                        color: (row.rsRank ?? 0) >= 70 ? 'var(--idx-up)' : 'var(--idx-text-muted)',
-                        fontWeight: 600
-                      }}>
+                      <span
+                        style={{
+                          color: (row.rsRank ?? 0) >= 70
+                            ? 'var(--idx-up)'
+                            : 'var(--idx-text-muted)',
+                          fontWeight: 600
+                        }}
+                      >
                         {row.rsRank ?? '-'}
                       </span>
                     </td>
                     <td className='idx-table-td-right'>
-                      <span style={{
-                        color: row.trendCriteriaCount >= 5 ? 'var(--idx-up)' : 'var(--idx-text-muted)',
-                        fontWeight: 600
-                      }}>
+                      <span
+                        style={{
+                          color: row.trendCriteriaCount >= 5
+                            ? 'var(--idx-up)'
+                            : 'var(--idx-text-muted)',
+                          fontWeight: 600
+                        }}
+                      >
                         {row.trendCriteriaCount}/5
                       </span>
                     </td>
@@ -188,9 +210,9 @@ export default function NewHighsView({
           </div>
         )}
       <div className='idx-px-24 idx-py-12 idx-p-muted idx-text-xs'>
-        Menampilkan emiten yang harganya dalam jarak tertentu dari High 52 Minggu.
-        ATH Zone = dalam 1% dari high. New High = dalam 5% dari high.
-        MA Align = kriteria alignment MA50/150/200 (maks 5).
+        Menampilkan emiten yang harganya dalam jarak tertentu dari High 52 Minggu. ATH Zone = dalam
+        1% dari high. New High = dalam 5% dari high. MA Align = kriteria alignment MA50/150/200
+        (maks 5).
       </div>
     </div>
   )

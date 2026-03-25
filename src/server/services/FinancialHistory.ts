@@ -32,12 +32,13 @@ const QUERY_YEARS = [2022, 2023, 2024, 2025, 2026]
 const QUERY_MONTHS = [3, 4, 6, 7, 9, 10, 12]
 const STORE_YEAR_MIN = 2022
 const STORE_YEAR_MAX = 2025
-const BASE_URL =
-  'https://www.idx.co.id/primary/DigitalStatistic/GetApiDataPaginated'
+const BASE_URL = 'https://www.idx.co.id/primary/DigitalStatistic/GetApiDataPaginated'
 
 function fsDateToYearQuarter(fsDate: string): { year: number; quarter: number } | null {
   const match = fsDate.match(/^(\d{4})-(\d{2})/)
-  if (!match) return null
+  if (!match) {
+    return null
+  }
   const year = parseInt(match[1]!, 10)
   const month = parseInt(match[2]!, 10)
   // Month 10-11 = Q3 filed late (Oct-Nov filing for Sep 30 period end)
@@ -57,8 +58,7 @@ export class FinancialHistory {
         if (year > currentYear || (year === currentYear && month > currentMonth)) {
           continue
         }
-        const url =
-          `${BASE_URL}?urlName=LINK_FINANCIAL_DATA_RATIO` +
+        const url = `${BASE_URL}?urlName=LINK_FINANCIAL_DATA_RATIO` +
           `&periodYear=${year}&periodMonth=${month}&periodType=monthly` +
           `&isPrint=False&cumulative=false&pageSize=9999`
         const response = await client.get(url)

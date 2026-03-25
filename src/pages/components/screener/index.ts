@@ -23,3 +23,4 @@ export { default as PocketPivotView } from '@app/pages/components/screener/Pocke
 export { default as RsLineView } from '@app/pages/components/screener/RsLineView.tsx'
 export { default as BasePatternsView } from '@app/pages/components/screener/BasePatternsView.tsx'
 export { default as PowerPlayView } from '@app/pages/components/screener/PowerPlayView.tsx'
+export { default as AiRecommendationView } from '@app/pages/components/screener/AiRecommendationView.tsx'
