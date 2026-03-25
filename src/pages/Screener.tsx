@@ -7,7 +7,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Activity, BarChart2, BookOpen, Flame, Medal, Star, TrendingUp, Zap } from 'lucide-react'
+import { Activity, BarChart2, BookOpen, Flame, Medal, Rocket, Star, TrendingUp, Zap } from 'lucide-react'
 import * as ScreenerComps from '@app/pages/components/screener/index.ts'
 import * as Hooks from '@app/pages/hooks/index.ts'
 import * as Utils from '@app/pages/utils/index.ts'
@@ -40,6 +40,7 @@ export default function Screener() {
   const [searchForRequest, setSearchForRequest] = useState<string>('')
   const [detailCode, setDetailCode] = useState<string | null>(null)
   const [mainTab, setMainTab] = useState<Types.MainAnalysisTab>('fundamental')
+  const [momentumSubTab, setMomentumSubTab] = useState<Types.MomentumSubTab>('stage')
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastSearchForRequestRef = useRef<string>('')
   const { data: generalData } = Hooks.useGeneral()
@@ -277,6 +278,14 @@ export default function Screener() {
             <Activity size={16} aria-hidden />
             <span>Volume A/D</span>
           </button>
+          <button
+            type='button'
+            className={`idx-tab idx-tab-inline ${mainTab === 'momentum' ? 'idx-tab-active' : ''}`}
+            onClick={() => setMainTab('momentum')}
+          >
+            <Rocket size={16} aria-hidden />
+            <span>Momentum Masters</span>
+          </button>
         </div>
         {mainTab === 'fundamental' && (
           <div className='idx-grid-main'>
@@ -386,6 +395,33 @@ export default function Screener() {
               onRefetch={refetchVolume}
               onRowClick={handleRowClick}
             />
+          </div>
+        )}
+        {mainTab === 'momentum' && (
+          <div className='idx-mt-24'>
+            <div className='idx-tabs idx-mb-16' style={{ borderBottom: '1px solid var(--idx-border)', paddingBottom: 8 }}>
+              {([
+                { key: 'stage', label: 'Stage Analysis' },
+                { key: 'pocketPivot', label: 'Pocket Pivot' },
+                { key: 'rsLine', label: 'RS Line' },
+                { key: 'basePatterns', label: 'Base Patterns' },
+                { key: 'powerPlay', label: 'Power Play' }
+              ] as { key: Types.MomentumSubTab; label: string }[]).map((t) => (
+                <button
+                  key={t.key}
+                  type='button'
+                  className={`idx-tab idx-tab-inline ${momentumSubTab === t.key ? 'idx-tab-active' : ''}`}
+                  onClick={() => setMomentumSubTab(t.key)}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+            {momentumSubTab === 'stage' && <ScreenerComps.StageAnalysisView onRowClick={handleRowClick} />}
+            {momentumSubTab === 'pocketPivot' && <ScreenerComps.PocketPivotView onRowClick={handleRowClick} />}
+            {momentumSubTab === 'rsLine' && <ScreenerComps.RsLineView onRowClick={handleRowClick} />}
+            {momentumSubTab === 'basePatterns' && <ScreenerComps.BasePatternsView onRowClick={handleRowClick} />}
+            {momentumSubTab === 'powerPlay' && <ScreenerComps.PowerPlayView onRowClick={handleRowClick} />}
           </div>
         )}
         {mainTab === 'watchlist' && (

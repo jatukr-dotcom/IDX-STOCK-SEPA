@@ -18,3 +18,8 @@ export { default as SepaView } from '@app/pages/components/screener/SepaView.tsx
 export { default as StockDetailModal } from '@app/pages/components/screener/StockDetailModal.tsx'
 export { default as TrendTemplateView } from '@app/pages/components/screener/TrendTemplateView.tsx'
 export { default as VolumeAnalysisView } from '@app/pages/components/screener/VolumeAnalysisView.tsx'
+export { default as StageAnalysisView } from '@app/pages/components/screener/StageAnalysisView.tsx'
+export { default as PocketPivotView } from '@app/pages/components/screener/PocketPivotView.tsx'
+export { default as RsLineView } from '@app/pages/components/screener/RsLineView.tsx'
+export { default as BasePatternsView } from '@app/pages/components/screener/BasePatternsView.tsx'
+export { default as PowerPlayView } from '@app/pages/components/screener/PowerPlayView.tsx'

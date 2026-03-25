@@ -515,6 +515,11 @@ export interface SepaCandidateRow {
   epsGrowthPct: number | null
   epsAcceleration: boolean
   epsConsecutiveGrowth: number
+  // Liquidity
+  avgVolume20d: number | null
+  avgValue20d: number | null
+  // Stage
+  stage: StageNumber
   // Composite
   sepaScore: number
 }
@@ -572,4 +577,118 @@ export interface VolumeScreenerResponse {
   date: number
   totalCount: number
   data: VolumeScreenerRow[]
+}
+
+export type StageNumber = 1 | 2 | 3 | 4
+
+export interface StageAnalysisRow {
+  code: string
+  name: string | null
+  sector: string | null
+  price: number | null
+  stage: StageNumber
+  stageLabel: string
+  ma50: number | null
+  ma150: number | null
+  ma200: number | null
+  ma200SlopePct: number | null
+  rsRank: number | null
+  trendCriteriaCount: number
+  pctFrom52wHigh: number | null
+  pctFrom52wLow: number | null
+  avgVolume20d: number | null
+  avgValue20d: number | null
+}
+
+export interface StageAnalysisResponse {
+  date: number
+  totalCount: number
+  data: StageAnalysisRow[]
+}
+
+export interface PocketPivotRow {
+  code: string
+  name: string | null
+  sector: string | null
+  price: number
+  pivotDate: number
+  pivotVolume: number
+  maxDownVol10d: number
+  ma10: number | null
+  pctAboveMa10: number | null
+  rsRank: number
+  trendCriteriaCount: number
+  stage: StageNumber
+}
+
+export interface PocketPivotResponse {
+  date: number
+  totalCount: number
+  data: PocketPivotRow[]
+}
+
+export interface RsLineRow {
+  code: string
+  name: string | null
+  sector: string | null
+  price: number | null
+  rsLineValue: number | null
+  rsLineNewHigh: boolean
+  rsLinePctFrom52wHigh: number | null
+  rsRank: number | null
+  pctFrom52wHigh: number | null
+  trendCriteriaCount: number
+}
+
+export interface RsLineResponse {
+  date: number
+  totalCount: number
+  data: RsLineRow[]
+}
+
+export type BasePatternType = 'flat' | 'cup-handle' | 'htf' | 'none'
+
+export interface BasePatternRow {
+  code: string
+  name: string | null
+  sector: string | null
+  price: number | null
+  patternType: BasePatternType
+  baseCount: number
+  baseDepthPct: number | null
+  baseLengthDays: number | null
+  rsRank: number | null
+  stage: StageNumber
+  trendCriteriaCount: number
+  pctFrom52wHigh: number | null
+}
+
+export interface BasePatternsResponse {
+  date: number
+  totalCount: number
+  data: BasePatternRow[]
+}
+
+export type PowerPlaySetupType = 'power-play' | 'low-cheat' | 'none'
+
+export interface PowerPlayRow {
+  code: string
+  name: string | null
+  sector: string | null
+  price: number | null
+  setupType: PowerPlaySetupType
+  tightRangePct: number | null
+  consolidationDays: number
+  volumeDryUpPct: number | null
+  rsRank: number | null
+  stage: StageNumber
+  nearBreakout: boolean
+  trendCriteriaCount: number
+  pctFrom52wHigh: number | null
+}
+
+export interface PowerPlayResponse {
+  date: number
+  totalCount: number
+  data: PowerPlayRow[]
 }

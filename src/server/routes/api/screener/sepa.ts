@@ -111,12 +111,34 @@ function returnPct(current: number, past: number): number | null {
   return ((current - past) / past) * 100
 }
 
+function determineStage(
+  price: number,
+  ma50: number | null,
+  ma150: number | null,
+  ma200: number | null,
+  ma200SlopePct: number | null
+): Types.StageNumber {
+  if (ma200 == null) {
+    if (ma50 != null && price > ma50 && (ma150 == null || ma50 > ma150)) return 2
+    return 1
+  }
+  const ma200up = ma200SlopePct != null && ma200SlopePct > 0
+  if (ma50 != null && ma150 != null && price > ma50 && ma50 > ma150 && ma150 > ma200 && ma200up) return 2
+  if (price < ma200 && !ma200up) return 4
+  if (ma50 != null && (price < ma50 || (ma150 != null && ma150 < ma200))) return 3
+  return 1
+}
+
 export async function GET(ctx: Context) {
   // Query params for thresholds (with sane defaults)
   const minTrend = Utils.parseNumber(Utils.queryString(ctx.query('minTrend')))
   const minRs = Utils.parseNumber(Utils.queryString(ctx.query('minRs')))
+  const minAvgVolStr = Utils.queryString(ctx.query('minAvgVolume'))
+  const minAvgValStr = Utils.queryString(ctx.query('minAvgValue'))
   const trendThreshold = minTrend != null && minTrend >= 1 && minTrend <= 8 ? minTrend : 6
   const rsThreshold = minRs != null && minRs >= 1 && minRs <= 99 ? minRs : 70
+  const minAvgVolume = minAvgVolStr != null ? Number(minAvgVolStr) : 50_000
+  const minAvgValue = minAvgValStr != null ? Number(minAvgValStr) : 200_000_000
 
   const latestRows = await Database.select({ date: Schemas.summary.date })
     .from(Schemas.summary)
@@ -130,19 +152,21 @@ export async function GET(ctx: Context) {
   const dateRef = Number(latestDate)
   const dateStart = Utils.addDaysToDateInt(dateRef, -400)
 
-  // Fetch OHLC data
+  // Fetch OHLC + volume/value data
   const summaryRows = await Database.select({
     stockCode: Schemas.summary.stockCode,
     date: Schemas.summary.date,
     priceClose: Schemas.summary.priceClose,
     priceHigh: Schemas.summary.priceHigh,
-    priceLow: Schemas.summary.priceLow
+    priceLow: Schemas.summary.priceLow,
+    volume: Schemas.summary.volume,
+    value: Schemas.summary.value
   })
     .from(Schemas.summary)
     .where(and(gte(Schemas.summary.date, dateStart), lte(Schemas.summary.date, dateRef)))
     .orderBy(asc(Schemas.summary.stockCode), asc(Schemas.summary.date))
 
-  type OhlcEntry = { date: number; close: number; high: number; low: number }
+  type OhlcEntry = { date: number; close: number; high: number; low: number; volume: number; value: number }
   const ohlcByCode = new Map<string, OhlcEntry[]>()
   for (const row of summaryRows) {
     const close = row.priceClose != null && Number.isFinite(Number(row.priceClose))
@@ -155,8 +179,10 @@ export async function GET(ctx: Context) {
     const low = row.priceLow != null && Number.isFinite(Number(row.priceLow))
       ? Number(row.priceLow)
       : close
+    const volume = row.volume != null && Number.isFinite(Number(row.volume)) ? Number(row.volume) : 0
+    const value = row.value != null && Number.isFinite(Number(row.value)) ? Number(row.value) : 0
     const list = ohlcByCode.get(row.stockCode) ?? []
-    list.push({ date: Number(row.date), close, high, low })
+    list.push({ date: Number(row.date), close, high, low, volume, value })
     ohlcByCode.set(row.stockCode, list)
   }
 
@@ -247,6 +273,17 @@ export async function GET(ctx: Context) {
   for (const [code, rows] of ohlcByCode.entries()) {
     if (rows.length < 50) continue
 
+    // Liquidity pre-filter: avg volume + avg value over last 20 days
+    const last20 = rows.slice(-20)
+    const avgVolume20d = last20.length > 0
+      ? last20.reduce((s, r) => s + r.volume, 0) / last20.length
+      : null
+    const avgValue20d = last20.length > 0
+      ? last20.reduce((s, r) => s + r.value, 0) / last20.length
+      : null
+    if (avgVolume20d != null && avgVolume20d < minAvgVolume) continue
+    if (avgValue20d != null && avgValue20d < minAvgValue) continue
+
     const rsRank = rsRankByCode.get(code) ?? 0
     if (rsRank < rsThreshold) continue
 
@@ -259,11 +296,16 @@ export async function GET(ctx: Context) {
 
     // MA200 trend
     let ma200Trending = false
+    let ma200SlopePct: number | null = null
     if (ma200 != null && closes.length >= 222) {
       const olderCloses = closes.slice(0, closes.length - 22)
       const ma200older = calcMA(olderCloses, 200)
-      if (ma200older != null) ma200Trending = ma200 > ma200older
+      if (ma200older != null) {
+        ma200Trending = ma200 > ma200older
+        ma200SlopePct = ma200older > 0 ? ((ma200 - ma200older) / ma200older) * 100 : null
+      }
     }
+    const stage = determineStage(price, ma50, ma150, ma200, ma200SlopePct)
 
     // 52w high/low
     const last252 = rows.slice(Math.max(0, rows.length - 252))
@@ -338,6 +380,9 @@ export async function GET(ctx: Context) {
       epsGrowthPct: epsResult.latestGrowthPct != null ? Utils.round3(epsResult.latestGrowthPct) : null,
       epsAcceleration: epsResult.acceleration,
       epsConsecutiveGrowth: epsResult.consecutiveGrowthQ,
+      avgVolume20d: avgVolume20d != null ? Math.round(avgVolume20d) : null,
+      avgValue20d: avgValue20d != null ? Math.round(avgValue20d) : null,
+      stage,
       sepaScore: Utils.round3(sepaScore)
     })
   }
