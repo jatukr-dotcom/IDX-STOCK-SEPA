@@ -7,7 +7,7 @@
  */
 
 import type { Context } from '@neabyte/deserve'
-import { and, asc, desc, gte, lte } from 'drizzle-orm'
+import { and, asc, desc, gte, isNotNull, lte, sql } from 'drizzle-orm'
 import Database from '@app/server/Database.ts'
 import Utils from '@app/server/Utils.ts'
 import * as Schemas from '@app/server/schemas/index.ts'
@@ -21,13 +21,11 @@ type HistRow = {
   sales: number | null
 }
 
-// ─── Scoring Helpers ────────────────────────────────────────────────────────
+// ─── Helpers ────────────────────────────────────────────────────────────────
 
 function calcQEps(byKey: Map<string, HistRow>, year: number, quarter: number): number | null {
   const row = byKey.get(`${year}_${quarter}`)
-  if (!row || row.profitAttrOwner == null || row.eps == null) {
-    return null
-  }
+  if (!row || row.profitAttrOwner == null || row.eps == null) return null
   let shares: number | null = null
   const q4c = byKey.get(`${year}_4`)
   if (q4c?.profitAttrOwner != null && q4c.eps != null && q4c.eps !== 0) {
@@ -39,26 +37,20 @@ function calcQEps(byKey: Map<string, HistRow>, year: number, quarter: number): n
       shares = q4p.profitAttrOwner / q4p.eps
     }
   }
-  if (shares == null || shares === 0) {
-    return null
-  }
+  if (shares == null || shares === 0) return null
   const prev = quarter > 1 ? byKey.get(`${year}_${quarter - 1}`) : null
   const prevProfit = prev?.profitAttrOwner ?? 0
   return (row.profitAttrOwner - prevProfit) / shares
 }
 
 function calcMA(prices: number[], period: number): number | null {
-  if (prices.length < period) {
-    return null
-  }
+  if (prices.length < period) return null
   const slice = prices.slice(prices.length - period)
   return slice.reduce((a, b) => a + b, 0) / period
 }
 
 function returnPct(current: number, past: number): number | null {
-  if (past <= 0 || !Number.isFinite(past) || !Number.isFinite(current)) {
-    return null
-  }
+  if (past <= 0 || !Number.isFinite(past) || !Number.isFinite(current)) return null
   return ((current - past) / past) * 100
 }
 
@@ -70,36 +62,26 @@ function determineStage(
   ma200SlopePct: number | null
 ): Types.StageNumber {
   if (ma200 == null) {
-    if (ma50 != null && price > ma50 && (ma150 == null || ma50 > ma150)) {
-      return 2
-    }
+    if (ma50 != null && price > ma50 && (ma150 == null || ma50 > ma150)) return 2
     return 1
   }
   const ma200up = ma200SlopePct != null && ma200SlopePct > 0
   if (ma50 != null && ma150 != null && price > ma50 && ma50 > ma150 && ma150 > ma200 && ma200up) {
     return 2
   }
-  if (price < ma200 && !ma200up) {
-    return 4
-  }
-  if (ma50 != null && (price < ma50 || (ma150 != null && ma150 < ma200))) {
-    return 3
-  }
+  if (price < ma200 && !ma200up) return 4
+  if (ma50 != null && (price < ma50 || (ma150 != null && ma150 < ma200))) return 3
   return 1
 }
 
-// ─── EPS Score Component ────────────────────────────────────────────────────
-
-function calcEpsScore(histRows: HistRow[]): {
+function calcEpsInfo(histRows: HistRow[]): {
   score: number
   latestGrowthPct: number | null
   acceleration: boolean
   consecutiveGrowthQ: number
 } {
   const byKey = new Map<string, HistRow>()
-  for (const r of histRows) {
-    byKey.set(`${r.year}_${r.quarter}`, r)
-  }
+  for (const r of histRows) byKey.set(`${r.year}_${r.quarter}`, r)
 
   let latestYear: number | null = null
   let latestQ: number | null = null
@@ -140,53 +122,25 @@ function calcEpsScore(histRows: HistRow[]): {
   for (let i = 0; i < 4; i++) {
     const ce = calcQEps(byKey, cy, cq)
     const pe = calcQEps(byKey, cy - 1, cq)
-    if (ce != null && pe != null && ce > pe) {
-      consecutiveGrowthQ++
-    } else {
-      break
-    }
+    if (ce != null && pe != null && ce > pe) consecutiveGrowthQ++
+    else break
     cq--
-    if (cq === 0) {
-      cq = 4
-      cy--
-    }
+    if (cq === 0) { cq = 4; cy-- }
   }
 
   let score = 0
   if (latestGrowthPct != null) {
-    if (latestGrowthPct >= 25) {
-      score += 8
-    } else if (latestGrowthPct >= 10) {
-      score += 5
-    } else if (latestGrowthPct >= 0) {
-      score += 2
-    }
+    if (latestGrowthPct >= 25) score += 8
+    else if (latestGrowthPct >= 10) score += 5
+    else if (latestGrowthPct >= 0) score += 2
   }
-  if (acceleration) {
-    score += 4
-  }
-  if (consecutiveGrowthQ >= 2) {
-    score += 3
-  }
+  if (acceleration) score += 4
+  if (consecutiveGrowthQ >= 2) score += 3
 
   return { score, latestGrowthPct, acceleration, consecutiveGrowthQ }
 }
 
-// ─── Trend Score (reuse from sepa.ts) ────────────────────────────────────
-
-function calcTrendScore(criteria: Types.TrendTemplateCriteria): number {
-  const count = (criteria.aboveMa150Ma200 ? 1 : 0) +
-    (criteria.ma150AboveMa200 ? 1 : 0) +
-    (criteria.ma200Trending ? 1 : 0) +
-    (criteria.ma50AboveMa150Ma200 ? 1 : 0) +
-    (criteria.aboveMa50 ? 1 : 0) +
-    (criteria.above52wLowBy30Pct ? 1 : 0) +
-    (criteria.within25PctOf52wHigh ? 1 : 0) +
-    (criteria.rsRank70 ? 1 : 0)
-  return (count / 8) * 40
-}
-
-// ─── Claude API Narrative Cache ─────────────────────────────────────────────
+// ─── Claude Narrative Cache ─────────────────────────────────────────────────
 
 interface NarrativeCache {
   date: number
@@ -203,11 +157,8 @@ async function getClaudeNarrative(
   topRows: Types.AiRecommendationRow[]
 ): Promise<string | undefined> {
   const apiKey = Deno.env.get('ANTHROPIC_API_KEY')
-  if (!apiKey) {
-    return undefined
-  }
+  if (!apiKey) return undefined
 
-  // Check cache
   const now = Date.now()
   if (
     narrativeCache && narrativeCache.date === date && narrativeCache.mode === mode &&
@@ -220,11 +171,11 @@ async function getClaudeNarrative(
     const contextStr = topRows
       .slice(0, 10)
       .map((r) =>
-        `- ${r.code} (${r.name}, ${r.sector}): score=${Math.round(r.combinedScore)}, SEPA=${
-          Math.round(r.sepaScore)
-        }, Stage=${r.stage}, RS=${r.rsRank}, EPS=${r.epsGrowthPct?.toFixed(1) ?? 'N/A'}%, ROE=${
-          r.roe?.toFixed(1) ?? 'N/A'
-        }%, ${r.reasons[0] ?? ''}`
+        `- ${r.code} (${r.name ?? '-'}, ${r.sector ?? '-'}): skor=${
+          Math.round(r.combinedScore)
+        }, SEPA=${Math.round(r.sepaScore)}, Stage=${r.stage}, RS=${r.rsRank}, EPS=${
+          r.epsGrowthPct?.toFixed(1) ?? 'N/A'
+        }%, ROE=${r.roe?.toFixed(1) ?? 'N/A'}%, ${r.reasons[0] ?? ''}`
       )
       .join('\n')
 
@@ -244,11 +195,10 @@ async function getClaudeNarrative(
         messages: [{
           role: 'user',
           content:
-            `Saham-saham teratas yang direkomendasikan AI berdasarkan analisis ${mode} untuk ${
+            `Saham-saham teratas AI berdasarkan analisis ${mode} untuk ${
               String(date).slice(0, 4)
-            }-${String(date).slice(4, 6)}-${
-              String(date).slice(6, 8)
-            }:\n\n${contextStr}\n\nTulis ringkasan narasi singkat tentang apa yang mereka miliki kesamaan, sektor mana yang kuat, dan setup individual mana yang perlu diperhatikan.`
+            }-${String(date).slice(4, 6)}-${String(date).slice(6, 8)}:\n\n${contextStr}\n\n` +
+            `Tulis ringkasan narasi singkat tentang kesamaan mereka, sektor yang kuat, dan setup individual yang perlu diperhatikan.`
         }]
       })
     })
@@ -262,7 +212,7 @@ async function getClaudeNarrative(
       }
     }
   } catch {
-    // Silently fail on timeout or network error
+    // Silently fail on timeout/network error
   }
 
   return undefined
@@ -272,15 +222,16 @@ async function getClaudeNarrative(
 
 export async function GET(ctx: Context) {
   const modeStr = Utils.queryString(ctx.query('mode')) ?? 'combined'
-  const mode =
-    (modeStr === 'technical' || modeStr === 'fundamental' || modeStr === 'combined'
+  const mode = (
+    modeStr === 'technical' || modeStr === 'fundamental' || modeStr === 'combined'
       ? modeStr
-      : 'combined') as Types.AiRecommendationMode
+      : 'combined'
+  ) as Types.AiRecommendationMode
   const limit = Math.min(100, Utils.parseNumber(Utils.queryString(ctx.query('limit'))) ?? 30)
   const minTechScore = Utils.parseNumber(Utils.queryString(ctx.query('minTechScore'))) ?? 50
   const minFundScore = Utils.parseNumber(Utils.queryString(ctx.query('minFundScore'))) ?? 40
 
-  // Get latest date
+  // Latest date
   const latestRows = await Database.select({ date: Schemas.summary.date })
     .from(Schemas.summary)
     .orderBy(desc(Schemas.summary.date))
@@ -290,103 +241,152 @@ export async function GET(ctx: Context) {
     const empty: Types.AiRecommendationResponse = { date: 0, mode, totalCount: 0, data: [] }
     return ctx.send.json(empty)
   }
+  const dateRef = Number(latestDate)
+  const dateStart = Utils.addDaysToDateInt(dateRef, -400)
 
-  // Fetch data
-  const dateRef = latestDate - 400
-  const summaryRows = await Database.select()
+  // ── IHSG proxy (for RS Line) ─────────────────────────────────────────────
+  const ihsgRaw = await Database.select({
+    date: Schemas.summary.date,
+    ihsg: sql<number>`SUM(${Schemas.summary.individualIndex} * ${Schemas.summary.weightForIndex})`
+  })
     .from(Schemas.summary)
-    .where(and(gte(Schemas.summary.date, dateRef), lte(Schemas.summary.date, latestDate)))
+    .where(
+      and(
+        gte(Schemas.summary.date, dateStart),
+        lte(Schemas.summary.date, dateRef),
+        isNotNull(Schemas.summary.individualIndex),
+        isNotNull(Schemas.summary.weightForIndex)
+      )
+    )
+    .groupBy(Schemas.summary.date)
     .orderBy(asc(Schemas.summary.date))
 
-  const screenerRows = await Database.select()
-    .from(Schemas.screener)
-
-  const financialRows = await Database.select()
-    .from(Schemas.financial)
-    .orderBy(asc(Schemas.financial.year), asc(Schemas.financial.quarter))
-
-  // Build OHLC by code
-  interface OhlcData {
-    dates: number[]
-    closes: number[]
-    highs: number[]
-    lows: number[]
-    volumes: number[]
-    values: number[]
-    listedShares: number | null
-    tradableShares: number | null
+  const ihsgByDate = new Map<number, number>()
+  for (const row of ihsgRaw) {
+    const v = Number(row.ihsg)
+    if (Number.isFinite(v) && v > 0) ihsgByDate.set(Number(row.date), v)
   }
-  const ohlcByCode = new Map<string, OhlcData>()
+
+  // ── OHLC + float data ────────────────────────────────────────────────────
+  const summaryRows = await Database.select({
+    stockCode: Schemas.summary.stockCode,
+    date: Schemas.summary.date,
+    priceClose: Schemas.summary.priceClose,
+    priceHigh: Schemas.summary.priceHigh,
+    priceLow: Schemas.summary.priceLow,
+    volume: Schemas.summary.volume,
+    value: Schemas.summary.value,
+    listedShares: Schemas.summary.listedShares,
+    tradableShares: Schemas.summary.tradableShares
+  })
+    .from(Schemas.summary)
+    .where(and(gte(Schemas.summary.date, dateStart), lte(Schemas.summary.date, dateRef)))
+    .orderBy(asc(Schemas.summary.stockCode), asc(Schemas.summary.date))
+
+  type OhlcEntry = {
+    date: number
+    close: number
+    high: number
+    low: number
+    volume: number
+    value: number
+  }
+  const ohlcByCode = new Map<string, OhlcEntry[]>()
+  const floatByCode = new Map<string, { listed: number; tradable: number }>()
+
   for (const row of summaryRows) {
-    const code = row.stock_code
-    if (!code) {
-      continue
+    const close = row.priceClose != null && Number.isFinite(Number(row.priceClose))
+      ? Number(row.priceClose)
+      : null
+    if (close == null || close <= 0) continue
+    const high = row.priceHigh != null && Number.isFinite(Number(row.priceHigh))
+      ? Number(row.priceHigh)
+      : close
+    const low = row.priceLow != null && Number.isFinite(Number(row.priceLow))
+      ? Number(row.priceLow)
+      : close
+    const volume = Number.isFinite(Number(row.volume)) ? Number(row.volume) : 0
+    const value = Number.isFinite(Number(row.value)) ? Number(row.value) : 0
+    const list = ohlcByCode.get(row.stockCode) ?? []
+    list.push({ date: Number(row.date), close, high, low, volume, value })
+    ohlcByCode.set(row.stockCode, list)
+    // Track latest float data
+    if (row.listedShares != null && row.tradableShares != null) {
+      floatByCode.set(row.stockCode, {
+        listed: Number(row.listedShares),
+        tradable: Number(row.tradableShares)
+      })
     }
-    const entry = ohlcByCode.get(code) ?? {
-      dates: [],
-      closes: [],
-      highs: [],
-      lows: [],
-      volumes: [],
-      values: [],
-      listedShares: null,
-      tradableShares: null
-    }
-    entry.dates.push(row.date!)
-    entry.closes.push(row.price_close ?? 0)
-    entry.highs.push(row.price_high ?? 0)
-    entry.lows.push(row.price_low ?? 0)
-    entry.volumes.push(row.volume ?? 0)
-    entry.values.push(row.value ?? 0)
-    if (row.listed_shares != null) {
-      entry.listedShares = row.listed_shares
-    }
-    if (row.tradable_shares != null) {
-      entry.tradableShares = row.tradable_shares
-    }
-    ohlcByCode.set(code, entry)
   }
 
-  // Build screener map
-  const screenerMap = new Map<string, typeof screenerRows[0]>()
+  // ── Screener data ────────────────────────────────────────────────────────
+  const screenerRows = await Database.select({
+    code: Schemas.screener.code,
+    name: Schemas.screener.name,
+    sector: Schemas.screener.sector,
+    marketCapital: Schemas.screener.marketCapital,
+    notation: Schemas.screener.notation,
+    umaDate: Schemas.screener.umaDate,
+    per: Schemas.screener.per,
+    roe: Schemas.screener.roe,
+    der: Schemas.screener.der,
+    npm: Schemas.screener.npm
+  }).from(Schemas.screener)
+
+  type ScRow = {
+    name: string | null
+    sector: string | null
+    marketCapital: number | null
+    notation: string | null
+    umaDate: string | null
+    per: number | null
+    roe: number | null
+    der: number | null
+    npm: number | null
+  }
+  const screenerMap = new Map<string, ScRow>()
   for (const row of screenerRows) {
-    screenerMap.set(row.code, row)
+    screenerMap.set(row.code, {
+      name: row.name ?? null,
+      sector: row.sector ?? null,
+      marketCapital: row.marketCapital != null ? Number(row.marketCapital) : null,
+      notation: row.notation ?? null,
+      umaDate: row.umaDate ?? null,
+      per: row.per != null ? Number(row.per) : null,
+      roe: row.roe != null ? Number(row.roe) : null,
+      der: row.der != null ? Number(row.der) : null,
+      npm: row.npm != null ? Number(row.npm) : null
+    })
   }
 
-  // Build financial history by code
+  // ── Financial history ────────────────────────────────────────────────────
+  const financialRows = await Database.select({
+    stockCode: Schemas.financialHistory.stockCode,
+    year: Schemas.financialHistory.year,
+    quarter: Schemas.financialHistory.quarter,
+    eps: Schemas.financialHistory.eps,
+    profitAttrOwner: Schemas.financialHistory.profitAttrOwner,
+    sales: Schemas.financialHistory.sales
+  }).from(Schemas.financialHistory)
+
   const historyByCode = new Map<string, HistRow[]>()
   for (const row of financialRows) {
-    const code = row.stock_code
-    if (!code) {
-      continue
-    }
-    const entries = historyByCode.get(code) ?? []
-    entries.push({
+    const list = historyByCode.get(row.stockCode) ?? []
+    list.push({
       year: row.year,
       quarter: row.quarter,
-      eps: row.eps,
-      profitAttrOwner: row.profit_attr_owner,
-      sales: row.sales
+      eps: row.eps ?? null,
+      profitAttrOwner: row.profitAttrOwner ?? null,
+      sales: row.sales ?? null
     })
-    historyByCode.set(code, entries)
+    historyByCode.set(row.stockCode, list)
   }
 
-  // Compute RS ranks (duplicate logic from other endpoints)
+  // ── RS Ranks ─────────────────────────────────────────────────────────────
   const rsScores = new Map<string, { score: number; rank: number }>()
-  const allCodes = Array.from(ohlcByCode.keys())
-  const ret3m = new Map<string, number>()
-  const ret6m = new Map<string, number>()
-  const ret9m = new Map<string, number>()
-  const ret12m = new Map<string, number>()
-
-  for (const code of allCodes) {
-    const data = ohlcByCode.get(code)!
-    const closes = data.closes
-    if (closes.length < 252) {
-      continue
-    }
-
-    const base = closes[0]
+  for (const [code, entries] of ohlcByCode) {
+    if (entries.length < 252) continue
+    const closes = entries.map((e) => e.close)
     const r3m = closes.length >= 63
       ? returnPct(closes[closes.length - 1], closes[closes.length - 63])
       : null
@@ -399,126 +399,73 @@ export async function GET(ctx: Context) {
     const r12m = closes.length >= 252
       ? returnPct(closes[closes.length - 1], closes[closes.length - 252])
       : null
-
-    if (r3m != null) {
-      ret3m.set(code, r3m)
-    }
-    if (r6m != null) {
-      ret6m.set(code, r6m)
-    }
-    if (r9m != null) {
-      ret9m.set(code, r9m)
-    }
-    if (r12m != null) {
-      ret12m.set(code, r12m)
-    }
-
-    const rsScore = (r3m ?? 0) * 0.40 + (r6m ?? 0) * 0.20 + (r9m ?? 0) * 0.20 + (r12m ?? 0) * 0.20
+    const rsScore = (r3m ?? 0) * 0.40 + (r6m ?? 0) * 0.20 + (r9m ?? 0) * 0.20 +
+      (r12m ?? 0) * 0.20
     rsScores.set(code, { score: rsScore, rank: 0 })
   }
-
-  // Rank RS scores
   const sortedByRs = Array.from(rsScores.entries()).sort((a, b) => b[1].score - a[1].score)
   for (let i = 0; i < sortedByRs.length; i++) {
-    const percent = Math.round(((i / sortedByRs.length) * 99) + 1)
-    rsScores.get(sortedByRs[i][0])!.rank = percent
+    const pct = Math.round(((i / sortedByRs.length) * 99) + 1)
+    rsScores.get(sortedByRs[i][0])!.rank = pct
   }
 
-  // Compute IHSG (for RS Line)
-  const ihsgByDate = new Map<number, number>()
-  for (const row of summaryRows) {
-    const date = row.date!
-    const individualIndex = row.individual_index ?? 0
-    const weight = row.weight_for_index ?? 0
-    const contribution = individualIndex * weight
-    ihsgByDate.set(date, (ihsgByDate.get(date) ?? 0) + contribution)
-  }
-
-  // Normalize IHSG to 100
-  const ihsgValues = Array.from(ihsgByDate.values())
-  const firstIhsg = ihsgValues[0] ?? 1
-  const normalizedIhsg = new Map<number, number>()
-  for (const [date, val] of ihsgByDate) {
-    normalizedIhsg.set(date, (val / firstIhsg) * 100)
-  }
-
-  // Process each stock
+  // ── Process each stock ───────────────────────────────────────────────────
   const results: Types.AiRecommendationRow[] = []
 
-  for (const code of allCodes) {
-    const ohlc = ohlcByCode.get(code)!
-    if (ohlc.closes.length < 50) {
-      continue
-    }
+  for (const [code, entries] of ohlcByCode) {
+    if (entries.length < 50) continue
 
-    const lastDate = ohlc.dates[ohlc.dates.length - 1]
-    const price = ohlc.closes[ohlc.closes.length - 1]
-    const screener = screenerMap.get(code)
+    const lastEntry = entries[entries.length - 1]
+    const price = lastEntry.close
+    const lastDate = lastEntry.date
+    const sc = screenerMap.get(code)
     const histRows = historyByCode.get(code) ?? []
+    const closes = entries.map((e) => e.close)
+    const highs = entries.map((e) => e.high)
+    const lows = entries.map((e) => e.low)
+    const volumes = entries.map((e) => e.volume)
 
-    // ─── Gorengan Score ────────────────────────────────────────────────────
-
+    // ── Gorengan Score ──────────────────────────────────────────────────
     let gorenganScore = 0
-    const notation = screener?.notation
-    if (notation === 'X') {
-      gorenganScore += 40
-    }
+    if (sc?.notation === 'X') gorenganScore += 40
 
-    const umaDate = screener?.uma_date
-    if (umaDate) {
-      // Parse UMA date (assuming string format)
+    if (sc?.umaDate) {
       try {
-        const umaTime = new Date(umaDate).getTime()
+        const umaTime = new Date(sc.umaDate).getTime()
+        const refStr = String(lastDate)
         const refTime = new Date(
-          String(lastDate).slice(0, 4) + '-' + String(lastDate).slice(4, 6) + '-' +
-            String(lastDate).slice(6, 8)
+          `${refStr.slice(0, 4)}-${refStr.slice(4, 6)}-${refStr.slice(6, 8)}`
         ).getTime()
-        if (refTime - umaTime < 30 * 24 * 60 * 60 * 1000) {
-          gorenganScore += 25
-        }
-      } catch {
-        // Unparseable date; skip
-      }
+        if (!isNaN(umaTime) && refTime - umaTime < 30 * 24 * 60 * 60 * 1000) gorenganScore += 25
+      } catch { /* ignore */ }
     }
 
-    const marketCap = screener?.market_capital ?? 0
-    if (marketCap < 100_000_000_000) {
-      gorenganScore += 25
-    } else if (marketCap < 500_000_000_000) {
+    const marketCap = sc?.marketCapital ?? 0
+    if (marketCap < 100_000_000_000) gorenganScore += 25
+    else if (marketCap < 500_000_000_000) gorenganScore += 15
+
+    const floatData = floatByCode.get(code)
+    if (floatData && floatData.listed > 0 && floatData.tradable / floatData.listed < 0.20) {
       gorenganScore += 15
     }
 
-    const floatRatio = ohlc.tradableShares && ohlc.listedShares && ohlc.listedShares > 0
-      ? ohlc.tradableShares / ohlc.listedShares
-      : 1
-    if (floatRatio < 0.20) {
-      gorenganScore += 15
-    }
+    const avgVol20d = volumes.slice(-20).reduce((a, b) => a + b, 0) / 20
+    if (volumes[volumes.length - 1] > avgVol20d * 10) gorenganScore += 10
 
-    const avgVol20d = ohlc.volumes.slice(-20).reduce((a, b) => a + b, 0) / 20
-    if (ohlc.volumes[ohlc.volumes.length - 1] > avgVol20d * 10) {
-      gorenganScore += 10
-    }
+    if (histRows.length === 0) gorenganScore += 5
 
-    if (histRows.length === 0) {
-      gorenganScore += 5
-    }
+    if (gorenganScore >= 60) continue
 
-    // Skip if gorengan score too high
-    if (gorenganScore >= 60) {
-      continue
-    }
+    // ── Technical signals ───────────────────────────────────────────────
+    const ma50 = calcMA(closes, 50)
+    const ma150 = calcMA(closes, 150)
+    const ma200 = calcMA(closes, 200)
+    const ma200prev = closes.length > 22 ? closes[closes.length - 23] : closes[0]
+    const ma200SlopePct = ma200 != null ? returnPct(ma200, ma200prev) : null
 
-    // ─── SEPA Components ───────────────────────────────────────────────────
-
-    const ma50 = calcMA(ohlc.closes, 50)
-    const ma150 = calcMA(ohlc.closes, 150)
-    const ma200 = calcMA(ohlc.closes, 200)
-    const ma200_22 = ohlc.closes.length > 22 ? ohlc.closes[ohlc.closes.length - 23] : ohlc.closes[0]
-    const ma200SlopePct = ma200 != null ? returnPct(ma200, ma200_22) : null
-
-    const high52w = Math.max(...ohlc.highs)
-    const low52w = Math.min(...ohlc.lows)
+    const high52w = Math.max(...highs)
+    const low52w = Math.min(...lows)
+    const rsRank = rsScores.get(code)?.rank ?? 0
 
     const criteria: Types.TrendTemplateCriteria = {
       aboveMa150Ma200: ma150 != null && ma200 != null && price > ma150 && price > ma200,
@@ -529,249 +476,175 @@ export async function GET(ctx: Context) {
       aboveMa50: ma50 != null && price > ma50,
       above52wLowBy30Pct: low52w > 0 && price >= low52w * 1.3,
       within25PctOf52wHigh: high52w > 0 && price >= high52w * 0.75,
-      rsRank70: (rsScores.get(code)?.rank ?? 0) >= 70
+      rsRank70: rsRank >= 70
     }
-
-    const trendScore = calcTrendScore(criteria)
-    const rsRank = rsScores.get(code)?.rank ?? 0
+    const trendCriteriaCount = Object.values(criteria).filter(Boolean).length
+    const trendScore = (trendCriteriaCount / 8) * 40
     const rsScore30 = (rsRank / 99) * 30
-    const epsInfo = calcEpsScore(histRows)
-    const fundScore = epsInfo.score
-
-    // ROE + NPM (15 pts max)
-    let fundScoreFull = fundScore
-    const roe = screener?.roe ?? 0
-    const roePts = Math.min(roe / 25, 1) * 9
-    const npm = screener?.npm ?? 0
-    const npmPts = Math.min(npm / 20, 1) * 6
-    fundScoreFull += roePts + npmPts
-
-    // DER (10 pts)
-    const der = screener?.der ?? 999
-    let derPts = 0
-    if (der <= 0.5) {
-      derPts = 10
-    } else if (der <= 1.0) {
-      derPts = 7
-    } else if (der <= 2.0) {
-      derPts = 4
-    }
-    fundScoreFull += derPts
-
-    // Revenue growth (10 pts)
-    let revenueGrowthPct: number | null = null
-    if (histRows.length > 0) {
-      const byKey = new Map<string, HistRow>()
-      for (const r of histRows) {
-        byKey.set(`${r.year}_${r.quarter}`, r)
-      }
-      let latestYear: number | null = null
-      let latestQ: number | null = null
-      outer: for (const y of [2025, 2024, 2023, 2022]) {
-        for (const q of [4, 3, 2, 1]) {
-          if (byKey.get(`${y}_${q}`)?.sales != null) {
-            latestYear = y
-            latestQ = q
-            break outer
-          }
-        }
-      }
-      if (latestYear && latestQ) {
-        const curSales = byKey.get(`${latestYear}_${latestQ}`)?.sales ?? 0
-        const priorSales = byKey.get(`${latestYear - 1}_${latestQ}`)?.sales ?? 0
-        if (priorSales > 0) {
-          revenueGrowthPct = ((curSales - priorSales) / priorSales) * 100
-          let revPts = 0
-          if (revenueGrowthPct >= 15) {
-            revPts = 10
-          } else if (revenueGrowthPct >= 5) {
-            revPts = 6
-          } else if (revenueGrowthPct >= 0) {
-            revPts = 2
-          }
-          fundScoreFull += revPts
-        }
-      }
-    }
-
-    // PER (5 pts)
-    const per = screener?.per ?? 0
-    let perPts = 0
-    if (per >= 5 && per <= 20) {
-      perPts = 5
-    } else if (per >= 20 && per <= 30) {
-      perPts = 3
-    } else if (per >= 30 && per <= 50) {
-      perPts = 1
-    }
-    fundScoreFull += perPts
-
-    // SEPA Score (100 pts max)
-    const sepaScore = Math.min(100, trendScore + rsScore30 + fundScoreFull)
 
     const stage = determineStage(price, ma50, ma150, ma200, ma200SlopePct)
 
-    // ─── RS Line New High ──────────────────────────────────────────────────
+    // ── EPS & Fundamental ───────────────────────────────────────────────
+    const epsInfo = calcEpsInfo(histRows)
+    const roe = sc?.roe ?? 0
+    const npm = sc?.npm ?? 0
+    const der = sc?.der ?? 999
+    const per = sc?.per ?? 0
 
-    const rsLineByDate = new Map<number, number>()
-    for (let i = 0; i < ohlc.dates.length; i++) {
-      const date = ohlc.dates[i]
-      const stockClose = ohlc.closes[i]
-      const ihsg = normalizedIhsg.get(date) ?? 1
-      rsLineByDate.set(date, stockClose / ihsg)
-    }
-
-    let rsLineNewHigh = false
-    if (rsLineByDate.size > 0) {
-      const rsLineValues = Array.from(rsLineByDate.values())
-      const rsLineMax52w = Math.max(...rsLineValues)
-      const rsLineCur = rsLineByDate.get(lastDate) ?? 0
-      rsLineNewHigh = rsLineCur >= rsLineMax52w * 0.999
-    }
-
-    // ─── Pocket Pivot ──────────────────────────────────────────────────────
-
-    let hasPocketPivot = false
-    if (ohlc.closes.length >= 15) {
-      const ma10 = calcMA(ohlc.closes, 10)
-      const last5 = ohlc.dates.slice(-5)
-      const maxDownVol10d = Math.max(...ohlc.volumes.slice(-10))
-
-      for (const lookDate of last5) {
-        const idx = ohlc.dates.indexOf(lookDate)
-        if (idx <= 0) {
-          continue
+    let fundScoreFull = epsInfo.score
+    // ROE + NPM (15 pts from sepa)
+    fundScoreFull += Math.min(roe / 25, 1) * 9 + Math.min(npm / 20, 1) * 6
+    // DER (10 pts)
+    if (der <= 0.5) fundScoreFull += 10
+    else if (der <= 1.0) fundScoreFull += 7
+    else if (der <= 2.0) fundScoreFull += 4
+    // Revenue growth (10 pts)
+    if (histRows.length > 0) {
+      const byKey = new Map<string, HistRow>()
+      for (const r of histRows) byKey.set(`${r.year}_${r.quarter}`, r)
+      let lYear: number | null = null
+      let lQ: number | null = null
+      salesSearch: for (const y of [2025, 2024, 2023, 2022]) {
+        for (const q of [4, 3, 2, 1]) {
+          if (byKey.get(`${y}_${q}`)?.sales != null) { lYear = y; lQ = q; break salesSearch }
         }
-        const prevClose = ohlc.closes[idx - 1]
-        const curClose = ohlc.closes[idx]
-        const curVol = ohlc.volumes[idx]
-        if (curClose > prevClose && curVol > maxDownVol10d && ma10 != null && curClose >= ma10) {
+      }
+      if (lYear && lQ) {
+        const curSales = byKey.get(`${lYear}_${lQ}`)?.sales ?? 0
+        const priorSales = byKey.get(`${lYear - 1}_${lQ}`)?.sales ?? 0
+        if (priorSales > 0) {
+          const revGrowth = ((curSales - priorSales) / priorSales) * 100
+          if (revGrowth >= 15) fundScoreFull += 10
+          else if (revGrowth >= 5) fundScoreFull += 6
+          else if (revGrowth >= 0) fundScoreFull += 2
+        }
+      }
+    }
+    // PER (5 pts)
+    if (per >= 5 && per <= 20) fundScoreFull += 5
+    else if (per > 20 && per <= 30) fundScoreFull += 3
+    else if (per > 30 && per <= 50) fundScoreFull += 1
+
+    const sepaScore = Math.min(100, trendScore + rsScore30 + epsInfo.score +
+      Math.min(roe / 25, 1) * 9 + Math.min(npm / 20, 1) * 6)
+
+    // ── RS Line New High ────────────────────────────────────────────────
+    let rsLineNewHigh = false
+    if (ihsgByDate.size > 0) {
+      const firstIhsg = ihsgByDate.values().next().value ?? 1
+      let rsLine52wHigh = 0
+      let rsLineCurrent = 0
+      for (const e of entries) {
+        const ihsg = ihsgByDate.get(e.date)
+        if (ihsg == null) continue
+        const rsLineVal = e.close / (ihsg / firstIhsg)
+        if (rsLineVal > rsLine52wHigh) rsLine52wHigh = rsLineVal
+        if (e.date === lastDate) rsLineCurrent = rsLineVal
+      }
+      rsLineNewHigh = rsLine52wHigh > 0 && rsLineCurrent >= rsLine52wHigh * 0.999
+    }
+
+    // ── Pocket Pivot (last 5 sessions) ──────────────────────────────────
+    let hasPocketPivot = false
+    if (entries.length >= 15) {
+      const ma10 = calcMA(closes, 10)
+      const maxDownVol10d = Math.max(
+        ...entries.slice(-10).filter((e, i, a) => i > 0 && e.close < a[i - 1].close).map((e) =>
+          e.volume
+        ).concat([0])
+      )
+      for (let i = entries.length - 5; i < entries.length; i++) {
+        if (i <= 0) continue
+        const prev = entries[i - 1]
+        const cur = entries[i]
+        if (cur.close > prev.close && cur.volume > maxDownVol10d && ma10 != null &&
+          cur.close >= ma10) {
           hasPocketPivot = true
           break
         }
       }
     }
 
-    // ─── Base Pattern Detection ────────────────────────────────────────────
-
+    // ── Base Pattern (simplified flat base detection) ───────────────────
     let patternType: Types.BasePatternType = 'none'
-
-    // Simplified: Check if last 25 bars form flat base
-    if (ohlc.closes.length >= 25) {
-      const last25 = ohlc.highs.slice(-25)
-      const range = Math.max(...last25) - Math.min(...last25)
-      const avgClose = ohlc.closes.slice(-25).reduce((a, b) => a + b) / 25
-      if (range / avgClose <= 0.15) {
-        patternType = 'flat'
-      }
+    if (entries.length >= 25) {
+      const last25H = highs.slice(-25)
+      const last25L = lows.slice(-25)
+      const range = Math.max(...last25H) - Math.min(...last25L)
+      const midPrice = (Math.max(...last25H) + Math.min(...last25L)) / 2
+      if (midPrice > 0 && range / midPrice <= 0.15) patternType = 'flat'
     }
 
-    // ─── Power Play / Low Cheat ────────────────────────────────────────────
-
+    // ── Power Play / Low Cheat ──────────────────────────────────────────
     let setupType: Types.PowerPlaySetupType = 'none'
-
-    // Simplified: Check last 5 days for tight range
-    if (ohlc.closes.length >= 5) {
-      const last5 = ohlc.closes.slice(-5)
+    if (closes.length >= 5) {
+      const last5 = closes.slice(-5)
       const range = Math.max(...last5) - Math.min(...last5)
-      const avgClose = last5.reduce((a, b) => a + b) / 5
-      if (range / avgClose < 0.03) {
-        setupType = 'power-play'
-      } else if (range / avgClose < 0.05) {
-        setupType = 'low-cheat'
+      const avg = last5.reduce((a, b) => a + b) / 5
+      if (avg > 0) {
+        if (range / avg < 0.03) setupType = 'power-play'
+        else if (range / avg < 0.05) setupType = 'low-cheat'
       }
     }
 
-    // ─── Scoring ───────────────────────────────────────────────────────────
-
-    // Technical Score (0–100)
-    let techScore = 0
-    techScore += (sepaScore / 100) * 50
-    if (stage === 2) {
-      techScore += 20
-    } else if (stage === 1) {
-      techScore += 10
-    }
-    if (rsLineNewHigh) {
-      techScore += 10
-    }
-    if (hasPocketPivot) {
-      techScore += 10
-    }
-    if (patternType === 'htf') {
-      techScore += 6
-    } else if (patternType === 'cup-handle') {
-      techScore += 4
-    } else if (patternType === 'flat') {
-      techScore += 2
-    }
-    if (setupType === 'power-play') {
-      techScore += 4
-    } else if (setupType === 'low-cheat') {
-      techScore += 2
-    }
+    // ── Technical Score (0–100) ─────────────────────────────────────────
+    let techScore = (sepaScore / 100) * 50
+    if (stage === 2) techScore += 20
+    else if (stage === 1) techScore += 10
+    if (rsLineNewHigh) techScore += 10
+    if (hasPocketPivot) techScore += 10
+    if (patternType === 'htf') techScore += 6
+    else if (patternType === 'cup-handle') techScore += 4
+    else if (patternType === 'flat') techScore += 2
+    if (setupType === 'power-play') techScore += 4
+    else if (setupType === 'low-cheat') techScore += 2
     techScore = Math.min(100, techScore)
 
-    // Fundamental Score (0–100)
-    let finalFundScore = Math.min(100, fundScoreFull)
+    // ── Fundamental Score (0–100) ───────────────────────────────────────
+    const finalFundScore = Math.min(100, fundScoreFull)
 
-    // Combined Score
+    // ── Combined Score ──────────────────────────────────────────────────
     const combinedScore = techScore * 0.6 + finalFundScore * 0.4
 
-    // Build reasons array
+    // ── Filter by mode ──────────────────────────────────────────────────
+    if (mode === 'technical' && techScore < minTechScore) continue
+    if (mode === 'fundamental' && finalFundScore < minFundScore) continue
+    if (mode === 'combined' && combinedScore < Math.min(minTechScore, minFundScore)) continue
+
+    // ── Reasons ─────────────────────────────────────────────────────────
     const reasons: string[] = []
-    if (sepaScore >= 75) {
-      reasons.push(`SEPA ${Math.round(sepaScore)} — Stage ${stage}, RS ${rsRank}`)
-    }
-    if (rsLineNewHigh) {
-      reasons.push('RS Line New High terkonfirmasi')
-    }
+    if (sepaScore >= 60) reasons.push(`SEPA ${Math.round(sepaScore)} — Stage ${stage}, RS ${rsRank}`)
+    if (rsLineNewHigh) reasons.push('RS Line New High terkonfirmasi')
     if (epsInfo.latestGrowthPct != null) {
-      let epsMsg = `EPS +${epsInfo.latestGrowthPct.toFixed(1)}% YoY`
-      if (epsInfo.acceleration) {
-        epsMsg += ', akselerasi'
-      }
-      if (epsInfo.consecutiveGrowthQ >= 2) {
-        epsMsg += `, ${epsInfo.consecutiveGrowthQ} Q berturut`
-      }
-      reasons.push(epsMsg)
+      let msg = `EPS ${epsInfo.latestGrowthPct >= 0 ? '+' : ''}${
+        epsInfo.latestGrowthPct.toFixed(1)
+      }% YoY`
+      if (epsInfo.acceleration) msg += ', akselerasi'
+      if (epsInfo.consecutiveGrowthQ >= 2) msg += `, ${epsInfo.consecutiveGrowthQ}Q berturut`
+      reasons.push(msg)
     }
     if (roe > 20 || npm > 15) {
-      reasons.push(`ROE ${roe?.toFixed(1) ?? 'N/A'}%, NPM ${npm?.toFixed(1) ?? 'N/A'}%`)
+      reasons.push(`ROE ${roe.toFixed(1)}%, NPM ${npm.toFixed(1)}%`)
     }
-    if (hasPocketPivot) {
-      reasons.push('Pocket Pivot terdeteksi')
-    }
+    if (hasPocketPivot) reasons.push('Pocket Pivot terdeteksi')
     if (patternType !== 'none') {
-      const pName = patternType === 'htf'
-        ? 'High Tight Flag'
-        : patternType === 'cup-handle'
-        ? 'Cup-and-Handle'
-        : 'Flat Base'
-      reasons.push(`${pName} pattern`)
+      reasons.push(
+        patternType === 'htf'
+          ? 'High Tight Flag pattern'
+          : patternType === 'cup-handle'
+          ? 'Cup-and-Handle pattern'
+          : 'Flat Base pattern'
+      )
     }
     if (setupType !== 'none') {
       reasons.push(setupType === 'power-play' ? 'Power Play setup' : 'Low Cheat setup')
     }
-
-    // Filter by mode and minimum scores
-    let shouldInclude = true
-    if (mode === 'technical' && techScore < minTechScore) {
-      shouldInclude = false
-    } else if (mode === 'fundamental' && finalFundScore < minFundScore) {
-      shouldInclude = false
-    } else if (mode === 'combined' && combinedScore < Math.min(minTechScore, minFundScore)) {
-      shouldInclude = false
-    }
-
-    if (!shouldInclude) {
-      continue
-    }
+    if (reasons.length === 0) reasons.push(`Skor ${mode}: ${Math.round(combinedScore)}`)
 
     results.push({
       code,
-      name: screener?.name ?? null,
-      sector: screener?.sector ?? null,
+      name: sc?.name ?? null,
+      sector: sc?.sector ?? null,
       price,
       techScore,
       fundScore: finalFundScore,
@@ -781,8 +654,8 @@ export async function GET(ctx: Context) {
       rsRank,
       sepaScore,
       epsGrowthPct: epsInfo.latestGrowthPct,
-      roe: screener?.roe ?? null,
-      der: screener?.der ?? null,
+      roe: roe > 0 ? roe : null,
+      der: der < 999 ? der : null,
       hasRsLineNewHigh: rsLineNewHigh,
       hasPocketPivot,
       patternType,
@@ -791,33 +664,26 @@ export async function GET(ctx: Context) {
     })
   }
 
-  // Sort by mode
-  if (mode === 'technical') {
-    results.sort((a, b) => b.techScore - a.techScore)
-  } else if (mode === 'fundamental') {
-    results.sort((a, b) => b.fundScore - a.fundScore)
-  } else {
-    results.sort((a, b) => b.combinedScore - a.combinedScore)
-  }
+  // Sort and slice
+  if (mode === 'technical') results.sort((a, b) => b.techScore - a.techScore)
+  else if (mode === 'fundamental') results.sort((a, b) => b.fundScore - a.fundScore)
+  else results.sort((a, b) => b.combinedScore - a.combinedScore)
 
-  // Slice to limit
   const sliced = results.slice(0, limit)
 
-  // Get Claude narrative if available
+  // Claude narrative (optional)
   let claudeNarrative: string | undefined
   try {
-    claudeNarrative = await getClaudeNarrative(latestDate, mode, sliced)
-  } catch {
-    // Silently fail
-  }
+    claudeNarrative = await getClaudeNarrative(dateRef, mode, sliced)
+  } catch { /* ignore */ }
 
   const response: Types.AiRecommendationResponse = {
-    date: latestDate,
+    date: dateRef,
     mode,
     totalCount: results.length,
     data: sliced,
     ...(claudeNarrative && { claudeNarrative })
   }
 
-  ctx.send.json(response)
+  return ctx.send.json(response)
 }
