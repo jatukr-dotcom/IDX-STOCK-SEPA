@@ -13,6 +13,93 @@ import Utils from '@app/server/Utils.ts'
 import * as Schemas from '@app/server/schemas/index.ts'
 import type * as Types from '@app/server/Types.ts'
 
+type HistRow = { year: number; quarter: number; eps: number | null; profitAttrOwner: number | null }
+
+function calcQEps(byKey: Map<string, HistRow>, year: number, quarter: number): number | null {
+  const row = byKey.get(`${year}_${quarter}`)
+  if (!row || row.profitAttrOwner == null || row.eps == null) return null
+  let shares: number | null = null
+  const q4c = byKey.get(`${year}_4`)
+  if (q4c?.profitAttrOwner != null && q4c.eps != null && q4c.eps !== 0) {
+    shares = q4c.profitAttrOwner / q4c.eps
+  }
+  if (shares == null || shares === 0) {
+    const q4p = byKey.get(`${year - 1}_4`)
+    if (q4p?.profitAttrOwner != null && q4p.eps != null && q4p.eps !== 0) {
+      shares = q4p.profitAttrOwner / q4p.eps
+    }
+  }
+  if (shares == null || shares === 0) return null
+  const prev = quarter > 1 ? byKey.get(`${year}_${quarter - 1}`) : null
+  const prevProfit = prev?.profitAttrOwner ?? 0
+  return (row.profitAttrOwner - prevProfit) / shares
+}
+
+function calcEpsScore(histRows: HistRow[]): {
+  score: number
+  latestGrowthPct: number | null
+  acceleration: boolean
+  consecutiveGrowthQ: number
+} {
+  const byKey = new Map<string, HistRow>()
+  for (const r of histRows) byKey.set(`${r.year}_${r.quarter}`, r)
+
+  // Find most recent quarter with data
+  let latestYear: number | null = null
+  let latestQ: number | null = null
+  outer: for (const y of [2025, 2024, 2023, 2022]) {
+    for (const q of [4, 3, 2, 1]) {
+      if (byKey.get(`${y}_${q}`)?.profitAttrOwner != null) {
+        latestYear = y; latestQ = q; break outer
+      }
+    }
+  }
+  if (latestYear == null || latestQ == null) {
+    return { score: 0, latestGrowthPct: null, acceleration: false, consecutiveGrowthQ: 0 }
+  }
+
+  const curEps = calcQEps(byKey, latestYear, latestQ)
+  const pyEps = calcQEps(byKey, latestYear - 1, latestQ)
+  let latestGrowthPct: number | null = null
+  if (curEps != null && pyEps != null && pyEps !== 0) {
+    latestGrowthPct = ((curEps - pyEps) / Math.abs(pyEps)) * 100
+  }
+
+  // Prior quarter growth for acceleration
+  const prevQ = latestQ > 1 ? latestQ - 1 : 4
+  const prevY = latestQ > 1 ? latestYear : latestYear - 1
+  const prevCurEps = calcQEps(byKey, prevY, prevQ)
+  const prevPyEps = calcQEps(byKey, prevY - 1, prevQ)
+  let prevGrowthPct: number | null = null
+  if (prevCurEps != null && prevPyEps != null && prevPyEps !== 0) {
+    prevGrowthPct = ((prevCurEps - prevPyEps) / Math.abs(prevPyEps)) * 100
+  }
+  const acceleration = latestGrowthPct != null && prevGrowthPct != null && latestGrowthPct > prevGrowthPct
+
+  // Count consecutive quarters of positive YoY growth
+  let consecutiveGrowthQ = 0
+  let cy = latestYear; let cq = latestQ
+  for (let i = 0; i < 4; i++) {
+    const ce = calcQEps(byKey, cy, cq)
+    const pe = calcQEps(byKey, cy - 1, cq)
+    if (ce != null && pe != null && ce > pe) consecutiveGrowthQ++
+    else break
+    cq--; if (cq === 0) { cq = 4; cy-- }
+  }
+
+  // Score (0–15): growth 8pts + acceleration 4pts + streak 3pts
+  let score = 0
+  if (latestGrowthPct != null) {
+    if (latestGrowthPct >= 25) score += 8
+    else if (latestGrowthPct >= 10) score += 5
+    else if (latestGrowthPct >= 0) score += 2
+  }
+  if (acceleration) score += 4
+  if (consecutiveGrowthQ >= 2) score += 3
+
+  return { score, latestGrowthPct, acceleration, consecutiveGrowthQ }
+}
+
 function calcMA(prices: number[], period: number): number | null {
   if (prices.length < period) return null
   const slice = prices.slice(prices.length - period)
@@ -95,6 +182,27 @@ export async function GET(ctx: Context) {
       der: row.der,
       npm: row.npm
     })
+  }
+
+  // Fetch EPS history for all stocks
+  const historyRows = await Database.select({
+    stockCode: Schemas.financialHistory.stockCode,
+    year: Schemas.financialHistory.year,
+    quarter: Schemas.financialHistory.quarter,
+    eps: Schemas.financialHistory.eps,
+    profitAttrOwner: Schemas.financialHistory.profitAttrOwner
+  }).from(Schemas.financialHistory)
+
+  const historyByCode = new Map<string, HistRow[]>()
+  for (const row of historyRows) {
+    const list = historyByCode.get(row.stockCode) ?? []
+    list.push({
+      year: row.year,
+      quarter: row.quarter,
+      eps: row.eps ?? null,
+      profitAttrOwner: row.profitAttrOwner ?? null
+    })
+    historyByCode.set(row.stockCode, list)
   }
 
   // --- Step 1: Calculate RS Score for all stocks to derive RS Rank ---
@@ -192,16 +300,18 @@ export async function GET(ctx: Context) {
     const der = fund?.der != null && Number.isFinite(Number(fund.der)) ? Number(fund.der) : null
     const npm = fund?.npm != null && Number.isFinite(Number(fund.npm)) ? Number(fund.npm) : null
 
+    // EPS Growth Score (0–15)
+    const epsResult = calcEpsScore(historyByCode.get(code) ?? [])
+
     // SEPA Score: 0–100
-    // 40% Trend Template (criteriaCount/8)
-    // 35% RS Rank (/99)
-    // 25% Fundamental Quality (ROE + NPM)
+    // 40% Trend Template | 30% RS Rank | 15% EPS Growth | 15% Fundamental Quality
     const trendScore = (trendCriteriaCount / 8) * 40
-    const rsScore40 = (rsRank / 99) * 35
+    const rsScore30 = (rsRank / 99) * 30
+    const epsScore = epsResult.score  // max 15
     let fundScore = 0
-    if (roe != null && roe > 0) fundScore += Math.min(roe / 30, 1) * 15 // ROE up to 30% → 15pts
-    if (npm != null && npm > 0) fundScore += Math.min(npm / 20, 1) * 10 // NPM up to 20% → 10pts
-    const sepaScore = trendScore + rsScore40 + fundScore
+    if (roe != null && roe > 0) fundScore += Math.min(roe / 30, 1) * 9  // ROE up to 30% → 9pts
+    if (npm != null && npm > 0) fundScore += Math.min(npm / 20, 1) * 6  // NPM up to 20% → 6pts
+    const sepaScore = trendScore + rsScore30 + epsScore + fundScore
 
     results.push({
       code,
@@ -225,6 +335,9 @@ export async function GET(ctx: Context) {
       roe,
       der,
       npm,
+      epsGrowthPct: epsResult.latestGrowthPct != null ? Utils.round3(epsResult.latestGrowthPct) : null,
+      epsAcceleration: epsResult.acceleration,
+      epsConsecutiveGrowth: epsResult.consecutiveGrowthQ,
       sepaScore: Utils.round3(sepaScore)
     })
   }

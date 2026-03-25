@@ -166,6 +166,25 @@ function SepaRow({ row }: { row: Types.SepaCandidateRow }) {
                 <span className='idx-p-muted'>NPM</span>
                 <strong>{row.npm != null ? `${Utils.Format.formatNum(row.npm, 1)}%` : '-'}</strong>
               </div>
+              <div className='idx-sepa-divider' />
+              <div className='idx-sepa-detail-group'>
+                <span className='idx-p-muted'>EPS Growth YoY</span>
+                <strong style={{ color: row.epsGrowthPct != null && row.epsGrowthPct >= 25 ? 'var(--idx-up)' : row.epsGrowthPct != null && row.epsGrowthPct >= 0 ? 'var(--idx-accent)' : 'var(--idx-down)' }}>
+                  {row.epsGrowthPct != null ? `${row.epsGrowthPct >= 0 ? '+' : ''}${Utils.Format.formatNum(row.epsGrowthPct, 1)}%` : '-'}
+                </strong>
+              </div>
+              <div className='idx-sepa-detail-group'>
+                <span className='idx-p-muted'>EPS Akselerasi</span>
+                <strong style={{ color: row.epsAcceleration ? 'var(--idx-up)' : 'var(--idx-text-muted)' }}>
+                  {row.epsAcceleration ? '✓ Ya' : '✗ Tidak'}
+                </strong>
+              </div>
+              <div className='idx-sepa-detail-group'>
+                <span className='idx-p-muted'>Kuartal Positif</span>
+                <strong style={{ color: row.epsConsecutiveGrowth >= 2 ? 'var(--idx-up)' : 'var(--idx-text-muted)' }}>
+                  {row.epsConsecutiveGrowth}Q berturut
+                </strong>
+              </div>
             </div>
             <div className='idx-trend-criteria-detail' style={{ marginTop: 8 }}>
               {(Object.keys(CRITERIA_SHORT) as (keyof Types.TrendTemplateCriteria)[]).map((key) => (

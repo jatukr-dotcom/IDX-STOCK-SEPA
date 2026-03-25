@@ -511,6 +511,10 @@ export interface SepaCandidateRow {
   roe: number | null
   der: number | null
   npm: number | null
+  // EPS Growth
+  epsGrowthPct: number | null
+  epsAcceleration: boolean
+  epsConsecutiveGrowth: number
   // Composite
   sepaScore: number
 }

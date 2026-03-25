@@ -35,8 +35,18 @@ SEPA adalah metodologi trading yang dikembangkan Mark Minervini, pemenang U.S. I
 | Komponen | Bobot | Penjelasan |
 |---|---|---|
 | Trend Template | 40% | Jumlah kriteria terpenuhi / 8 |
-| RS Rank | 35% | Peringkat RS / 99 |
-| Fundamental (ROE + NPM) | 25% | ROE hingga 30% + NPM hingga 20% |
+| RS Rank | 30% | Peringkat RS / 99 |
+| EPS Growth | 15% | Pertumbuhan EPS YoY + akselerasi + konsistensi |
+| Fundamental (ROE + NPM) | 15% | ROE hingga 30% (9pts) + NPM hingga 20% (6pts) |
+
+**Detail skor EPS Growth (0–15 poin):**
+| Kondisi | Poin |
+|---|---|
+| EPS YoY ≥ 25% (standar Minervini) | 8 |
+| EPS YoY ≥ 10% | 5 |
+| EPS YoY ≥ 0% | 2 |
+| Akselerasi (growth kuartal ini > kuartal lalu) | +4 |
+| ≥ 2 kuartal berturut-turut tumbuh positif | +3 |
 
 ---
 
