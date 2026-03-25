@@ -93,7 +93,8 @@ deno task ui:dev
 | `deno task ui:build` | Build UI untuk production |
 | `deno task ui:dev` | Jalankan UI dev server |
 | `deno task db:push` | Terapkan skema ke database |
-| `deno task db:init` | Isi data awal |
+| `deno task db:init` | Isi data awal (2 tahun penuh, jalankan sekali) |
+| `deno task db:update` | Fetch hanya tanggal yang belum ada di DB |
 | `deno task db:fetch-eps` | Fetch data EPS historis Q1–Q4 dari IDX |
 | `deno task check` | Format, lint, dan typecheck |
 
