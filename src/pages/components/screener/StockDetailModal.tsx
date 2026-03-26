@@ -1383,196 +1383,152 @@ export default function StockDetailModal({
                           )
                           : <p className='idx-p-muted'>Data Stochastic RSI tidak tersedia.</p>}
                       </section>
-                      <div
-                        style={{
-                          display: 'grid',
-                          gridTemplateColumns: '1fr 1fr',
-                          gap: 16
-                        }}
-                      >
-                        <section className='idx-detail-section'>
-                          <h4 className='idx-detail-section-title'>Support & Resistance</h4>
-                          <table className='idx-detail-table' style={{ width: '100%' }}>
-                            <tbody>
-                              {([
-                                {
-                                  label: 'R3',
-                                  val: advancedData.supportResistance.pivotLevels.r3,
-                                  color: 'var(--idx-down)'
-                                },
-                                {
-                                  label: 'R2',
-                                  val: advancedData.supportResistance.pivotLevels.r2,
-                                  color: 'var(--idx-down)'
-                                },
-                                {
-                                  label: 'R1',
-                                  val: advancedData.supportResistance.pivotLevels.r1,
-                                  color: '#f97316'
-                                },
-                                {
-                                  label: 'Pivot',
-                                  val: advancedData.supportResistance.pivotLevels.pivot,
-                                  color: 'var(--idx-accent)'
-                                },
-                                {
-                                  label: 'S1',
-                                  val: advancedData.supportResistance.pivotLevels.s1,
-                                  color: '#22c55e'
-                                },
-                                {
-                                  label: 'S2',
-                                  val: advancedData.supportResistance.pivotLevels.s2,
-                                  color: 'var(--idx-up)'
-                                },
-                                {
-                                  label: 'S3',
-                                  val: advancedData.supportResistance.pivotLevels.s3,
-                                  color: 'var(--idx-up)'
-                                }
-                              ] as { label: string; val: number; color: string }[]).map(
-                                ({ label, val, color }) => (
-                                  <tr key={label}>
-                                    <td
-                                      style={{
-                                        fontSize: 'var(--idx-text-sm)',
-                                        color,
-                                        fontWeight: 700,
-                                        padding: '2px 6px'
-                                      }}
-                                    >
-                                      {label}
-                                    </td>
-                                    <td
-                                      style={{
-                                        fontSize: 'var(--idx-text-sm)',
-                                        textAlign: 'right',
-                                        padding: '2px 6px'
-                                      }}
-                                    >
-                                      {Utils.Format.formatNum(val, 0)}
-                                    </td>
-                                  </tr>
-                                )
-                              )}
-                            </tbody>
-                          </table>
-                          {advancedData.supportResistance.swingLevels.length > 0 && (
-                            <>
-                              <p
+                      {/* Support & Resistance */}
+                      <section className='idx-detail-section'>
+                        <h4 className='idx-detail-section-title'>Support & Resistance (Pivot Points)</h4>
+                        <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+                          {/* Pivot levels */}
+                          <div style={{ flex: '1 1 220px' }}>
+                            {([
+                              { label: 'R3', val: advancedData.supportResistance.pivotLevels.r3, bg: 'rgba(239,68,68,0.08)', border: 'var(--idx-down)' },
+                              { label: 'R2', val: advancedData.supportResistance.pivotLevels.r2, bg: 'rgba(239,68,68,0.05)', border: 'var(--idx-down)' },
+                              { label: 'R1', val: advancedData.supportResistance.pivotLevels.r1, bg: 'rgba(249,115,22,0.08)', border: '#f97316' },
+                              { label: 'Pivot', val: advancedData.supportResistance.pivotLevels.pivot, bg: 'rgba(99,102,241,0.1)', border: 'var(--idx-accent)' },
+                              { label: 'S1', val: advancedData.supportResistance.pivotLevels.s1, bg: 'rgba(34,197,94,0.08)', border: '#22c55e' },
+                              { label: 'S2', val: advancedData.supportResistance.pivotLevels.s2, bg: 'rgba(34,197,94,0.05)', border: 'var(--idx-up)' },
+                              { label: 'S3', val: advancedData.supportResistance.pivotLevels.s3, bg: 'rgba(34,197,94,0.04)', border: 'var(--idx-up)' }
+                            ] as { label: string; val: number; bg: string; border: string }[]).map(({ label, val, bg, border }) => (
+                              <div
+                                key={label}
                                 style={{
-                                  fontSize: 'var(--idx-text-xs)',
-                                  color: 'var(--idx-text-muted)',
-                                  marginTop: 8,
-                                  marginBottom: 4
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  padding: '5px 10px',
+                                  marginBottom: 3,
+                                  borderRadius: 4,
+                                  background: bg,
+                                  borderLeft: `3px solid ${border}`
                                 }}
                               >
-                                Swing Levels (80 hari terakhir):
+                                <span style={{ fontSize: 'var(--idx-text-sm)', fontWeight: 700, color: border, minWidth: 36 }}>{label}</span>
+                                <span style={{ fontSize: 'var(--idx-text-sm)', fontWeight: 600 }}>{Utils.Format.formatNum(val, 0)}</span>
+                              </div>
+                            ))}
+                          </div>
+                          {/* Swing levels */}
+                          {advancedData.supportResistance.swingLevels.length > 0 && (
+                            <div style={{ flex: '1 1 180px' }}>
+                              <p style={{ fontSize: 'var(--idx-text-xs)', color: 'var(--idx-text-muted)', marginBottom: 6, fontWeight: 600 }}>
+                                Swing Levels (80 hari):
                               </p>
                               {advancedData.supportResistance.swingLevels.map((sw, i) => (
                                 <div
                                   key={i}
                                   style={{
-                                    fontSize: 'var(--idx-text-xs)',
-                                    color: sw.type === 'high'
-                                      ? 'var(--idx-down)'
-                                      : 'var(--idx-up)'
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    padding: '4px 10px',
+                                    marginBottom: 3,
+                                    borderRadius: 4,
+                                    background: sw.type === 'high' ? 'rgba(239,68,68,0.06)' : 'rgba(34,197,94,0.06)',
+                                    borderLeft: `3px solid ${sw.type === 'high' ? 'var(--idx-down)' : 'var(--idx-up)'}`
                                   }}
                                 >
-                                  {sw.type === 'high' ? '▲' : '▼'}{' '}
-                                  {Utils.Format.formatNum(sw.price, 0)}{' '}
-                                  <span style={{ color: 'var(--idx-text-muted)' }}>
-                                    ({Utils.Format.formatDateInt(sw.date)})
+                                  <span style={{ fontSize: 'var(--idx-text-xs)', color: sw.type === 'high' ? 'var(--idx-down)' : 'var(--idx-up)', fontWeight: 700 }}>
+                                    {sw.type === 'high' ? '▲ Res' : '▼ Sup'}
+                                  </span>
+                                  <span style={{ fontSize: 'var(--idx-text-xs)', fontWeight: 600 }}>{Utils.Format.formatNum(sw.price, 0)}</span>
+                                  <span style={{ fontSize: 'var(--idx-text-xs)', color: 'var(--idx-text-muted)' }}>
+                                    {Utils.Format.formatDateInt(sw.date)}
                                   </span>
                                 </div>
                               ))}
-                            </>
+                            </div>
                           )}
-                        </section>
-                        <section className='idx-detail-section'>
-                          <h4 className='idx-detail-section-title'>Fibonacci Retracement</h4>
-                          {advancedData.fibonacci
-                            ? (
-                              <>
-                                <p
+                        </div>
+                      </section>
+
+                      {/* Fibonacci Retracement */}
+                      <section className='idx-detail-section'>
+                        <h4 className='idx-detail-section-title'>Fibonacci Retracement</h4>
+                        {advancedData.fibonacci
+                          ? (
+                            <>
+                              <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 10, flexWrap: 'wrap' }}>
+                                <span
                                   style={{
-                                    fontSize: 'var(--idx-text-xs)',
-                                    color: 'var(--idx-text-muted)',
-                                    marginBottom: 6
+                                    fontSize: 'var(--idx-text-sm)',
+                                    fontWeight: 700,
+                                    color: advancedData.fibonacci.trend === 'up' ? 'var(--idx-up)' : 'var(--idx-down)',
+                                    padding: '2px 8px',
+                                    borderRadius: 4,
+                                    background: advancedData.fibonacci.trend === 'up' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)'
                                   }}
                                 >
-                                  Tren:{' '}
-                                  <strong
-                                    style={{
-                                      color: advancedData.fibonacci.trend === 'up'
-                                        ? 'var(--idx-up)'
-                                        : 'var(--idx-down)'
-                                    }}
-                                  >
-                                    {advancedData.fibonacci.trend === 'up'
-                                      ? '▲ Uptrend'
-                                      : '▼ Downtrend'}
-                                  </strong>
-                                  {' | H: '}
-                                  {Utils.Format.formatNum(advancedData.fibonacci.swingHigh, 0)}
-                                  {' | L: '}
-                                  {Utils.Format.formatNum(advancedData.fibonacci.swingLow, 0)}
-                                </p>
-                                <table className='idx-detail-table' style={{ width: '100%' }}>
-                                  <tbody>
-                                    {advancedData.fibonacci.levels.map((lvl) => {
-                                      const currentPrice = detail.priceClose ?? 0
-                                      const isCurrent = Math.abs(currentPrice - lvl.price) /
-                                          Math.max(lvl.price, 1) < 0.05
-                                      return (
-                                        <tr
-                                          key={lvl.label}
-                                          style={isCurrent
-                                            ? {
-                                              background: 'var(--idx-bg-second)',
-                                              fontWeight: 700
-                                            }
-                                            : undefined}
-                                        >
-                                          <td
-                                            style={{
-                                              fontSize: 'var(--idx-text-sm)',
-                                              color: 'var(--idx-text-muted)',
-                                              padding: '2px 6px'
-                                            }}
-                                          >
-                                            {lvl.label}
-                                          </td>
-                                          <td
-                                            style={{
-                                              fontSize: 'var(--idx-text-sm)',
-                                              textAlign: 'right',
-                                              padding: '2px 6px'
-                                            }}
-                                          >
-                                            {Utils.Format.formatNum(lvl.price, 0)}
-                                            {isCurrent && (
-                                              <span
-                                                style={{
-                                                  marginLeft: 4,
-                                                  fontSize: 'var(--idx-text-xs)',
-                                                  color: 'var(--idx-accent)'
-                                                }}
-                                              >
-                                                ← saat ini
-                                              </span>
-                                            )}
-                                          </td>
-                                        </tr>
-                                      )
-                                    })}
-                                  </tbody>
-                                </table>
-                              </>
-                            )
-                            : <p className='idx-p-muted'>Data Fibonacci tidak tersedia.</p>}
-                        </section>
-                      </div>
+                                  {advancedData.fibonacci.trend === 'up' ? '▲ Uptrend' : '▼ Downtrend'}
+                                </span>
+                                <span style={{ fontSize: 'var(--idx-text-xs)', color: 'var(--idx-text-muted)' }}>
+                                  High: <strong>{Utils.Format.formatNum(advancedData.fibonacci.swingHigh, 0)}</strong>
+                                  {` (${Utils.Format.formatDateInt(advancedData.fibonacci.swingHighDate)})`}
+                                </span>
+                                <span style={{ fontSize: 'var(--idx-text-xs)', color: 'var(--idx-text-muted)' }}>
+                                  Low: <strong>{Utils.Format.formatNum(advancedData.fibonacci.swingLow, 0)}</strong>
+                                  {` (${Utils.Format.formatDateInt(advancedData.fibonacci.swingLowDate)})`}
+                                </span>
+                              </div>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                                {advancedData.fibonacci.levels.map((lvl) => {
+                                  const currentPrice = detail.priceClose ?? 0
+                                  const range = advancedData.fibonacci!.swingHigh - advancedData.fibonacci!.swingLow
+                                  const pct = range > 0 ? Math.min(100, Math.max(0, ((lvl.price - advancedData.fibonacci!.swingLow) / range) * 100)) : 0
+                                  const isCurrent = Math.abs(currentPrice - lvl.price) / Math.max(lvl.price, 1) < 0.03
+                                  const fibColors: Record<string, string> = {
+                                    '0%': 'var(--idx-text-muted)',
+                                    '23.6%': '#6366f1',
+                                    '38.2%': '#8b5cf6',
+                                    '50%': 'var(--idx-accent)',
+                                    '61.8%': '#f59e0b',
+                                    '78.6%': '#f97316',
+                                    '100%': 'var(--idx-text-muted)'
+                                  }
+                                  const levelColor = fibColors[lvl.label] ?? 'var(--idx-text-muted)'
+                                  return (
+                                    <div
+                                      key={lvl.label}
+                                      style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 8,
+                                        padding: '4px 8px',
+                                        borderRadius: 4,
+                                        background: isCurrent ? 'var(--idx-bg-second)' : 'transparent',
+                                        border: isCurrent ? `1px solid ${levelColor}` : '1px solid transparent'
+                                      }}
+                                    >
+                                      <span style={{ fontSize: 'var(--idx-text-xs)', color: levelColor, fontWeight: 700, minWidth: 42, textAlign: 'right' }}>
+                                        {lvl.label}
+                                      </span>
+                                      <div style={{ flex: 1, height: 6, background: 'var(--idx-bg-second)', borderRadius: 3, overflow: 'hidden' }}>
+                                        <div style={{ width: `${pct}%`, height: '100%', background: levelColor, borderRadius: 3, opacity: 0.7 }} />
+                                      </div>
+                                      <span style={{ fontSize: 'var(--idx-text-sm)', fontWeight: isCurrent ? 700 : 400, minWidth: 70, textAlign: 'right' }}>
+                                        {Utils.Format.formatNum(lvl.price, 0)}
+                                      </span>
+                                      {isCurrent && (
+                                        <span style={{ fontSize: 'var(--idx-text-xs)', color: levelColor, whiteSpace: 'nowrap' }}>
+                                          ← saat ini
+                                        </span>
+                                      )}
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            </>
+                          )
+                          : <p className='idx-p-muted'>Data Fibonacci tidak tersedia.</p>}
+                      </section>
                     </div>
                   )}
                   {!advancedLoading && !advancedData && (
