@@ -59,6 +59,60 @@ export async function GET(ctx: Context) {
   if (screenerRow == null) {
     return ctx.send.json({ error: 'Stock not found' }, { status: 404 })
   }
+  // Compute price performance from OHLC as fallback when screener values are null
+  // Must be done before rowsForScore so momentum score is accurate
+  let computedWeek4PC = screenerRow.week4PC
+  let computedWeek13PC = screenerRow.week13PC
+  let computedWeek26PC = screenerRow.week26PC
+  let computedWeek52PC = screenerRow.week52PC
+
+  if (
+    computedWeek4PC == null || computedWeek13PC == null ||
+    computedWeek26PC == null || computedWeek52PC == null
+  ) {
+    const perfStart = Utils.addDaysToDateInt(dateInt, -400)
+    const perfRows = await Database.select({
+      date: Schemas.summary.date,
+      priceClose: Schemas.summary.priceClose
+    })
+      .from(Schemas.summary)
+      .where(
+        and(
+          eq(Schemas.summary.stockCode, stockCode),
+          gte(Schemas.summary.date, perfStart),
+          lte(Schemas.summary.date, dateInt)
+        )
+      )
+      .orderBy(asc(Schemas.summary.date))
+
+    const validPerf = perfRows.filter(
+      (r) => r.priceClose != null && Number.isFinite(Number(r.priceClose)) && Number(r.priceClose) > 0
+    )
+
+    if (validPerf.length >= 2) {
+      const currentClose = Number(validPerf[validPerf.length - 1]!.priceClose)
+
+      const findReturnByDays = (calendarDays: number): number | null => {
+        const targetDate = Utils.addDaysToDateInt(dateInt, -calendarDays)
+        let bestIdx: number | null = null
+        for (let i = validPerf.length - 2; i >= 0; i--) {
+          if (validPerf[i]!.date <= targetDate) {
+            bestIdx = i
+            break
+          }
+        }
+        if (bestIdx == null) return null
+        const pastClose = Number(validPerf[bestIdx]!.priceClose)
+        return pastClose > 0 ? ((currentClose - pastClose) / pastClose) * 100 : null
+      }
+
+      if (computedWeek4PC == null) computedWeek4PC = findReturnByDays(28)
+      if (computedWeek13PC == null) computedWeek13PC = findReturnByDays(91)
+      if (computedWeek26PC == null) computedWeek26PC = findReturnByDays(182)
+      if (computedWeek52PC == null) computedWeek52PC = findReturnByDays(365)
+    }
+  }
+
   const allScreenerRows = await Database.select({
     code: Schemas.screener.code,
     name: Schemas.screener.name,
@@ -71,18 +125,21 @@ export async function GET(ctx: Context) {
     week26PC: Schemas.screener.week26PC,
     week52PC: Schemas.screener.week52PC
   }).from(Schemas.screener)
-  const rowsForScore: Types.ScreenerRow[] = allScreenerRows.map((row) => ({
-    code: row.code,
-    name: row.name,
-    sector: row.sector,
-    per: row.per,
-    pbv: row.pbv,
-    roa: row.roa,
-    roe: row.roe,
-    der: row.der,
-    week26PC: row.week26PC,
-    week52PC: row.week52PC
-  }))
+  const rowsForScore: Types.ScreenerRow[] = allScreenerRows.map((row) => {
+    const isCurrentStock = row.code === stockCode
+    return {
+      code: row.code,
+      name: row.name,
+      sector: row.sector,
+      per: row.per,
+      pbv: row.pbv,
+      roa: row.roa,
+      roe: row.roe,
+      der: row.der,
+      week26PC: isCurrentStock ? computedWeek26PC : row.week26PC,
+      week52PC: isCurrentStock ? computedWeek52PC : row.week52PC
+    }
+  })
   const rankedRows = Services.Composite.computeRanked(rowsForScore)
   const rankedRow = rankedRows.find((rankedItem) => rankedItem.code === stockCode)
   const valueSummaryRows = await Database.select({
@@ -113,6 +170,7 @@ export async function GET(ctx: Context) {
   const hasNotation = Utils.isNonEmptyString(screenerRow.notation)
   const hasCorpAction = Utils.isNonEmptyString(screenerRow.corpAction)
   const hasUma = Utils.isNonEmptyString(screenerRow.umaDate)
+
   const detail: Types.StockDetail = {
     code: screenerRow.code,
     name: screenerRow.name,
@@ -128,10 +186,10 @@ export async function GET(ctx: Context) {
     eps: screenerRow.eps ?? null,
     bookValue: screenerRow.bookValue ?? null,
     marketCapital: screenerRow.marketCapital,
-    week4PC: screenerRow.week4PC,
-    week13PC: screenerRow.week13PC,
-    week26PC: screenerRow.week26PC,
-    week52PC: screenerRow.week52PC,
+    week4PC: computedWeek4PC,
+    week13PC: computedWeek13PC,
+    week26PC: computedWeek26PC,
+    week52PC: computedWeek52PC,
     hasNotation,
     hasCorpAction,
     hasUma,

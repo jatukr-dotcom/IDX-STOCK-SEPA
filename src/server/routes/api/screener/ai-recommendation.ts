@@ -25,7 +25,9 @@ type HistRow = {
 
 function calcQEps(byKey: Map<string, HistRow>, year: number, quarter: number): number | null {
   const row = byKey.get(`${year}_${quarter}`)
-  if (!row || row.profitAttrOwner == null || row.eps == null) return null
+  if (!row || row.profitAttrOwner == null || row.eps == null) {
+    return null
+  }
   let shares: number | null = null
   const q4c = byKey.get(`${year}_4`)
   if (q4c?.profitAttrOwner != null && q4c.eps != null && q4c.eps !== 0) {
@@ -37,20 +39,26 @@ function calcQEps(byKey: Map<string, HistRow>, year: number, quarter: number): n
       shares = q4p.profitAttrOwner / q4p.eps
     }
   }
-  if (shares == null || shares === 0) return null
+  if (shares == null || shares === 0) {
+    return null
+  }
   const prev = quarter > 1 ? byKey.get(`${year}_${quarter - 1}`) : null
   const prevProfit = prev?.profitAttrOwner ?? 0
   return (row.profitAttrOwner - prevProfit) / shares
 }
 
 function calcMA(prices: number[], period: number): number | null {
-  if (prices.length < period) return null
+  if (prices.length < period) {
+    return null
+  }
   const slice = prices.slice(prices.length - period)
   return slice.reduce((a, b) => a + b, 0) / period
 }
 
 function returnPct(current: number, past: number): number | null {
-  if (past <= 0 || !Number.isFinite(past) || !Number.isFinite(current)) return null
+  if (past <= 0 || !Number.isFinite(past) || !Number.isFinite(current)) {
+    return null
+  }
   return ((current - past) / past) * 100
 }
 
@@ -62,15 +70,21 @@ function determineStage(
   ma200SlopePct: number | null
 ): Types.StageNumber {
   if (ma200 == null) {
-    if (ma50 != null && price > ma50 && (ma150 == null || ma50 > ma150)) return 2
+    if (ma50 != null && price > ma50 && (ma150 == null || ma50 > ma150)) {
+      return 2
+    }
     return 1
   }
   const ma200up = ma200SlopePct != null && ma200SlopePct > 0
   if (ma50 != null && ma150 != null && price > ma50 && ma50 > ma150 && ma150 > ma200 && ma200up) {
     return 2
   }
-  if (price < ma200 && !ma200up) return 4
-  if (ma50 != null && (price < ma50 || (ma150 != null && ma150 < ma200))) return 3
+  if (price < ma200 && !ma200up) {
+    return 4
+  }
+  if (ma50 != null && (price < ma50 || (ma150 != null && ma150 < ma200))) {
+    return 3
+  }
   return 1
 }
 
@@ -81,7 +95,9 @@ function calcEpsInfo(histRows: HistRow[]): {
   consecutiveGrowthQ: number
 } {
   const byKey = new Map<string, HistRow>()
-  for (const r of histRows) byKey.set(`${r.year}_${r.quarter}`, r)
+  for (const r of histRows) {
+    byKey.set(`${r.year}_${r.quarter}`, r)
+  }
 
   let latestYear: number | null = null
   let latestQ: number | null = null
@@ -122,20 +138,34 @@ function calcEpsInfo(histRows: HistRow[]): {
   for (let i = 0; i < 4; i++) {
     const ce = calcQEps(byKey, cy, cq)
     const pe = calcQEps(byKey, cy - 1, cq)
-    if (ce != null && pe != null && ce > pe) consecutiveGrowthQ++
-    else break
+    if (ce != null && pe != null && ce > pe) {
+      consecutiveGrowthQ++
+    } else {
+      break
+    }
     cq--
-    if (cq === 0) { cq = 4; cy-- }
+    if (cq === 0) {
+      cq = 4
+      cy--
+    }
   }
 
   let score = 0
   if (latestGrowthPct != null) {
-    if (latestGrowthPct >= 25) score += 8
-    else if (latestGrowthPct >= 10) score += 5
-    else if (latestGrowthPct >= 0) score += 2
+    if (latestGrowthPct >= 25) {
+      score += 8
+    } else if (latestGrowthPct >= 10) {
+      score += 5
+    } else if (latestGrowthPct >= 0) {
+      score += 2
+    }
   }
-  if (acceleration) score += 4
-  if (consecutiveGrowthQ >= 2) score += 3
+  if (acceleration) {
+    score += 4
+  }
+  if (consecutiveGrowthQ >= 2) {
+    score += 3
+  }
 
   return { score, latestGrowthPct, acceleration, consecutiveGrowthQ }
 }
@@ -157,7 +187,9 @@ async function getClaudeNarrative(
   topRows: Types.AiRecommendationRow[]
 ): Promise<string | undefined> {
   const apiKey = Deno.env.get('ANTHROPIC_API_KEY')
-  if (!apiKey) return undefined
+  if (!apiKey) {
+    return undefined
+  }
 
   const now = Date.now()
   if (
@@ -264,7 +296,9 @@ export async function GET(ctx: Context) {
   const ihsgByDate = new Map<number, number>()
   for (const row of ihsgRaw) {
     const v = Number(row.ihsg)
-    if (Number.isFinite(v) && v > 0) ihsgByDate.set(Number(row.date), v)
+    if (Number.isFinite(v) && v > 0) {
+      ihsgByDate.set(Number(row.date), v)
+    }
   }
 
   // ── OHLC + float data ────────────────────────────────────────────────────
@@ -298,7 +332,9 @@ export async function GET(ctx: Context) {
     const close = row.priceClose != null && Number.isFinite(Number(row.priceClose))
       ? Number(row.priceClose)
       : null
-    if (close == null || close <= 0) continue
+    if (close == null || close <= 0) {
+      continue
+    }
     const high = row.priceHigh != null && Number.isFinite(Number(row.priceHigh))
       ? Number(row.priceHigh)
       : close
@@ -385,7 +421,9 @@ export async function GET(ctx: Context) {
   // ── RS Ranks ─────────────────────────────────────────────────────────────
   const rsScores = new Map<string, { score: number; rank: number }>()
   for (const [code, entries] of ohlcByCode) {
-    if (entries.length < 252) continue
+    if (entries.length < 252) {
+      continue
+    }
     const closes = entries.map((e) => e.close)
     const r3m = closes.length >= 63
       ? returnPct(closes[closes.length - 1], closes[closes.length - 63])
@@ -413,7 +451,9 @@ export async function GET(ctx: Context) {
   const results: Types.AiRecommendationRow[] = []
 
   for (const [code, entries] of ohlcByCode) {
-    if (entries.length < 50) continue
+    if (entries.length < 50) {
+      continue
+    }
 
     const lastEntry = entries[entries.length - 1]
     const price = lastEntry.close
@@ -427,7 +467,9 @@ export async function GET(ctx: Context) {
 
     // ── Gorengan Score ──────────────────────────────────────────────────
     let gorenganScore = 0
-    if (sc?.notation === 'X') gorenganScore += 40
+    if (sc?.notation === 'X') {
+      gorenganScore += 40
+    }
 
     if (sc?.umaDate) {
       try {
@@ -436,13 +478,18 @@ export async function GET(ctx: Context) {
         const refTime = new Date(
           `${refStr.slice(0, 4)}-${refStr.slice(4, 6)}-${refStr.slice(6, 8)}`
         ).getTime()
-        if (!isNaN(umaTime) && refTime - umaTime < 30 * 24 * 60 * 60 * 1000) gorenganScore += 25
+        if (!isNaN(umaTime) && refTime - umaTime < 30 * 24 * 60 * 60 * 1000) {
+          gorenganScore += 25
+        }
       } catch { /* ignore */ }
     }
 
     const marketCap = sc?.marketCapital ?? 0
-    if (marketCap < 100_000_000_000) gorenganScore += 25
-    else if (marketCap < 500_000_000_000) gorenganScore += 15
+    if (marketCap < 100_000_000_000) {
+      gorenganScore += 25
+    } else if (marketCap < 500_000_000_000) {
+      gorenganScore += 15
+    }
 
     const floatData = floatByCode.get(code)
     if (floatData && floatData.listed > 0 && floatData.tradable / floatData.listed < 0.20) {
@@ -450,11 +497,17 @@ export async function GET(ctx: Context) {
     }
 
     const avgVol20d = volumes.slice(-20).reduce((a, b) => a + b, 0) / 20
-    if (volumes[volumes.length - 1] > avgVol20d * 10) gorenganScore += 10
+    if (volumes[volumes.length - 1] > avgVol20d * 10) {
+      gorenganScore += 10
+    }
 
-    if (histRows.length === 0) gorenganScore += 5
+    if (histRows.length === 0) {
+      gorenganScore += 5
+    }
 
-    if (gorenganScore >= 60) continue
+    if (gorenganScore >= 60) {
+      continue
+    }
 
     // ── Technical signals ───────────────────────────────────────────────
     const ma50 = calcMA(closes, 50)
@@ -495,18 +548,28 @@ export async function GET(ctx: Context) {
     // ROE + NPM (15 pts from sepa)
     fundScoreFull += Math.min(roe / 25, 1) * 9 + Math.min(npm / 20, 1) * 6
     // DER (10 pts)
-    if (der <= 0.5) fundScoreFull += 10
-    else if (der <= 1.0) fundScoreFull += 7
-    else if (der <= 2.0) fundScoreFull += 4
+    if (der <= 0.5) {
+      fundScoreFull += 10
+    } else if (der <= 1.0) {
+      fundScoreFull += 7
+    } else if (der <= 2.0) {
+      fundScoreFull += 4
+    }
     // Revenue growth (10 pts)
     if (histRows.length > 0) {
       const byKey = new Map<string, HistRow>()
-      for (const r of histRows) byKey.set(`${r.year}_${r.quarter}`, r)
+      for (const r of histRows) {
+        byKey.set(`${r.year}_${r.quarter}`, r)
+      }
       let lYear: number | null = null
       let lQ: number | null = null
       salesSearch: for (const y of [2025, 2024, 2023, 2022]) {
         for (const q of [4, 3, 2, 1]) {
-          if (byKey.get(`${y}_${q}`)?.sales != null) { lYear = y; lQ = q; break salesSearch }
+          if (byKey.get(`${y}_${q}`)?.sales != null) {
+            lYear = y
+            lQ = q
+            break salesSearch
+          }
         }
       }
       if (lYear && lQ) {
@@ -514,19 +577,30 @@ export async function GET(ctx: Context) {
         const priorSales = byKey.get(`${lYear - 1}_${lQ}`)?.sales ?? 0
         if (priorSales > 0) {
           const revGrowth = ((curSales - priorSales) / priorSales) * 100
-          if (revGrowth >= 15) fundScoreFull += 10
-          else if (revGrowth >= 5) fundScoreFull += 6
-          else if (revGrowth >= 0) fundScoreFull += 2
+          if (revGrowth >= 15) {
+            fundScoreFull += 10
+          } else if (revGrowth >= 5) {
+            fundScoreFull += 6
+          } else if (revGrowth >= 0) {
+            fundScoreFull += 2
+          }
         }
       }
     }
     // PER (5 pts)
-    if (per >= 5 && per <= 20) fundScoreFull += 5
-    else if (per > 20 && per <= 30) fundScoreFull += 3
-    else if (per > 30 && per <= 50) fundScoreFull += 1
+    if (per >= 5 && per <= 20) {
+      fundScoreFull += 5
+    } else if (per > 20 && per <= 30) {
+      fundScoreFull += 3
+    } else if (per > 30 && per <= 50) {
+      fundScoreFull += 1
+    }
 
-    const sepaScore = Math.min(100, trendScore + rsScore30 + epsInfo.score +
-      Math.min(roe / 25, 1) * 9 + Math.min(npm / 20, 1) * 6)
+    const sepaScore = Math.min(
+      100,
+      trendScore + rsScore30 + epsInfo.score +
+        Math.min(roe / 25, 1) * 9 + Math.min(npm / 20, 1) * 6
+    )
 
     // ── RS Line New High ────────────────────────────────────────────────
     let rsLineNewHigh = false
@@ -536,10 +610,16 @@ export async function GET(ctx: Context) {
       let rsLineCurrent = 0
       for (const e of entries) {
         const ihsg = ihsgByDate.get(e.date)
-        if (ihsg == null) continue
+        if (ihsg == null) {
+          continue
+        }
         const rsLineVal = e.close / (ihsg / firstIhsg)
-        if (rsLineVal > rsLine52wHigh) rsLine52wHigh = rsLineVal
-        if (e.date === lastDate) rsLineCurrent = rsLineVal
+        if (rsLineVal > rsLine52wHigh) {
+          rsLine52wHigh = rsLineVal
+        }
+        if (e.date === lastDate) {
+          rsLineCurrent = rsLineVal
+        }
       }
       rsLineNewHigh = rsLine52wHigh > 0 && rsLineCurrent >= rsLine52wHigh * 0.999
     }
@@ -554,11 +634,15 @@ export async function GET(ctx: Context) {
         ).concat([0])
       )
       for (let i = entries.length - 5; i < entries.length; i++) {
-        if (i <= 0) continue
+        if (i <= 0) {
+          continue
+        }
         const prev = entries[i - 1]
         const cur = entries[i]
-        if (cur.close > prev.close && cur.volume > maxDownVol10d && ma10 != null &&
-          cur.close >= ma10) {
+        if (
+          cur.close > prev.close && cur.volume > maxDownVol10d && ma10 != null &&
+          cur.close >= ma10
+        ) {
           hasPocketPivot = true
           break
         }
@@ -572,7 +656,9 @@ export async function GET(ctx: Context) {
       const last25L = lows.slice(-25)
       const range = Math.max(...last25H) - Math.min(...last25L)
       const midPrice = (Math.max(...last25H) + Math.min(...last25L)) / 2
-      if (midPrice > 0 && range / midPrice <= 0.15) patternType = 'flat'
+      if (midPrice > 0 && range / midPrice <= 0.15) {
+        patternType = 'flat'
+      }
     }
 
     // ── Power Play / Low Cheat ──────────────────────────────────────────
@@ -582,22 +668,39 @@ export async function GET(ctx: Context) {
       const range = Math.max(...last5) - Math.min(...last5)
       const avg = last5.reduce((a, b) => a + b) / 5
       if (avg > 0) {
-        if (range / avg < 0.03) setupType = 'power-play'
-        else if (range / avg < 0.05) setupType = 'low-cheat'
+        if (range / avg < 0.03) {
+          setupType = 'power-play'
+        } else if (range / avg < 0.05) {
+          setupType = 'low-cheat'
+        }
       }
     }
 
     // ── Technical Score (0–100) ─────────────────────────────────────────
     let techScore = (sepaScore / 100) * 50
-    if (stage === 2) techScore += 20
-    else if (stage === 1) techScore += 10
-    if (rsLineNewHigh) techScore += 10
-    if (hasPocketPivot) techScore += 10
-    if (patternType === 'htf') techScore += 6
-    else if (patternType === 'cup-handle') techScore += 4
-    else if (patternType === 'flat') techScore += 2
-    if (setupType === 'power-play') techScore += 4
-    else if (setupType === 'low-cheat') techScore += 2
+    if (stage === 2) {
+      techScore += 20
+    } else if (stage === 1) {
+      techScore += 10
+    }
+    if (rsLineNewHigh) {
+      techScore += 10
+    }
+    if (hasPocketPivot) {
+      techScore += 10
+    }
+    if (patternType === 'htf') {
+      techScore += 6
+    } else if (patternType === 'cup-handle') {
+      techScore += 4
+    } else if (patternType === 'flat') {
+      techScore += 2
+    }
+    if (setupType === 'power-play') {
+      techScore += 4
+    } else if (setupType === 'low-cheat') {
+      techScore += 2
+    }
     techScore = Math.min(100, techScore)
 
     // ── Fundamental Score (0–100) ───────────────────────────────────────
@@ -607,26 +710,42 @@ export async function GET(ctx: Context) {
     const combinedScore = techScore * 0.6 + finalFundScore * 0.4
 
     // ── Filter by mode ──────────────────────────────────────────────────
-    if (mode === 'technical' && techScore < minTechScore) continue
-    if (mode === 'fundamental' && finalFundScore < minFundScore) continue
-    if (mode === 'combined' && combinedScore < Math.min(minTechScore, minFundScore)) continue
+    if (mode === 'technical' && techScore < minTechScore) {
+      continue
+    }
+    if (mode === 'fundamental' && finalFundScore < minFundScore) {
+      continue
+    }
+    if (mode === 'combined' && combinedScore < Math.min(minTechScore, minFundScore)) {
+      continue
+    }
 
     // ── Reasons ─────────────────────────────────────────────────────────
     const reasons: string[] = []
-    if (sepaScore >= 60) reasons.push(`SEPA ${Math.round(sepaScore)} — Stage ${stage}, RS ${rsRank}`)
-    if (rsLineNewHigh) reasons.push('RS Line New High terkonfirmasi')
+    if (sepaScore >= 60) {
+      reasons.push(`SEPA ${Math.round(sepaScore)} — Stage ${stage}, RS ${rsRank}`)
+    }
+    if (rsLineNewHigh) {
+      reasons.push('RS Line New High terkonfirmasi')
+    }
     if (epsInfo.latestGrowthPct != null) {
       let msg = `EPS ${epsInfo.latestGrowthPct >= 0 ? '+' : ''}${
         epsInfo.latestGrowthPct.toFixed(1)
       }% YoY`
-      if (epsInfo.acceleration) msg += ', akselerasi'
-      if (epsInfo.consecutiveGrowthQ >= 2) msg += `, ${epsInfo.consecutiveGrowthQ}Q berturut`
+      if (epsInfo.acceleration) {
+        msg += ', akselerasi'
+      }
+      if (epsInfo.consecutiveGrowthQ >= 2) {
+        msg += `, ${epsInfo.consecutiveGrowthQ}Q berturut`
+      }
       reasons.push(msg)
     }
     if (roe > 20 || npm > 15) {
       reasons.push(`ROE ${roe.toFixed(1)}%, NPM ${npm.toFixed(1)}%`)
     }
-    if (hasPocketPivot) reasons.push('Pocket Pivot terdeteksi')
+    if (hasPocketPivot) {
+      reasons.push('Pocket Pivot terdeteksi')
+    }
     if (patternType !== 'none') {
       reasons.push(
         patternType === 'htf'
@@ -639,7 +758,9 @@ export async function GET(ctx: Context) {
     if (setupType !== 'none') {
       reasons.push(setupType === 'power-play' ? 'Power Play setup' : 'Low Cheat setup')
     }
-    if (reasons.length === 0) reasons.push(`Skor ${mode}: ${Math.round(combinedScore)}`)
+    if (reasons.length === 0) {
+      reasons.push(`Skor ${mode}: ${Math.round(combinedScore)}`)
+    }
 
     results.push({
       code,
@@ -665,9 +786,13 @@ export async function GET(ctx: Context) {
   }
 
   // Sort and slice
-  if (mode === 'technical') results.sort((a, b) => b.techScore - a.techScore)
-  else if (mode === 'fundamental') results.sort((a, b) => b.fundScore - a.fundScore)
-  else results.sort((a, b) => b.combinedScore - a.combinedScore)
+  if (mode === 'technical') {
+    results.sort((a, b) => b.techScore - a.techScore)
+  } else if (mode === 'fundamental') {
+    results.sort((a, b) => b.fundScore - a.fundScore)
+  } else {
+    results.sort((a, b) => b.combinedScore - a.combinedScore)
+  }
 
   const sliced = results.slice(0, limit)
 

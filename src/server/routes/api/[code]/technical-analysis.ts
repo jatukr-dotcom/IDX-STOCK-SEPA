@@ -85,11 +85,43 @@ export async function GET(ctx: Context) {
 
   const closes = rows.map((r) => r.close)
 
+  // ── Fetch 1-year history for cluster-based S/R ───────────────────────────
+  // S/R needs more data than the display range to detect repeated touches
+  const srStart = Utils.addDaysToDateInt(end, -365)
+  const srRawRows = await Database.select({
+    date: Schemas.summary.date,
+    priceHigh: Schemas.summary.priceHigh,
+    priceLow: Schemas.summary.priceLow,
+    priceClose: Schemas.summary.priceClose
+  })
+    .from(Schemas.summary)
+    .where(
+      and(
+        eq(Schemas.summary.stockCode, stockCode),
+        gte(Schemas.summary.date, srStart),
+        lte(Schemas.summary.date, end)
+      )
+    )
+    .orderBy(asc(Schemas.summary.date))
+
+  type CleanRow = { date: number; high: number; low: number; close: number }
+  const srRows: CleanRow[] = []
+  for (const row of srRawRows) {
+    const close = row.priceClose != null && Number.isFinite(Number(row.priceClose))
+      ? Number(row.priceClose) : null
+    const high = row.priceHigh != null && Number.isFinite(Number(row.priceHigh))
+      ? Number(row.priceHigh) : null
+    const low = row.priceLow != null && Number.isFinite(Number(row.priceLow))
+      ? Number(row.priceLow) : null
+    if (close == null || close <= 0 || high == null || low == null) continue
+    srRows.push({ date: Number(row.date), high, low, close })
+  }
+
   // ── Compute all indicators ───────────────────────────────────────────────
   const { macdLine, signalLine, histogram } = TechnicalAnalysis.calculateMACD(closes)
   const { k: stochK, d: stochD } = TechnicalAnalysis.calculateStochRSI(closes)
   const rsiValues = RSI.calculate(closes)
-  const sr = TechnicalAnalysis.calculateSupportResistance(rows)
+  const sr = TechnicalAnalysis.calculateSupportResistance(srRows)
   const fib = TechnicalAnalysis.calculateFibonacci(
     rows.filter((r) => r.date >= start)
   )

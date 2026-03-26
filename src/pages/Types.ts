@@ -182,6 +182,7 @@ export type MainAnalysisTab =
   | 'volumeAnalysis'
   | 'momentum'
   | 'aiRec'
+  | 'stocklist'
 
 export interface OhlcApiRow extends StockDetailOhlcRow {
   bidVolume: number | null
@@ -700,25 +701,17 @@ export interface StochRsiSeriesRow {
   d: number | null
 }
 
-export interface PivotLevels {
-  pivot: number
-  s1: number
-  s2: number
-  s3: number
-  r1: number
-  r2: number
-  r3: number
-}
-
-export interface SwingLevel {
-  date: number
+export interface SRLevel {
   price: number
-  type: 'high' | 'low'
+  type: 'support' | 'resistance'
+  touchCount: number
+  lastTouchDate: number
+  strength: 'strong' | 'moderate' | 'weak'
 }
 
 export interface SupportResistanceData {
-  pivotLevels: PivotLevels
-  swingLevels: SwingLevel[]
+  currentClose: number
+  levels: SRLevel[]
 }
 
 export interface FibonacciLevel {
@@ -756,4 +749,23 @@ export interface TechnicalAnalysisApiResponse {
   supportResistance: SupportResistanceData
   fibonacci: FibonacciData | null
   divergences: DivergenceSignal[]
+}
+
+export interface StockListItem {
+  code: string
+  name: string | null
+  sector: string | null
+  industry: string | null
+  compositeScore: number
+  rank: number
+  per: number | null
+  roe: number | null
+  der: number | null
+}
+
+export interface StockListResponse {
+  totalCount: number
+  limit: number
+  offset: number
+  data: StockListItem[]
 }

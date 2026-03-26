@@ -13,6 +13,7 @@ import {
   BookOpen,
   Brain,
   Flame,
+  List,
   Medal,
   Rocket,
   Star,
@@ -314,6 +315,14 @@ export default function Screener() {
             <Brain size={16} aria-hidden />
             <span>AI Rekomendasi</span>
           </button>
+          <button
+            type='button'
+            className={`idx-tab idx-tab-inline ${mainTab === 'stocklist' ? 'idx-tab-active' : ''}`}
+            onClick={() => setMainTab('stocklist')}
+          >
+            <List size={16} aria-hidden />
+            <span>Daftar Saham</span>
+          </button>
         </div>
         {mainTab === 'fundamental' && (
           <div className='idx-grid-main'>
@@ -493,6 +502,16 @@ export default function Screener() {
               emptyMessage='Belum ada emiten di watchlist. Dari tab Analisa Fundamental, klik bintang di baris kandidat untuk menambah.'
               watchlistCodes={watchlistCodes}
               onWatchlistToggle={toggleWatchlist}
+            />
+          </div>
+        )}
+        {mainTab === 'stocklist' && (
+          <div className='idx-mt-24'>
+            <ScreenerComps.StockListView
+              sectors={sectors}
+              watchlistCodes={watchlistCodes}
+              onWatchlistToggle={toggleWatchlist}
+              onRowClick={handleRowClick}
             />
           </div>
         )}

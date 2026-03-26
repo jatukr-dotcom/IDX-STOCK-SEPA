@@ -14,6 +14,7 @@ import {
   colorForPct,
   colorForSignal,
   createDoc,
+  fmtDate,
   fmtN,
   fmtPct,
   PDF_COLORS
@@ -54,7 +55,8 @@ function calcQEps(
 export function exportStockPdf(
   detail: Types.StockDetail,
   volumeData: Types.VolumeAnalysisResponse | null,
-  historyData: Types.FinancialHistoryResponse | null
+  historyData: Types.FinancialHistoryResponse | null,
+  advancedData: Types.TechnicalAnalysisApiResponse | null = null
 ): void {
   const doc = createDoc('p')
   const pw = doc.internal.pageSize.getWidth()
@@ -266,6 +268,169 @@ export function exportStockPdf(
       }
     })
     y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6
+  }
+
+  // === Advanced Technical Indicators ===
+  if (advancedData) {
+    // — MACD Summary —
+    const lastMacd = advancedData.macd.length > 0
+      ? advancedData.macd[advancedData.macd.length - 1]!
+      : null
+    const lastStoch = advancedData.stochRsi.length > 0
+      ? advancedData.stochRsi[advancedData.stochRsi.length - 1]!
+      : null
+
+    if (lastMacd || lastStoch) {
+      y = checkPageBreak(doc, y, 40)
+      y = addSectionTitle(doc, 'Indikator Teknikal Lanjutan', y)
+      const macdMetrics = []
+      if (lastMacd) {
+        const histVal = lastMacd.histogram
+        macdMetrics.push({
+          label: 'MACD Line',
+          value: fmtN(lastMacd.macdLine, 3),
+          color: lastMacd.macdLine != null && lastMacd.macdLine >= 0 ? PDF_COLORS.up : PDF_COLORS.down
+        })
+        macdMetrics.push({
+          label: 'Signal',
+          value: fmtN(lastMacd.signalLine, 3)
+        })
+        macdMetrics.push({
+          label: 'Histogram',
+          value: histVal != null ? (histVal >= 0 ? '+' : '') + fmtN(histVal, 3) : '-',
+          color: histVal != null ? (histVal >= 0 ? PDF_COLORS.up : PDF_COLORS.down) : undefined
+        })
+      }
+      if (lastStoch) {
+        macdMetrics.push({
+          label: 'StochRSI %K',
+          value: fmtN(lastStoch.k, 1),
+          color: lastStoch.k != null && lastStoch.k >= 80
+            ? PDF_COLORS.down
+            : lastStoch.k != null && lastStoch.k <= 20
+            ? PDF_COLORS.up
+            : undefined
+        })
+        macdMetrics.push({
+          label: 'StochRSI %D',
+          value: fmtN(lastStoch.d, 1)
+        })
+      }
+      if (macdMetrics.length > 0) {
+        y = addMetricRow(doc, macdMetrics, 10, y, (pw - 20) / 5)
+      }
+    }
+
+    // — Support & Resistance —
+    const srLevels = advancedData.supportResistance.levels
+    if (srLevels.length > 0) {
+      y = checkPageBreak(doc, y, 50)
+      y = addSectionTitle(doc, `Support & Resistance  (Harga saat ini: ${fmtN(advancedData.supportResistance.currentClose, 0)})`, y)
+      const srHead = [['Tipe', 'Harga', '% dari Close', 'Kekuatan', 'Terakhir Disentuh']]
+      const srBody = srLevels.map((lvl) => {
+        const pct = ((lvl.price - advancedData.supportResistance.currentClose) /
+          advancedData.supportResistance.currentClose * 100)
+        const strengthLabel = lvl.strength === 'strong' ? 'Kuat' : lvl.strength === 'moderate' ? 'Sedang' : 'Lemah'
+        return [
+          lvl.type === 'resistance' ? 'Resistance' : 'Support',
+          fmtN(lvl.price, 0),
+          (pct >= 0 ? '+' : '') + pct.toFixed(1) + '%',
+          strengthLabel,
+          fmtDate(lvl.lastTouchDate)
+        ]
+      })
+      autoTable(doc, {
+        startY: y,
+        head: srHead,
+        body: srBody,
+        margin: { left: 10, right: 10 },
+        headStyles: { fillColor: PDF_COLORS.headerBg, textColor: 255, fontStyle: 'bold', fontSize: 8 },
+        bodyStyles: { fontSize: 8, textColor: PDF_COLORS.text },
+        alternateRowStyles: { fillColor: PDF_COLORS.bgLight },
+        didParseCell: (data) => {
+          if (data.section === 'body' && data.column.index === 0) {
+            data.cell.styles.textColor = data.cell.raw === 'Resistance'
+              ? PDF_COLORS.down
+              : PDF_COLORS.up
+            data.cell.styles.fontStyle = 'bold'
+          }
+        },
+        columnStyles: {
+          0: { cellWidth: 28 },
+          1: { halign: 'right', cellWidth: 22 },
+          2: { halign: 'right', cellWidth: 28 },
+          3: { cellWidth: 22 },
+          4: { halign: 'right' }
+        }
+      })
+      y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6
+    }
+
+    // — Fibonacci Retracement —
+    if (advancedData.fibonacci) {
+      const fib = advancedData.fibonacci
+      y = checkPageBreak(doc, y, 50)
+      y = addSectionTitle(
+        doc,
+        `Fibonacci Retracement (${fib.trend === 'up' ? 'Uptrend ▲' : 'Downtrend ▼'})`,
+        y
+      )
+      const fibHead = [['Level', 'Harga', '', 'Level', 'Harga']]
+      const fibLevels = fib.levels
+      const fibBody: string[][] = []
+      for (let fi = 0; fi < Math.ceil(fibLevels.length / 2); fi++) {
+        const left = fibLevels[fi]
+        const right = fibLevels[fi + Math.ceil(fibLevels.length / 2)]
+        fibBody.push([
+          left?.label ?? '',
+          left ? fmtN(left.price, 0) : '',
+          '',
+          right?.label ?? '',
+          right ? fmtN(right.price, 0) : ''
+        ])
+      }
+      autoTable(doc, {
+        startY: y,
+        head: fibHead,
+        body: fibBody,
+        margin: { left: 10, right: 10 },
+        headStyles: { fillColor: PDF_COLORS.headerBg, textColor: 255, fontStyle: 'bold', fontSize: 8 },
+        bodyStyles: { fontSize: 8, textColor: PDF_COLORS.text },
+        alternateRowStyles: { fillColor: PDF_COLORS.bgLight },
+        columnStyles: {
+          0: { cellWidth: 25 },
+          1: { halign: 'right', cellWidth: 25 },
+          2: { cellWidth: 10 },
+          3: { cellWidth: 25 },
+          4: { halign: 'right', cellWidth: 25 }
+        }
+      })
+      y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6
+    }
+
+    // — Divergences —
+    if (advancedData.divergences.length > 0) {
+      y = checkPageBreak(doc, y, 30)
+      y = addSectionTitle(doc, 'Divergensi Terdeteksi', y)
+      for (const div of advancedData.divergences) {
+        y = checkPageBreak(doc, y, 8)
+        const indicator = div.indicator === 'rsi' ? 'RSI' : 'StochRSI'
+        const label = div.type === 'bullish' ? 'Bullish' : 'Bearish'
+        const color = div.type === 'bullish' ? PDF_COLORS.up : PDF_COLORS.down
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(8)
+        doc.setTextColor(...color)
+        doc.text(`• ${label} Divergence (${indicator}):`, 10, y)
+        doc.setFont('helvetica', 'normal')
+        doc.setTextColor(...PDF_COLORS.text)
+        doc.text(
+          `${fmtDate(div.startDate)} → ${fmtDate(div.endDate)}  |  Harga: ${fmtN(div.priceStart, 0)} → ${fmtN(div.priceEnd, 0)}  |  ${indicator}: ${fmtN(div.indicatorStart, 1)} → ${fmtN(div.indicatorEnd, 1)}`,
+          55,
+          y
+        )
+        y += 6
+      }
+    }
   }
 
   // === Flags ===

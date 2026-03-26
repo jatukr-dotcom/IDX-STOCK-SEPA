@@ -250,7 +250,7 @@ export default function StockDetailModal({
                 className='idx-btn idx-btn-sm idx-btn-icon'
                 title='Download PDF'
                 onClick={() =>
-                  Utils.exportStockPdf(detail, volumeData ?? null, financialHistoryData ?? null)}
+                  Utils.exportStockPdf(detail, volumeData ?? null, financialHistoryData ?? null, advancedData ?? null)}
               >
                 <FileDown size={15} aria-hidden />
                 <span>PDF</span>
@@ -1385,69 +1385,69 @@ export default function StockDetailModal({
                       </section>
                       {/* Support & Resistance */}
                       <section className='idx-detail-section'>
-                        <h4 className='idx-detail-section-title'>Support & Resistance (Pivot Points)</h4>
-                        <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
-                          {/* Pivot levels */}
-                          <div style={{ flex: '1 1 220px' }}>
-                            {([
-                              { label: 'R3', val: advancedData.supportResistance.pivotLevels.r3, bg: 'rgba(239,68,68,0.08)', border: 'var(--idx-down)' },
-                              { label: 'R2', val: advancedData.supportResistance.pivotLevels.r2, bg: 'rgba(239,68,68,0.05)', border: 'var(--idx-down)' },
-                              { label: 'R1', val: advancedData.supportResistance.pivotLevels.r1, bg: 'rgba(249,115,22,0.08)', border: '#f97316' },
-                              { label: 'Pivot', val: advancedData.supportResistance.pivotLevels.pivot, bg: 'rgba(99,102,241,0.1)', border: 'var(--idx-accent)' },
-                              { label: 'S1', val: advancedData.supportResistance.pivotLevels.s1, bg: 'rgba(34,197,94,0.08)', border: '#22c55e' },
-                              { label: 'S2', val: advancedData.supportResistance.pivotLevels.s2, bg: 'rgba(34,197,94,0.05)', border: 'var(--idx-up)' },
-                              { label: 'S3', val: advancedData.supportResistance.pivotLevels.s3, bg: 'rgba(34,197,94,0.04)', border: 'var(--idx-up)' }
-                            ] as { label: string; val: number; bg: string; border: string }[]).map(({ label, val, bg, border }) => (
-                              <div
-                                key={label}
-                                style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'space-between',
-                                  padding: '5px 10px',
-                                  marginBottom: 3,
-                                  borderRadius: 4,
-                                  background: bg,
-                                  borderLeft: `3px solid ${border}`
-                                }}
-                              >
-                                <span style={{ fontSize: 'var(--idx-text-sm)', fontWeight: 700, color: border, minWidth: 36 }}>{label}</span>
-                                <span style={{ fontSize: 'var(--idx-text-sm)', fontWeight: 600 }}>{Utils.Format.formatNum(val, 0)}</span>
+                        <h4 className='idx-detail-section-title'>
+                          Support &amp; Resistance
+                          <span style={{ fontSize: 'var(--idx-text-xs)', fontWeight: 400, color: 'var(--idx-text-muted)', marginLeft: 8 }}>
+                            Berbasis cluster level yang sering disentuh harga (1 tahun)
+                          </span>
+                        </h4>
+                        {advancedData.supportResistance.levels.length === 0
+                          ? <p className='idx-p-muted'>Tidak cukup data untuk mendeteksi level S/R.</p>
+                          : (
+                            <div>
+                              {/* Current price reference */}
+                              <div style={{
+                                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                padding: '5px 10px', marginBottom: 6, borderRadius: 4,
+                                background: 'rgba(99,102,241,0.1)', borderLeft: '3px solid var(--idx-accent)'
+                              }}>
+                                <span style={{ fontSize: 'var(--idx-text-sm)', fontWeight: 700, color: 'var(--idx-accent)' }}>Harga Saat Ini</span>
+                                <span style={{ fontSize: 'var(--idx-text-sm)', fontWeight: 700, color: 'var(--idx-accent)' }}>
+                                  {Utils.Format.formatNum(advancedData.supportResistance.currentClose, 0)}
+                                </span>
                               </div>
-                            ))}
-                          </div>
-                          {/* Swing levels */}
-                          {advancedData.supportResistance.swingLevels.length > 0 && (
-                            <div style={{ flex: '1 1 180px' }}>
-                              <p style={{ fontSize: 'var(--idx-text-xs)', color: 'var(--idx-text-muted)', marginBottom: 6, fontWeight: 600 }}>
-                                Swing Levels (80 hari):
+                              {/* Levels sorted price descending: resistance above, support below */}
+                              {advancedData.supportResistance.levels.map((lvl, i) => {
+                                const isRes = lvl.type === 'resistance'
+                                const strengthDot = lvl.strength === 'strong' ? '●●●' : lvl.strength === 'moderate' ? '●●○' : '●○○'
+                                const bg = isRes ? 'rgba(239,68,68,0.07)' : 'rgba(34,197,94,0.07)'
+                                const border = isRes ? 'var(--idx-down)' : 'var(--idx-up)'
+                                const pctFromClose = ((lvl.price - advancedData.supportResistance.currentClose) /
+                                  advancedData.supportResistance.currentClose * 100)
+                                return (
+                                  <div
+                                    key={i}
+                                    style={{
+                                      display: 'flex', alignItems: 'center',
+                                      justifyContent: 'space-between', gap: 8,
+                                      padding: '5px 10px', marginBottom: 3,
+                                      borderRadius: 4, background: bg,
+                                      borderLeft: `3px solid ${border}`
+                                    }}
+                                  >
+                                    <span style={{ fontSize: 'var(--idx-text-xs)', fontWeight: 700, color: border, minWidth: 40 }}>
+                                      {isRes ? '▲ Res' : '▼ Sup'}
+                                    </span>
+                                    <span style={{ fontSize: 'var(--idx-text-sm)', fontWeight: 700, flex: 1 }}>
+                                      {Utils.Format.formatNum(lvl.price, 0)}
+                                    </span>
+                                    <span style={{ fontSize: 'var(--idx-text-xs)', color: isRes ? 'var(--idx-down)' : 'var(--idx-up)', minWidth: 52, textAlign: 'right' }}>
+                                      {pctFromClose >= 0 ? '+' : ''}{pctFromClose.toFixed(1)}%
+                                    </span>
+                                    <span style={{ fontSize: 10, color: 'var(--idx-text-muted)', minWidth: 28, textAlign: 'center' }} title={`Kekuatan: ${lvl.strength} (${lvl.touchCount} sentuhan)`}>
+                                      {strengthDot}
+                                    </span>
+                                    <span style={{ fontSize: 'var(--idx-text-xs)', color: 'var(--idx-text-muted)', minWidth: 52, textAlign: 'right' }}>
+                                      {Utils.Format.formatDateInt(lvl.lastTouchDate)}
+                                    </span>
+                                  </div>
+                                )
+                              })}
+                              <p style={{ fontSize: 'var(--idx-text-xs)', color: 'var(--idx-text-muted)', marginTop: 8 }}>
+                                ●●● Kuat &nbsp;·&nbsp; ●●○ Sedang &nbsp;·&nbsp; ●○○ Lemah &nbsp;·&nbsp; Tanggal = sentuhan terakhir
                               </p>
-                              {advancedData.supportResistance.swingLevels.map((sw, i) => (
-                                <div
-                                  key={i}
-                                  style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'space-between',
-                                    padding: '4px 10px',
-                                    marginBottom: 3,
-                                    borderRadius: 4,
-                                    background: sw.type === 'high' ? 'rgba(239,68,68,0.06)' : 'rgba(34,197,94,0.06)',
-                                    borderLeft: `3px solid ${sw.type === 'high' ? 'var(--idx-down)' : 'var(--idx-up)'}`
-                                  }}
-                                >
-                                  <span style={{ fontSize: 'var(--idx-text-xs)', color: sw.type === 'high' ? 'var(--idx-down)' : 'var(--idx-up)', fontWeight: 700 }}>
-                                    {sw.type === 'high' ? '▲ Res' : '▼ Sup'}
-                                  </span>
-                                  <span style={{ fontSize: 'var(--idx-text-xs)', fontWeight: 600 }}>{Utils.Format.formatNum(sw.price, 0)}</span>
-                                  <span style={{ fontSize: 'var(--idx-text-xs)', color: 'var(--idx-text-muted)' }}>
-                                    {Utils.Format.formatDateInt(sw.date)}
-                                  </span>
-                                </div>
-                              ))}
                             </div>
                           )}
-                        </div>
                       </section>
 
                       {/* Fibonacci Retracement */}

@@ -124,54 +124,116 @@ export default class TechnicalAnalysis {
     return { k, d }
   }
 
-  // ─── Support & Resistance ────────────────────────────────────────────────
+  // ─── Support & Resistance (Cluster-based) ───────────────────────────────
+  //
+  // Algorithm:
+  // 1. Detect all swing highs/lows (5-bar pivot) across full history
+  // 2. Sort all swing prices and cluster nearby ones (within clusterPct radius)
+  // 3. For each cluster: count swing points + candle touches as strength proxy
+  // 4. Filter weak clusters, classify support/resistance vs current close
+  // 5. Return top levels sorted by strength
 
-  static calculateSupportResistance(rows: OhlcRow[]): Types.SupportResistanceData {
-    // Pivot Points from the most recent day
-    const last = rows[rows.length - 1]!
-    const H = last.high
-    const L = last.low
-    const C = last.close
-    const P = (H + L + C) / 3
-    const pivotLevels: Types.PivotLevels = {
-      pivot: Math.round(P * 100) / 100,
-      r1: Math.round((2 * P - L) * 100) / 100,
-      r2: Math.round((P + (H - L)) * 100) / 100,
-      r3: Math.round((H + 2 * (P - L)) * 100) / 100,
-      s1: Math.round((2 * P - H) * 100) / 100,
-      s2: Math.round((P - (H - L)) * 100) / 100,
-      s3: Math.round((L - 2 * (H - P)) * 100) / 100
+  static calculateSupportResistance(
+    rows: OhlcRow[],
+    clusterPct = 1.5
+  ): Types.SupportResistanceData {
+    if (rows.length === 0) {
+      return { currentClose: 0, levels: [] }
     }
 
-    // Swing Levels from last 60 rows (5-bar pivot detection)
-    const recent = rows.slice(Math.max(0, rows.length - 80))
-    const swingLevels: Types.SwingLevel[] = []
+    const currentClose = rows[rows.length - 1]!.close
 
-    for (let i = 2; i < recent.length - 2; i++) {
-      const r = recent[i]!
-      const prev1 = recent[i - 1]!
-      const prev2 = recent[i - 2]!
-      const next1 = recent[i + 1]!
-      const next2 = recent[i + 2]!
+    // Step 1 — Collect all swing highs and lows (5-bar pivot)
+    type SwingPoint = { price: number; date: number }
+    const swings: SwingPoint[] = []
 
-      if (
-        r.high > prev1.high && r.high > prev2.high &&
-        r.high > next1.high && r.high > next2.high
-      ) {
-        swingLevels.push({ date: r.date, price: r.high, type: 'high' })
-      } else if (
-        r.low < prev1.low && r.low < prev2.low &&
-        r.low < next1.low && r.low < next2.low
-      ) {
-        swingLevels.push({ date: r.date, price: r.low, type: 'low' })
+    for (let i = 2; i < rows.length - 2; i++) {
+      const r = rows[i]!
+      const p1 = rows[i - 1]!
+      const p2 = rows[i - 2]!
+      const n1 = rows[i + 1]!
+      const n2 = rows[i + 2]!
+
+      if (r.high > p1.high && r.high > p2.high && r.high > n1.high && r.high > n2.high) {
+        swings.push({ price: r.high, date: r.date })
+      }
+      if (r.low < p1.low && r.low < p2.low && r.low < n1.low && r.low < n2.low) {
+        swings.push({ price: r.low, date: r.date })
       }
     }
 
-    // Return most recent 5 highs and 5 lows
-    const highs = swingLevels.filter((s) => s.type === 'high').slice(-5)
-    const lows = swingLevels.filter((s) => s.type === 'low').slice(-5)
+    if (swings.length === 0) {
+      return { currentClose, levels: [] }
+    }
 
-    return { pivotLevels, swingLevels: [...highs, ...lows].sort((a, b) => a.date - b.date) }
+    // Step 2 — Sort by price and cluster nearby swings
+    const sorted = swings.slice().sort((a, b) => a.price - b.price)
+
+    const clusters: { prices: number[]; dates: number[] }[] = []
+    let cur: { prices: number[]; dates: number[] } | null = null
+
+    for (const sw of sorted) {
+      if (cur == null) {
+        cur = { prices: [sw.price], dates: [sw.date] }
+      } else {
+        // Use mean of current cluster as reference
+        const mean = cur.prices.reduce((a, b) => a + b, 0) / cur.prices.length
+        if (Math.abs(sw.price - mean) / mean * 100 <= clusterPct) {
+          cur.prices.push(sw.price)
+          cur.dates.push(sw.date)
+        } else {
+          clusters.push(cur)
+          cur = { prices: [sw.price], dates: [sw.date] }
+        }
+      }
+    }
+    if (cur != null) clusters.push(cur)
+
+    // Step 3 — Score each cluster
+    const result: Types.SRLevel[] = []
+
+    for (const cluster of clusters) {
+      const rep = cluster.prices.reduce((a, b) => a + b, 0) / cluster.prices.length
+      const swingCount = cluster.prices.length
+      const lastTouchDate = Math.max(...cluster.dates)
+
+      // Count candle touches: high or low came within 1% of the level
+      const touchRadius = rep * 0.01
+      let candleTouches = 0
+      for (const row of rows) {
+        if (Math.abs(row.high - rep) <= touchRadius || Math.abs(row.low - rep) <= touchRadius) {
+          candleTouches++
+        }
+      }
+
+      // Must have ≥2 swing points OR ≥3 candle touches to qualify
+      if (swingCount < 2 && candleTouches < 3) continue
+
+      // Total score: each swing counts double (stronger signal than a candle touch)
+      const totalScore = swingCount * 2 + candleTouches
+
+      const type: 'support' | 'resistance' = rep < currentClose ? 'support' : 'resistance'
+      const strength: 'strong' | 'moderate' | 'weak' =
+        totalScore >= 8 ? 'strong' : totalScore >= 4 ? 'moderate' : 'weak'
+
+      result.push({
+        price: Math.round(rep * 100) / 100,
+        type,
+        touchCount: totalScore,
+        lastTouchDate,
+        strength
+      })
+    }
+
+    // Step 4 — Balance: take up to 4 support + 4 resistance, sorted by strength
+    result.sort((a, b) => b.touchCount - a.touchCount)
+    const supports = result.filter((l) => l.type === 'support').slice(0, 4)
+    const resistances = result.filter((l) => l.type === 'resistance').slice(0, 4)
+
+    // Return sorted price descending (resistance first, then support)
+    const levels = [...resistances, ...supports].sort((a, b) => b.price - a.price)
+
+    return { currentClose, levels }
   }
 
   // ─── Fibonacci Retracement ───────────────────────────────────────────────
