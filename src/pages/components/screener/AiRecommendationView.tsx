@@ -10,6 +10,32 @@ import { Brain, ChevronDown, ChevronUp, FileDown, Sparkles } from 'lucide-react'
 import * as Utils from '@app/pages/utils/index.ts'
 import type * as Types from '@app/pages/Types.ts'
 
+function buildClaudePrompt(data: Types.AiRecommendationResponse, mode: Types.AiRecommendationMode): string {
+  const modeLabel = mode === 'technical' ? 'Teknikal' : mode === 'fundamental' ? 'Fundamental' : 'Kombinasi'
+  const top10 = data.data.slice(0, 10)
+  const dateStr = String(data.date)
+  const tanggal = `${dateStr.slice(0, 4)}-${dateStr.slice(4, 6)}-${dateStr.slice(6, 8)}`
+
+  const rows = top10.map((r, i) =>
+    `${i + 1}. ${r.code} (${r.name ?? '-'}) — Sektor: ${r.sector ?? '-'}
+   Skor ${modeLabel}: ${Math.round(r.combinedScore)} | SEPA: ${Math.round(r.sepaScore)} | Stage: ${r.stage} | RS Rank: ${r.rsRank}
+   EPS YoY: ${r.epsGrowthPct != null ? `${r.epsGrowthPct >= 0 ? '+' : ''}${r.epsGrowthPct.toFixed(1)}%` : 'N/A'} | ROE: ${r.roe != null ? `${r.roe.toFixed(1)}%` : 'N/A'} | DER: ${r.der != null ? r.der.toFixed(2) : 'N/A'}
+   Sinyal: ${r.reasons.slice(0, 3).join(' | ')}`
+  ).join('\n\n')
+
+  return `Berikut adalah hasil screening saham IDX (Bursa Efek Indonesia) per tanggal ${tanggal} berdasarkan analisis ${modeLabel}:
+
+${rows}
+
+Tolong buatkan narasi pasar 3–4 paragraf dalam Bahasa Indonesia yang:
+1. Mengidentifikasi tema atau pola umum dari saham-saham teratas ini
+2. Menyebutkan sektor mana yang paling kuat dan kenapa
+3. Menyoroti setup individual yang paling menarik untuk diperhatikan
+4. Memberikan konteks risiko pasar yang relevan
+
+Catatan: Ini adalah analisis teknikal/fundamental dari screener, bukan rekomendasi investasi.`
+}
+
 function ScoreBar({ score }: { score: number }) {
   const pct = Math.min(100, Math.max(0, score))
   const color = pct >= 75 ? 'var(--idx-up)' : pct >= 55 ? '#f59e0b' : 'var(--idx-text-muted)'
@@ -207,6 +233,17 @@ export default function AiRecommendationView({
   onModeChange
 }: Types.AiRecommendationViewProps) {
   const [narrativeExpanded, setNarrativeExpanded] = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  function handleCopyPrompt() {
+    if (!data) return
+    const prompt = buildClaudePrompt(data, mode)
+    navigator.clipboard.writeText(prompt).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 3000)
+      globalThis.open('https://claude.ai/new', '_blank')
+    })
+  }
 
   if (loading) {
     return (
@@ -268,6 +305,17 @@ export default function AiRecommendationView({
             </button>
           ))}
           <span className='idx-sepa-divider' style={{ marginLeft: 'auto' }} />
+          <button
+            type='button'
+            className='idx-btn idx-btn-sm idx-btn-icon'
+            title='Salin prompt & buka Claude.ai untuk membuat narasi'
+            disabled={filtered.length === 0}
+            onClick={handleCopyPrompt}
+            style={copied ? { color: 'var(--idx-up)' } : undefined}
+          >
+            <Sparkles size={14} aria-hidden />
+            <span>{copied ? 'Tersalin! Paste di Claude' : 'Narasi di Claude'}</span>
+          </button>
           <button
             type='button'
             className='idx-btn idx-btn-sm idx-btn-icon'
