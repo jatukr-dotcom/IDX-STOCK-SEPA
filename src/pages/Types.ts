@@ -94,7 +94,7 @@ export interface DashboardHeaderProps {
   loading?: boolean
 }
 
-export type DetailTab = 'fundamental' | 'technical' | 'eps' | 'volume'
+export type DetailTab = 'fundamental' | 'technical' | 'eps' | 'volume' | 'advanced'
 
 export interface FilterPanelProps {
   params: CandidatesParams
@@ -683,4 +683,77 @@ export interface VolumeAnalysisViewProps {
   loading: boolean
   error: string | null
   onRefetch: () => void
+}
+
+// ─── Advanced Technical Indicators ──────────────────────────────────────────
+
+export interface MacdSeriesRow {
+  date: number
+  macdLine: number | null
+  signalLine: number | null
+  histogram: number | null
+}
+
+export interface StochRsiSeriesRow {
+  date: number
+  k: number | null
+  d: number | null
+}
+
+export interface PivotLevels {
+  pivot: number
+  s1: number
+  s2: number
+  s3: number
+  r1: number
+  r2: number
+  r3: number
+}
+
+export interface SwingLevel {
+  date: number
+  price: number
+  type: 'high' | 'low'
+}
+
+export interface SupportResistanceData {
+  pivotLevels: PivotLevels
+  swingLevels: SwingLevel[]
+}
+
+export interface FibonacciLevel {
+  ratio: number
+  label: string
+  price: number
+}
+
+export interface FibonacciData {
+  swingHigh: number
+  swingHighDate: number
+  swingLow: number
+  swingLowDate: number
+  trend: 'up' | 'down'
+  levels: FibonacciLevel[]
+}
+
+export interface DivergenceSignal {
+  type: 'bullish' | 'bearish'
+  indicator: 'rsi' | 'stochRsi'
+  startDate: number
+  endDate: number
+  priceStart: number
+  priceEnd: number
+  indicatorStart: number
+  indicatorEnd: number
+}
+
+export interface TechnicalAnalysisApiResponse {
+  code: string
+  start: number
+  end: number
+  macd: MacdSeriesRow[]
+  stochRsi: StochRsiSeriesRow[]
+  supportResistance: SupportResistanceData
+  fibonacci: FibonacciData | null
+  divergences: DivergenceSignal[]
 }

@@ -14,7 +14,8 @@ import {
   FileDown,
   LineChart as LineChartIcon,
   TrendingUp,
-  X
+  X,
+  Zap
 } from 'lucide-react'
 import {
   Area,
@@ -188,6 +189,10 @@ export default function StockDetailModal({
   } = Hooks.useForeign(detail?.code ?? null, foreignPeriodDays)
   const { data: financialHistoryData, loading: financialHistoryLoading } = Hooks
     .useFinancialHistory(detail?.code ?? null)
+  const {
+    data: advancedData,
+    loading: advancedLoading
+  } = Hooks.useAdvancedTechnical(detail?.code ?? null, foreignPeriodDays)
   const chartData = detail?.ohlc?.map((ohlcRow: Types.StockDetailOhlcRow) => ({
     date: Utils.Format.formatDateInt(ohlcRow.date),
     close: ohlcRow.close ?? 0
@@ -307,6 +312,16 @@ export default function StockDetailModal({
                 >
                   <Activity size={16} aria-hidden />
                   <span>Volume A/D</span>
+                </button>
+                <button
+                  type='button'
+                  className={`idx-tab idx-tab-inline ${
+                    activeTab === 'advanced' ? 'idx-tab-active' : ''
+                  }`}
+                  onClick={() => setActiveTab('advanced')}
+                >
+                  <Zap size={16} aria-hidden />
+                  <span>Teknikal Lanjutan</span>
                 </button>
               </div>
               {activeTab === 'fundamental' && (
@@ -1141,6 +1156,428 @@ export default function StockDetailModal({
                       </>
                     )}
                   </div>
+                </>
+              )}
+              {activeTab === 'advanced' && (
+                <>
+                  <div className='idx-foreign-header idx-mb-16'>
+                    <label className='idx-form-label'>Periode</label>
+                    <div className='idx-tabs'>
+                      {foreignPeriodOptions.map(({ days, label }) => (
+                        <button
+                          key={days}
+                          type='button'
+                          className={`idx-tab idx-tab-sm ${
+                            foreignPeriodDays === days ? 'idx-tab-active' : ''
+                          }`}
+                          onClick={() => setForeignPeriodDays(days)}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {advancedLoading && <p className='idx-p-muted'>Memuat indikator...</p>}
+                  {!advancedLoading && advancedData && (
+                    <div className='idx-detail-sections'>
+                      {advancedData.divergences.length > 0 && (
+                        <section className='idx-detail-section'>
+                          <h4 className='idx-detail-section-title'>Sinyal Divergence</h4>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            {advancedData.divergences.map((div, i) => (
+                              <div
+                                key={i}
+                                style={{
+                                  padding: '6px 10px',
+                                  borderRadius: 4,
+                                  fontSize: 'var(--idx-text-sm)',
+                                  background: div.type === 'bullish'
+                                    ? 'rgba(34,197,94,0.12)'
+                                    : 'rgba(239,68,68,0.12)',
+                                  color: div.type === 'bullish'
+                                    ? 'var(--idx-up)'
+                                    : 'var(--idx-down)',
+                                  borderLeft: `3px solid ${
+                                    div.type === 'bullish' ? 'var(--idx-up)' : 'var(--idx-down)'
+                                  }`
+                                }}
+                              >
+                                <strong>
+                                  {div.type === 'bullish' ? '▲ Bullish' : '▼ Bearish'}{' '}
+                                  Divergence ({div.indicator === 'rsi' ? 'RSI' : 'StochRSI'})
+                                </strong>
+                                {' — '}
+                                {Utils.Format.formatDateInt(div.startDate)}
+                                {' → '}
+                                {Utils.Format.formatDateInt(div.endDate)}
+                                {' | Harga: '}
+                                {Utils.Format.formatNum(div.priceStart, 0)}
+                                {' → '}
+                                {Utils.Format.formatNum(div.priceEnd, 0)}
+                                {' | Indikator: '}
+                                {Utils.Format.formatNum(div.indicatorStart, 1)}
+                                {' → '}
+                                {Utils.Format.formatNum(div.indicatorEnd, 1)}
+                              </div>
+                            ))}
+                          </div>
+                        </section>
+                      )}
+                      <section className='idx-detail-section'>
+                        <h4 className='idx-detail-section-title'>MACD (12, 26, 9)</h4>
+                        {advancedData.macd.length > 0
+                          ? (
+                            <div style={{ height: 200 }}>
+                              <ResponsiveContainer width='100%' height='100%'>
+                                <LineChart
+                                  data={advancedData.macd.map((r) => ({
+                                    date: Utils.Format.formatDateInt(r.date),
+                                    macd: r.macdLine,
+                                    signal: r.signalLine,
+                                    hist: r.histogram
+                                  }))}
+                                  margin={{ top: 4, right: 8, left: 0, bottom: 0 }}
+                                >
+                                  <XAxis
+                                    dataKey='date'
+                                    tick={{ fontSize: 10 }}
+                                    tickLine={false}
+                                    interval='preserveStartEnd'
+                                  />
+                                  <YAxis
+                                    tick={{ fontSize: 10 }}
+                                    tickLine={false}
+                                    width={50}
+                                    tickFormatter={(v: number) =>
+                                      v != null ? v.toFixed(1) : ''}
+                                  />
+                                  <Tooltip
+                                    formatter={(v: number) => v?.toFixed(3) ?? '-'}
+                                    contentStyle={{
+                                      fontSize: 11,
+                                      background: 'var(--idx-bg)',
+                                      border: '1px solid var(--idx-border)'
+                                    }}
+                                  />
+                                  <ReferenceLine y={0} stroke='var(--idx-border)' />
+                                  <Bar dataKey='hist' isAnimationActive={false}>
+                                    {advancedData.macd.map((r) => (
+                                      <Cell
+                                        key={r.date}
+                                        fill={(r.histogram ?? 0) >= 0
+                                          ? 'var(--idx-up)'
+                                          : 'var(--idx-down)'}
+                                        fillOpacity={0.6}
+                                      />
+                                    ))}
+                                  </Bar>
+                                  <Line
+                                    type='monotone'
+                                    dataKey='macd'
+                                    stroke='var(--idx-accent)'
+                                    dot={false}
+                                    strokeWidth={1.5}
+                                    isAnimationActive={false}
+                                    connectNulls
+                                    name='MACD'
+                                  />
+                                  <Line
+                                    type='monotone'
+                                    dataKey='signal'
+                                    stroke='#f59e0b'
+                                    dot={false}
+                                    strokeWidth={1.5}
+                                    strokeDasharray='4 2'
+                                    isAnimationActive={false}
+                                    connectNulls
+                                    name='Signal'
+                                  />
+                                </LineChart>
+                              </ResponsiveContainer>
+                            </div>
+                          )
+                          : <p className='idx-p-muted'>Data MACD tidak tersedia.</p>}
+                      </section>
+                      <section className='idx-detail-section'>
+                        <h4 className='idx-detail-section-title'>Stochastic RSI (14, 14, 3)</h4>
+                        {advancedData.stochRsi.length > 0
+                          ? (
+                            <div style={{ height: 180 }}>
+                              <ResponsiveContainer width='100%' height='100%'>
+                                <LineChart
+                                  data={advancedData.stochRsi.map((r) => ({
+                                    date: Utils.Format.formatDateInt(r.date),
+                                    k: r.k,
+                                    d: r.d
+                                  }))}
+                                  margin={{ top: 4, right: 8, left: 0, bottom: 0 }}
+                                >
+                                  <XAxis
+                                    dataKey='date'
+                                    tick={{ fontSize: 10 }}
+                                    tickLine={false}
+                                    interval='preserveStartEnd'
+                                  />
+                                  <YAxis
+                                    domain={[0, 100]}
+                                    tick={{ fontSize: 10 }}
+                                    tickLine={false}
+                                    width={35}
+                                  />
+                                  <Tooltip
+                                    formatter={(v: number) => v?.toFixed(1) ?? '-'}
+                                    contentStyle={{
+                                      fontSize: 11,
+                                      background: 'var(--idx-bg)',
+                                      border: '1px solid var(--idx-border)'
+                                    }}
+                                  />
+                                  <ReferenceLine
+                                    y={80}
+                                    stroke='var(--idx-down)'
+                                    strokeDasharray='3 3'
+                                    strokeOpacity={0.5}
+                                  />
+                                  <ReferenceLine
+                                    y={20}
+                                    stroke='var(--idx-up)'
+                                    strokeDasharray='3 3'
+                                    strokeOpacity={0.5}
+                                  />
+                                  <Line
+                                    type='monotone'
+                                    dataKey='k'
+                                    stroke='var(--idx-accent)'
+                                    dot={false}
+                                    strokeWidth={1.5}
+                                    isAnimationActive={false}
+                                    connectNulls
+                                    name='%K'
+                                  />
+                                  <Line
+                                    type='monotone'
+                                    dataKey='d'
+                                    stroke='#f59e0b'
+                                    dot={false}
+                                    strokeWidth={1.5}
+                                    strokeDasharray='4 2'
+                                    isAnimationActive={false}
+                                    connectNulls
+                                    name='%D'
+                                  />
+                                </LineChart>
+                              </ResponsiveContainer>
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  gap: 12,
+                                  fontSize: 'var(--idx-text-xs)',
+                                  color: 'var(--idx-text-muted)',
+                                  marginTop: 4
+                                }}
+                              >
+                                <span style={{ color: 'var(--idx-down)' }}>─ 80 Overbought</span>
+                                <span style={{ color: 'var(--idx-up)' }}>─ 20 Oversold</span>
+                              </div>
+                            </div>
+                          )
+                          : <p className='idx-p-muted'>Data Stochastic RSI tidak tersedia.</p>}
+                      </section>
+                      <div
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: '1fr 1fr',
+                          gap: 16
+                        }}
+                      >
+                        <section className='idx-detail-section'>
+                          <h4 className='idx-detail-section-title'>Support & Resistance</h4>
+                          <table className='idx-detail-table' style={{ width: '100%' }}>
+                            <tbody>
+                              {([
+                                {
+                                  label: 'R3',
+                                  val: advancedData.supportResistance.pivotLevels.r3,
+                                  color: 'var(--idx-down)'
+                                },
+                                {
+                                  label: 'R2',
+                                  val: advancedData.supportResistance.pivotLevels.r2,
+                                  color: 'var(--idx-down)'
+                                },
+                                {
+                                  label: 'R1',
+                                  val: advancedData.supportResistance.pivotLevels.r1,
+                                  color: '#f97316'
+                                },
+                                {
+                                  label: 'Pivot',
+                                  val: advancedData.supportResistance.pivotLevels.pivot,
+                                  color: 'var(--idx-accent)'
+                                },
+                                {
+                                  label: 'S1',
+                                  val: advancedData.supportResistance.pivotLevels.s1,
+                                  color: '#22c55e'
+                                },
+                                {
+                                  label: 'S2',
+                                  val: advancedData.supportResistance.pivotLevels.s2,
+                                  color: 'var(--idx-up)'
+                                },
+                                {
+                                  label: 'S3',
+                                  val: advancedData.supportResistance.pivotLevels.s3,
+                                  color: 'var(--idx-up)'
+                                }
+                              ] as { label: string; val: number; color: string }[]).map(
+                                ({ label, val, color }) => (
+                                  <tr key={label}>
+                                    <td
+                                      style={{
+                                        fontSize: 'var(--idx-text-sm)',
+                                        color,
+                                        fontWeight: 700,
+                                        padding: '2px 6px'
+                                      }}
+                                    >
+                                      {label}
+                                    </td>
+                                    <td
+                                      style={{
+                                        fontSize: 'var(--idx-text-sm)',
+                                        textAlign: 'right',
+                                        padding: '2px 6px'
+                                      }}
+                                    >
+                                      {Utils.Format.formatNum(val, 0)}
+                                    </td>
+                                  </tr>
+                                )
+                              )}
+                            </tbody>
+                          </table>
+                          {advancedData.supportResistance.swingLevels.length > 0 && (
+                            <>
+                              <p
+                                style={{
+                                  fontSize: 'var(--idx-text-xs)',
+                                  color: 'var(--idx-text-muted)',
+                                  marginTop: 8,
+                                  marginBottom: 4
+                                }}
+                              >
+                                Swing Levels (80 hari terakhir):
+                              </p>
+                              {advancedData.supportResistance.swingLevels.map((sw, i) => (
+                                <div
+                                  key={i}
+                                  style={{
+                                    fontSize: 'var(--idx-text-xs)',
+                                    color: sw.type === 'high'
+                                      ? 'var(--idx-down)'
+                                      : 'var(--idx-up)'
+                                  }}
+                                >
+                                  {sw.type === 'high' ? '▲' : '▼'}{' '}
+                                  {Utils.Format.formatNum(sw.price, 0)}{' '}
+                                  <span style={{ color: 'var(--idx-text-muted)' }}>
+                                    ({Utils.Format.formatDateInt(sw.date)})
+                                  </span>
+                                </div>
+                              ))}
+                            </>
+                          )}
+                        </section>
+                        <section className='idx-detail-section'>
+                          <h4 className='idx-detail-section-title'>Fibonacci Retracement</h4>
+                          {advancedData.fibonacci
+                            ? (
+                              <>
+                                <p
+                                  style={{
+                                    fontSize: 'var(--idx-text-xs)',
+                                    color: 'var(--idx-text-muted)',
+                                    marginBottom: 6
+                                  }}
+                                >
+                                  Tren:{' '}
+                                  <strong
+                                    style={{
+                                      color: advancedData.fibonacci.trend === 'up'
+                                        ? 'var(--idx-up)'
+                                        : 'var(--idx-down)'
+                                    }}
+                                  >
+                                    {advancedData.fibonacci.trend === 'up'
+                                      ? '▲ Uptrend'
+                                      : '▼ Downtrend'}
+                                  </strong>
+                                  {' | H: '}
+                                  {Utils.Format.formatNum(advancedData.fibonacci.swingHigh, 0)}
+                                  {' | L: '}
+                                  {Utils.Format.formatNum(advancedData.fibonacci.swingLow, 0)}
+                                </p>
+                                <table className='idx-detail-table' style={{ width: '100%' }}>
+                                  <tbody>
+                                    {advancedData.fibonacci.levels.map((lvl) => {
+                                      const currentPrice = detail.priceClose ?? 0
+                                      const isCurrent = Math.abs(currentPrice - lvl.price) /
+                                          Math.max(lvl.price, 1) < 0.05
+                                      return (
+                                        <tr
+                                          key={lvl.label}
+                                          style={isCurrent
+                                            ? {
+                                              background: 'var(--idx-bg-second)',
+                                              fontWeight: 700
+                                            }
+                                            : undefined}
+                                        >
+                                          <td
+                                            style={{
+                                              fontSize: 'var(--idx-text-sm)',
+                                              color: 'var(--idx-text-muted)',
+                                              padding: '2px 6px'
+                                            }}
+                                          >
+                                            {lvl.label}
+                                          </td>
+                                          <td
+                                            style={{
+                                              fontSize: 'var(--idx-text-sm)',
+                                              textAlign: 'right',
+                                              padding: '2px 6px'
+                                            }}
+                                          >
+                                            {Utils.Format.formatNum(lvl.price, 0)}
+                                            {isCurrent && (
+                                              <span
+                                                style={{
+                                                  marginLeft: 4,
+                                                  fontSize: 'var(--idx-text-xs)',
+                                                  color: 'var(--idx-accent)'
+                                                }}
+                                              >
+                                                ← saat ini
+                                              </span>
+                                            )}
+                                          </td>
+                                        </tr>
+                                      )
+                                    })}
+                                  </tbody>
+                                </table>
+                              </>
+                            )
+                            : <p className='idx-p-muted'>Data Fibonacci tidak tersedia.</p>}
+                        </section>
+                      </div>
+                    </div>
+                  )}
+                  {!advancedLoading && !advancedData && (
+                    <p className='idx-p-muted'>Data indikator lanjutan tidak tersedia.</p>
+                  )}
                 </>
               )}
             </>

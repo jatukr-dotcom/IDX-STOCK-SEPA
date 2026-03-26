@@ -6,6 +6,7 @@
  * Fullstack developer with a focus on security and experience in trading systems.
  */
 
+export * from '@app/pages/hooks/useAdvancedTechnical.ts'
 export * from '@app/pages/hooks/useBidOfferHistory.ts'
 export * from '@app/pages/hooks/useCandidates.ts'
 export * from '@app/pages/hooks/useClient.ts'
