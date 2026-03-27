@@ -19,5 +19,8 @@ export class Fetcher {
       const dateInt = Services.CronDate.getDateIntForDayOffset(offset)
       await Services.Summary.run(this.client, dateInt)
     }
+    await Services.Dividend.run(this.client)
+    await Services.SectoralMovement.run(this.client)
+    await Services.DataEnrichment.run()
   }
 }

@@ -291,6 +291,9 @@ export interface StockDetail {
   rank: number
   value: number | null
   volume: number | null
+  listedShares: number | null
+  currentPrice: number | null
+  dividendYield: number | null
   ohlc: StockDetailOhlcRow[]
 }
 

@@ -7,7 +7,7 @@
  */
 
 import type { Context } from '@neabyte/deserve'
-import { and, asc, eq, gte, lte } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, lte } from 'drizzle-orm'
 import Database from '@app/server/Database.ts'
 import Utils from '@app/server/Utils.ts'
 import * as Schemas from '@app/server/schemas/index.ts'
@@ -51,7 +51,8 @@ export async function GET(ctx: Context) {
     week52PC: Schemas.screener.week52PC,
     notation: Schemas.screener.notation,
     corpAction: Schemas.screener.corpAction,
-    umaDate: Schemas.screener.umaDate
+    umaDate: Schemas.screener.umaDate,
+    dividendYield: Schemas.screener.dividendYield
   })
     .from(Schemas.screener)
     .where(eq(Schemas.screener.code, stockCode))
@@ -59,8 +60,8 @@ export async function GET(ctx: Context) {
   if (screenerRow == null) {
     return ctx.send.json({ error: 'Stock not found' }, { status: 404 })
   }
+
   // Compute price performance from OHLC as fallback when screener values are null
-  // Must be done before rowsForScore so momentum score is accurate
   let computedWeek4PC = screenerRow.week4PC
   let computedWeek13PC = screenerRow.week13PC
   let computedWeek26PC = screenerRow.week26PC
@@ -112,6 +113,29 @@ export async function GET(ctx: Context) {
       if (computedWeek52PC == null) computedWeek52PC = findReturnByDays(365)
     }
   }
+
+  // Query latest listed_shares and price_close for this stock
+  const latestSummaryRows = await Database.select({
+    listedShares: Schemas.summary.listedShares,
+    priceClose: Schemas.summary.priceClose
+  })
+    .from(Schemas.summary)
+    .where(
+      and(
+        eq(Schemas.summary.stockCode, stockCode),
+        gte(Schemas.summary.listedShares, 1)
+      )
+    )
+    .orderBy(desc(Schemas.summary.date))
+    .limit(1)
+  const latestSummary = latestSummaryRows[0]
+  const listedShares = latestSummary?.listedShares ?? null
+  const currentPrice = latestSummary?.priceClose ?? null
+
+  // Compute accurate market cap from current price × listed shares
+  const computedMarketCap = currentPrice != null && listedShares != null && listedShares > 0
+    ? currentPrice * listedShares
+    : screenerRow.marketCapital
 
   const allScreenerRows = await Database.select({
     code: Schemas.screener.code,
@@ -185,7 +209,7 @@ export async function GET(ctx: Context) {
     npm: screenerRow.npm,
     eps: screenerRow.eps ?? null,
     bookValue: screenerRow.bookValue ?? null,
-    marketCapital: screenerRow.marketCapital,
+    marketCapital: computedMarketCap,
     week4PC: computedWeek4PC,
     week13PC: computedWeek13PC,
     week26PC: computedWeek26PC,
@@ -200,6 +224,9 @@ export async function GET(ctx: Context) {
     rank: rankedRow?.rank ?? 0,
     value: summaryRow?.value ?? null,
     volume: summaryRow?.volume ?? null,
+    listedShares: listedShares ?? null,
+    currentPrice: currentPrice ?? null,
+    dividendYield: screenerRow.dividendYield ?? null,
     ohlc: ohlcRows.map((row) => ({
       date: row.date,
       open: row.priceOpen,

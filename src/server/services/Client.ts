@@ -30,15 +30,17 @@ export class Client implements Types.IdxClient {
     })
     const setCookieHeaders = indexResponse.headers.getSetCookie?.() ?? []
     this.sessionCookie = setCookieHeaders.join('; ')
+    // Consume response body to clean up
+    await indexResponse.text().catch(() => {})
     await this.wait(1000)
-    indexResponse.body?.cancel?.()
     const validationResponse = await fetch(`${Client.origin}/primary/home/GetIndexList`, {
       headers: {
         ...Client.browserHeaders,
         ...(this.sessionCookie ? { Cookie: this.sessionCookie } : {})
       }
     })
-    validationResponse.body?.cancel?.()
+    // Consume response body to clean up
+    await validationResponse.text().catch(() => {})
   }
 
   async get(url: string): Promise<Response> {
@@ -49,7 +51,15 @@ export class Client implements Types.IdxClient {
     }
     const response = await fetch(url, { headers })
     if (!response.ok && response.status === 403) {
+      // Session expired — clear and retry once with a fresh session
       this.sessionCookie = ''
+      await response.text().catch(() => {})
+      await this.ensureSession()
+      const retryHeaders = {
+        ...Client.browserHeaders,
+        ...(this.sessionCookie ? { Cookie: this.sessionCookie } : {})
+      }
+      return fetch(url, { headers: retryHeaders })
     }
     return response
   }

@@ -187,6 +187,10 @@ export default function StockDetailModal({
     loading: foreignLoading,
     error: foreignError
   } = Hooks.useForeign(detail?.code ?? null, foreignPeriodDays)
+  const {
+    data: technicalData,
+    loading: technicalLoading
+  } = Hooks.useStockTechnical(detail?.code ?? null)
   const { data: financialHistoryData, loading: financialHistoryLoading } = Hooks
     .useFinancialHistory(detail?.code ?? null)
   const {
@@ -361,6 +365,34 @@ export default function StockDetailModal({
                               : '-'}
                           </span>
                         </div>
+                        <div className='idx-detail-item'>
+                          <label>Harga Saat Ini</label>
+                          <span>
+                            {detail.currentPrice != null
+                              ? `Rp ${Utils.Format.formatNum(detail.currentPrice, 0)}`
+                              : '-'}
+                          </span>
+                        </div>
+                        <div className='idx-detail-item'>
+                          <label>Market Cap</label>
+                          <span>{Utils.Format.formatRp(detail.marketCapital)}</span>
+                        </div>
+                        <div className='idx-detail-item'>
+                          <label>Saham Beredar</label>
+                          <span>
+                            {detail.listedShares != null
+                              ? `${(detail.listedShares / 1e9).toFixed(2)}M`
+                              : '-'}
+                          </span>
+                        </div>
+                        <div className='idx-detail-item'>
+                          <label>Div. Yield</label>
+                          <span>
+                            {detail.dividendYield != null
+                              ? `${Utils.Format.formatNum(detail.dividendYield, 2)}%`
+                              : '-'}
+                          </span>
+                        </div>
                       </div>
                     </section>
                     <section className='idx-detail-section'>
@@ -395,6 +427,60 @@ export default function StockDetailModal({
                         <div className='idx-detail-item'>
                           <label>Volume</label>
                           <span>{Utils.Format.formatNum(detail.volume, 0)}</span>
+                        </div>
+                      </div>
+                    </section>
+                    <section className='idx-detail-section'>
+                      <h4 className='idx-detail-section-title'>Kondisi Teknikal</h4>
+                      <div className='idx-detail-grid'>
+                        <div className='idx-detail-item'>
+                          <label>Stage</label>
+                          <span style={{ fontWeight: 'bold', color: '#f59e0b' }}>
+                            {technicalLoading ? '...' : (
+                              technicalData?.stage
+                                ? `${technicalData.stage.stage} - ${['Akumulasi', 'Markup', 'Distribusi', 'Markdown'][technicalData.stage.stage - 1]}`
+                                : '-'
+                            )}
+                          </span>
+                        </div>
+                        <div className='idx-detail-item'>
+                          <label>Volume Signal</label>
+                          <span style={{
+                            fontWeight: 'bold',
+                            color: technicalData?.volume?.signal === 'accumulation' ? '#10b981'
+                              : technicalData?.volume?.signal === 'distribution' ? '#ef4444'
+                              : '#6b7280'
+                          }}>
+                            {technicalLoading ? '...' : (
+                              technicalData?.volume?.signal
+                                ? technicalData.volume.signal === 'accumulation' ? 'Akumulasi'
+                                  : technicalData.volume.signal === 'distribution' ? 'Distribusi'
+                                  : 'Netral'
+                                : '-'
+                            )}
+                          </span>
+                        </div>
+                        <div className='idx-detail-item'>
+                          <label>VCP</label>
+                          <span style={{ color: technicalData?.volume?.vcp?.isVcp ? '#ef4444' : '#6b7280' }}>
+                            {technicalLoading ? '...' : (
+                              technicalData?.volume?.vcp?.isVcp ? `Ya (${technicalData.volume.vcp.contractions} kontraksi)` : 'Tidak'
+                            )}
+                          </span>
+                        </div>
+                        <div className='idx-detail-item'>
+                          <label>Trend Criteria</label>
+                          <span>{technicalLoading ? '...' : (technicalData?.stage?.trendCriteriaCount ?? 0)}/5</span>
+                        </div>
+                        <div className='idx-detail-item idx-detail-item-full'>
+                          <label>Support/Resistance</label>
+                          <span style={{ fontSize: '0.9em', color: '#6b7280' }}>
+                            {technicalLoading ? '...' : (
+                              technicalData?.technical?.supportResistance?.levels
+                                ? `${technicalData.technical.supportResistance.levels.length} level(s) terdeteksi`
+                                : '-'
+                            )}
+                          </span>
                         </div>
                       </div>
                     </section>
@@ -822,10 +908,10 @@ export default function StockDetailModal({
                                     }}
                                   />
                                   <Line
-                                    type='monotone'
+                                    type='linear'
                                     dataKey='mfi'
                                     name='MFI'
-                                    stroke='var(--idx-accent)'
+                                    stroke='#7c3aed'
                                     strokeWidth={2}
                                     dot={false}
                                     isAnimationActive={false}
@@ -1480,7 +1566,7 @@ export default function StockDetailModal({
                               </div>
                               <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                                 {advancedData.fibonacci.levels.map((lvl) => {
-                                  const currentPrice = detail.priceClose ?? 0
+                                  const currentPrice = advancedData.supportResistance.currentClose ?? 0
                                   const range = advancedData.fibonacci!.swingHigh - advancedData.fibonacci!.swingLow
                                   const pct = range > 0 ? Math.min(100, Math.max(0, ((lvl.price - advancedData.fibonacci!.swingLow) / range) * 100)) : 0
                                   const isCurrent = Math.abs(currentPrice - lvl.price) / Math.max(lvl.price, 1) < 0.03

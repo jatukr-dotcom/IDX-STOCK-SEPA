@@ -37,5 +37,6 @@ export const screener = sqliteTable('stock_screener', {
   notation: text('notation'),
   status: text('status'),
   corpAction: text('corp_action'),
-  corpActionDate: text('corp_action_date')
+  corpActionDate: text('corp_action_date'),
+  dividendYield: real('dividend_yield')
 })

@@ -36,6 +36,10 @@ export class Bootstrap {
       currentDate = Bootstrap.addDays(currentDate, 1)
       await Bootstrap.sleepMs(150)
     }
+    console.log('[bootstrap] Fetching financial history...')
+    await Bootstrap.withRetry('financialHistory', () => Services.FinancialHistory.run(client))
+    console.log('[bootstrap] Running data enrichment (TTM EPS, BVPS, MarketCap)...')
+    await Services.DataEnrichment.run()
     console.log('[bootstrap] Done')
   }
 

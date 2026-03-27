@@ -8,10 +8,13 @@
 
 export * from '@app/server/services/Client.ts'
 export * from '@app/server/services/Composite.ts'
+export * from '@app/server/services/DataEnrichment.ts'
 export * from '@app/server/services/Date.ts'
+export * from '@app/server/services/Dividend.ts'
 export * from '@app/server/services/Fetcher.ts'
 export * from '@app/server/services/FinancialHistory.ts'
 export * from '@app/server/services/FinancialRatio.ts'
 export * from '@app/server/services/Screener.ts'
+export * from '@app/server/services/SectoralMovement.ts'
 export * from '@app/server/services/Summary.ts'
 export type * from '@app/server/services/Types.ts'

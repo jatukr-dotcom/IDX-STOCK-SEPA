@@ -19,6 +19,10 @@ export class Summary {
     const url = `${Summary.stockSummaryUrl}?date=${dateInt}`
     const response = await client.get(url)
     if (!response.ok) {
+      // 403/404 = no trading data for this date (weekend, holiday, future) — skip silently
+      if (response.status === 403 || response.status === 404) {
+        return
+      }
       throw new Error(`Stock summary API ${response.status}`)
     }
     const apiResponse = (await response.json()) as Types.StockSummaryApiResponse

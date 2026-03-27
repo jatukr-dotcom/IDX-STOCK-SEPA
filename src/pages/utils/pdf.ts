@@ -159,3 +159,244 @@ export function checkPageBreak(doc: jsPDF, y: number, needed = 20): number {
   }
   return y
 }
+
+export interface MiniLineSeries {
+  values: (number | null)[]
+  color: [number, number, number]
+  dashed?: boolean
+}
+
+export interface MiniRefLine {
+  value: number
+  color: [number, number, number]
+  label?: string
+}
+
+export function drawMiniLineChart(
+  doc: jsPDF,
+  title: string,
+  series: MiniLineSeries[],
+  refLines: MiniRefLine[],
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  yDomain?: [number, number]
+): number {
+  const TITLE_H = 5
+  const PAD_L = 6, PAD_R = 2, PAD_T = 2, PAD_B = 2
+  const cx = x + PAD_L
+  const cy = y + TITLE_H + PAD_T
+  const cw = w - PAD_L - PAD_R
+  const ch = h - TITLE_H - PAD_T - PAD_B
+  const cBottom = cy + ch
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(7)
+  doc.setTextColor(...PDF_COLORS.text)
+  doc.text(title, x, y + 3.5)
+
+  doc.setFillColor(...PDF_COLORS.bgLight)
+  doc.rect(cx, cy, cw, ch, 'F')
+
+  let yMin: number
+  let yMax: number
+  if (yDomain != null) {
+    yMin = yDomain[0]
+    yMax = yDomain[1]
+  } else {
+    const allVals: number[] = []
+    for (const s of series) {
+      for (const v of s.values) {
+        if (v != null) allVals.push(v)
+      }
+    }
+    for (const rl of refLines) {
+      allVals.push(rl.value)
+    }
+    if (allVals.length === 0) {
+      doc.setDrawColor(...PDF_COLORS.border)
+      doc.setLineWidth(0.3)
+      doc.rect(cx, cy, cw, ch)
+      return y + h + 3
+    }
+    yMin = Math.min(...allVals)
+    yMax = Math.max(...allVals)
+    const rng = (yMax - yMin) || 1
+    yMin -= rng * 0.08
+    yMax += rng * 0.08
+  }
+
+  const scaleY = (v: number): number =>
+    cBottom - ((v - yMin) / (yMax - yMin)) * ch
+
+  for (const rl of refLines) {
+    const ry = scaleY(rl.value)
+    if (ry < cy - 0.5 || ry > cBottom + 0.5) continue
+    doc.setDrawColor(...rl.color)
+    doc.setLineDashPattern([1.5, 1], 0)
+    doc.setLineWidth(0.2)
+    doc.line(cx, ry, cx + cw, ry)
+    if (rl.label != null) {
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(5)
+      doc.setTextColor(...rl.color)
+      doc.text(rl.label, x + 0.5, ry + 1.5)
+    }
+  }
+  doc.setLineDashPattern([], 0)
+
+  for (const s of series) {
+    const n = s.values.length
+    if (n === 0) continue
+    doc.setDrawColor(...s.color)
+    doc.setLineWidth(0.5)
+    if (s.dashed === true) {
+      doc.setLineDashPattern([1.5, 1], 0)
+    } else {
+      doc.setLineDashPattern([], 0)
+    }
+    let prevPx: number | null = null
+    let prevPy: number | null = null
+    for (let i = 0; i < n; i++) {
+      const v = s.values[i]
+      if (v == null) {
+        prevPx = null
+        prevPy = null
+        continue
+      }
+      const px = cx + i * (cw / Math.max(n - 1, 1))
+      const py = Math.max(cy, Math.min(cBottom, scaleY(v)))
+      if (prevPx != null && prevPy != null) {
+        doc.line(prevPx, prevPy, px, py)
+      }
+      prevPx = px
+      prevPy = py
+    }
+    doc.setLineDashPattern([], 0)
+  }
+
+  doc.setDrawColor(...PDF_COLORS.border)
+  doc.setLineWidth(0.3)
+  doc.rect(cx, cy, cw, ch)
+
+  return y + h + 3
+}
+
+export function drawMacdChart(
+  doc: jsPDF,
+  histValues: (number | null)[],
+  macdLine: (number | null)[],
+  signalLine: (number | null)[],
+  x: number,
+  y: number,
+  w: number,
+  h: number
+): number {
+  const TITLE_H = 5
+  const PAD_L = 6, PAD_R = 2, PAD_T = 2, PAD_B = 2
+  const cx = x + PAD_L
+  const cy = y + TITLE_H + PAD_T
+  const cw = w - PAD_L - PAD_R
+  const ch = h - TITLE_H - PAD_T - PAD_B
+  const cBottom = cy + ch
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(7)
+  doc.setTextColor(...PDF_COLORS.text)
+  doc.text('MACD (12,26,9)', x, y + 3.5)
+
+  const allVals: number[] = []
+  for (const v of [...histValues, ...macdLine, ...signalLine]) {
+    if (v != null) allVals.push(v)
+  }
+
+  doc.setFillColor(...PDF_COLORS.bgLight)
+  doc.rect(cx, cy, cw, ch, 'F')
+
+  if (allVals.length === 0) {
+    doc.setDrawColor(...PDF_COLORS.border)
+    doc.setLineWidth(0.3)
+    doc.rect(cx, cy, cw, ch)
+    return y + h + 3
+  }
+
+  const rawMax = Math.max(...allVals)
+  const rawMin = Math.min(...allVals)
+  const rng = (rawMax - rawMin) || 1
+  const yMax = rawMax + rng * 0.1
+  const yMin = rawMin - rng * 0.1
+
+  const scaleY = (v: number): number =>
+    cBottom - ((v - yMin) / (yMax - yMin)) * ch
+
+  const n = histValues.length
+  const xStep = n > 1 ? cw / (n - 1) : 0
+  const zeroY = Math.max(cy, Math.min(cBottom, scaleY(0)))
+
+  doc.setDrawColor(...PDF_COLORS.muted)
+  doc.setLineDashPattern([1.5, 1], 0)
+  doc.setLineWidth(0.2)
+  doc.line(cx, zeroY, cx + cw, zeroY)
+  doc.setLineDashPattern([], 0)
+
+  const barW = Math.max(0.3, xStep * 0.5)
+  for (let i = 0; i < n; i++) {
+    const v = histValues[i]
+    if (v == null) continue
+    const px = cx + i * xStep
+    const vy = Math.max(cy, Math.min(cBottom, scaleY(v)))
+    const rectTop = Math.min(zeroY, vy)
+    const rectH = Math.abs(vy - zeroY)
+    if (rectH < 0.05) continue
+    if (v >= 0) {
+      doc.setFillColor(...PDF_COLORS.up)
+    } else {
+      doc.setFillColor(...PDF_COLORS.down)
+    }
+    doc.rect(px - barW / 2, rectTop, barW, rectH, 'F')
+  }
+
+  doc.setDrawColor(...PDF_COLORS.primary)
+  doc.setLineWidth(0.5)
+  let prevPx: number | null = null
+  let prevPy: number | null = null
+  for (let i = 0; i < macdLine.length; i++) {
+    const v = macdLine[i]
+    if (v == null) { prevPx = null; prevPy = null; continue }
+    const px = cx + i * (cw / Math.max(macdLine.length - 1, 1))
+    const py = Math.max(cy, Math.min(cBottom, scaleY(v)))
+    if (prevPx != null && prevPy != null) doc.line(prevPx, prevPy, px, py)
+    prevPx = px; prevPy = py
+  }
+
+  doc.setDrawColor(...PDF_COLORS.accent)
+  prevPx = null; prevPy = null
+  for (let i = 0; i < signalLine.length; i++) {
+    const v = signalLine[i]
+    if (v == null) { prevPx = null; prevPy = null; continue }
+    const px = cx + i * (cw / Math.max(signalLine.length - 1, 1))
+    const py = Math.max(cy, Math.min(cBottom, scaleY(v)))
+    if (prevPx != null && prevPy != null) doc.line(prevPx, prevPy, px, py)
+    prevPx = px; prevPy = py
+  }
+
+  doc.setFillColor(...PDF_COLORS.up)
+  doc.rect(cx + 2, cy + 1.5, 2, 1.5, 'F')
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(5)
+  doc.setTextColor(...PDF_COLORS.muted)
+  doc.text('Hist', cx + 5, cy + 2.8)
+  doc.setFillColor(...PDF_COLORS.primary)
+  doc.rect(cx + 14, cy + 1.5, 2, 1.5, 'F')
+  doc.text('MACD', cx + 17, cy + 2.8)
+  doc.setFillColor(...PDF_COLORS.accent)
+  doc.rect(cx + 30, cy + 1.5, 2, 1.5, 'F')
+  doc.text('Signal', cx + 33, cy + 2.8)
+
+  doc.setDrawColor(...PDF_COLORS.border)
+  doc.setLineWidth(0.3)
+  doc.rect(cx, cy, cw, ch)
+
+  return y + h + 3
+}

@@ -14,6 +14,8 @@ import {
   colorForPct,
   colorForSignal,
   createDoc,
+  drawMacdChart,
+  drawMiniLineChart,
   fmtDate,
   fmtN,
   fmtPct,
@@ -79,17 +81,49 @@ export function exportStockPdf(
     [
       { label: 'PER', value: fmtN(detail.per, 1) },
       { label: 'PBV', value: fmtN(detail.pbv, 2) },
-      { label: 'EPS (Rp)', value: fmtN(detail.eps, 2) },
+      { label: 'EPS TTM (Rp)', value: fmtN(detail.eps, 2) },
       { label: 'Book Value', value: fmtN(detail.bookValue, 2) },
       {
-        label: 'Market Cap (M)',
-        value: detail.marketCapital != null ? fmtN(detail.marketCapital / 1e6, 0) : '-'
+        label: 'Market Cap',
+        value: detail.marketCapital != null
+          ? detail.marketCapital >= 1e12
+            ? `${(detail.marketCapital / 1e12).toFixed(1)}T`
+            : `${(detail.marketCapital / 1e9).toFixed(0)}M`
+          : '-'
+      },
+      {
+        label: 'Div. Yield',
+        value: detail.dividendYield != null ? `${fmtN(detail.dividendYield, 2)}%` : '-'
+      },
+      {
+        label: 'Harga Saat Ini',
+        value: detail.currentPrice != null ? `Rp ${fmtN(detail.currentPrice, 0)}` : '-'
+      },
+      {
+        label: 'Saham Beredar',
+        value: detail.listedShares != null
+          ? `${(detail.listedShares / 1e9).toFixed(2)}M`
+          : '-'
       }
     ],
     10,
     y,
-    (pw - 20) / 5
+    (pw - 20) / 8
   )
+
+  // Metodologi TTM EPS
+  y = checkPageBreak(doc, y, 8)
+  doc.setFont('helvetica', 'italic')
+  doc.setFontSize(7)
+  doc.setTextColor(120, 120, 120)
+  doc.text(
+    '* EPS TTM = laba YTD terbaru + (laba FY tahun lalu - laba kuartal sama tahun lalu). Book Value dikoreksi jika ada corporate action.',
+    10,
+    y
+  )
+  doc.setFont('helvetica', 'normal')
+  doc.setTextColor(0, 0, 0)
+  y += 6
 
   y = addSectionTitle(doc, 'Profitabilitas', y)
   y = addMetricRow(
@@ -229,6 +263,39 @@ export function exportStockPdf(
       y,
       (pw - 20) / 5
     )
+
+    // CMF and MFI mini charts side-by-side
+    if (volumeData.series.length > 1) {
+      y = checkPageBreak(doc, y, 35)
+      const halfW = Math.floor((pw - 24) / 2)
+      const cmfVals = volumeData.series.map((r) => r.cmf)
+      const mfiVals = volumeData.series.map((r) => r.mfi)
+      const yBefore = y
+      y = drawMiniLineChart(
+        doc,
+        'CMF (20)',
+        [{ values: cmfVals, color: PDF_COLORS.primary }],
+        [{ value: 0, color: PDF_COLORS.muted }],
+        10,
+        yBefore,
+        halfW,
+        32
+      )
+      drawMiniLineChart(
+        doc,
+        'MFI (14)',
+        [{ values: mfiVals, color: PDF_COLORS.purple }],
+        [
+          { value: 70, color: PDF_COLORS.down, label: '70' },
+          { value: 30, color: PDF_COLORS.up, label: '30' }
+        ],
+        10 + halfW + 4,
+        yBefore,
+        halfW,
+        32,
+        [0, 100]
+      )
+    }
   }
 
   // === EPS Historis ===
@@ -319,6 +386,43 @@ export function exportStockPdf(
       if (macdMetrics.length > 0) {
         y = addMetricRow(doc, macdMetrics, 10, y, (pw - 20) / 5)
       }
+    }
+
+    // — MACD Chart —
+    if (advancedData.macd.length > 1) {
+      y = checkPageBreak(doc, y, 42)
+      y = drawMacdChart(
+        doc,
+        advancedData.macd.map((r) => r.histogram),
+        advancedData.macd.map((r) => r.macdLine),
+        advancedData.macd.map((r) => r.signalLine),
+        10,
+        y,
+        pw - 20,
+        38
+      )
+    }
+
+    // — Stochastic RSI Chart —
+    if (advancedData.stochRsi.length > 1) {
+      y = checkPageBreak(doc, y, 36)
+      y = drawMiniLineChart(
+        doc,
+        'Stochastic RSI',
+        [
+          { values: advancedData.stochRsi.map((r) => r.k), color: PDF_COLORS.primary },
+          { values: advancedData.stochRsi.map((r) => r.d), color: PDF_COLORS.accent, dashed: true }
+        ],
+        [
+          { value: 80, color: PDF_COLORS.down, label: '80' },
+          { value: 20, color: PDF_COLORS.up, label: '20' }
+        ],
+        10,
+        y,
+        pw - 20,
+        32,
+        [0, 100]
+      )
     }
 
     // — Support & Resistance —
