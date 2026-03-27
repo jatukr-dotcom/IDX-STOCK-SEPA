@@ -537,6 +537,9 @@ export async function GET(ctx: Context) {
 
     const stage = determineStage(price, ma50, ma150, ma200, ma200SlopePct)
 
+    // Eksklusi saham fase distribusi (stage 3) dan markdown (stage 4)
+    if (stage === 3 || stage === 4) continue
+
     // ── EPS & Fundamental ───────────────────────────────────────────────
     const epsInfo = calcEpsInfo(histRows)
     const roe = sc?.roe ?? 0

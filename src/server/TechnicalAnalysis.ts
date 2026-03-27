@@ -297,21 +297,23 @@ export default class TechnicalAnalysis {
   ): Types.DivergenceSignal[] {
     const signals: Types.DivergenceSignal[] = []
 
-    // Use last 60 rows for divergence scan
-    const startIdx = Math.max(0, rows.length - 60)
+    // Use last 90 rows for divergence scan (was 60)
+    const startIdx = Math.max(0, rows.length - 90)
 
-    // Find price swing lows and highs (3-bar pivot for more signals)
+    // Find price swing lows and highs (5-bar pivot: 2 bars each side)
     const priceLows: { idx: number; price: number }[] = []
     const priceHighs: { idx: number; price: number }[] = []
 
-    for (let i = startIdx + 1; i < rows.length - 1; i++) {
+    for (let i = startIdx + 2; i < rows.length - 2; i++) {
       const r = rows[i]!
-      const prev = rows[i - 1]!
-      const next = rows[i + 1]!
-      if (r.low < prev.low && r.low < next.low) {
+      // Swing low: lower than 2 bars on each side
+      if (r.low < rows[i - 1]!.low && r.low < rows[i - 2]!.low &&
+          r.low < rows[i + 1]!.low && r.low < rows[i + 2]!.low) {
         priceLows.push({ idx: i, price: r.low })
       }
-      if (r.high > prev.high && r.high > next.high) {
+      // Swing high: higher than 2 bars on each side
+      if (r.high > rows[i - 1]!.high && r.high > rows[i - 2]!.high &&
+          r.high > rows[i + 1]!.high && r.high > rows[i + 2]!.high) {
         priceHighs.push({ idx: i, price: r.high })
       }
     }
@@ -323,44 +325,58 @@ export default class TechnicalAnalysis {
 
     for (const { name, values } of indicators) {
       // Bullish divergence: price lower low, indicator higher low
+      // Compare every swing against ALL previous swings (non-consecutive)
       for (let i = 1; i < priceLows.length; i++) {
-        const prev = priceLows[i - 1]!
         const curr = priceLows[i]!
-        const indPrev = values[prev.idx]
-        const indCurr = values[curr.idx]
-        if (indPrev == null || indCurr == null) continue
-        if (curr.price < prev.price && indCurr > indPrev) {
-          signals.push({
-            type: 'bullish',
-            indicator: name,
-            startDate: rows[prev.idx]!.date,
-            endDate: rows[curr.idx]!.date,
-            priceStart: prev.price,
-            priceEnd: curr.price,
-            indicatorStart: Math.round(indPrev * 10) / 10,
-            indicatorEnd: Math.round(indCurr * 10) / 10
-          })
+        for (let j = 0; j < i; j++) {
+          const prev = priceLows[j]!
+          const indPrev = values[prev.idx]
+          const indCurr = values[curr.idx]
+          if (indPrev == null || indCurr == null) continue
+          // RSI zone filter: bullish only valid if RSI < 40 (near oversold)
+          if (name === 'rsi' && indCurr >= 40) continue
+          // Minimum threshold: require at least 3 points RSI difference
+          if (name === 'rsi' && Math.abs(indCurr - indPrev) < 3) continue
+          if (curr.price < prev.price && indCurr > indPrev) {
+            signals.push({
+              type: 'bullish',
+              indicator: name,
+              startDate: rows[prev.idx]!.date,
+              endDate: rows[curr.idx]!.date,
+              priceStart: prev.price,
+              priceEnd: curr.price,
+              indicatorStart: Math.round(indPrev * 10) / 10,
+              indicatorEnd: Math.round(indCurr * 10) / 10
+            })
+          }
         }
       }
 
       // Bearish divergence: price higher high, indicator lower high
+      // Compare every swing against ALL previous swings (non-consecutive)
       for (let i = 1; i < priceHighs.length; i++) {
-        const prev = priceHighs[i - 1]!
         const curr = priceHighs[i]!
-        const indPrev = values[prev.idx]
-        const indCurr = values[curr.idx]
-        if (indPrev == null || indCurr == null) continue
-        if (curr.price > prev.price && indCurr < indPrev) {
-          signals.push({
-            type: 'bearish',
-            indicator: name,
-            startDate: rows[prev.idx]!.date,
-            endDate: rows[curr.idx]!.date,
-            priceStart: prev.price,
-            priceEnd: curr.price,
-            indicatorStart: Math.round(indPrev * 10) / 10,
-            indicatorEnd: Math.round(indCurr * 10) / 10
-          })
+        for (let j = 0; j < i; j++) {
+          const prev = priceHighs[j]!
+          const indPrev = values[prev.idx]
+          const indCurr = values[curr.idx]
+          if (indPrev == null || indCurr == null) continue
+          // RSI zone filter: bearish only valid if RSI > 60 (near overbought)
+          if (name === 'rsi' && indCurr <= 60) continue
+          // Minimum threshold: require at least 3 points RSI difference
+          if (name === 'rsi' && Math.abs(indCurr - indPrev) < 3) continue
+          if (curr.price > prev.price && indCurr < indPrev) {
+            signals.push({
+              type: 'bearish',
+              indicator: name,
+              startDate: rows[prev.idx]!.date,
+              endDate: rows[curr.idx]!.date,
+              priceStart: prev.price,
+              priceEnd: curr.price,
+              indicatorStart: Math.round(indPrev * 10) / 10,
+              indicatorEnd: Math.round(indCurr * 10) / 10
+            })
+          }
         }
       }
     }
