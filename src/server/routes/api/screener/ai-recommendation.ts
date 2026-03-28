@@ -9,6 +9,7 @@
 import type { Context } from '@neabyte/deserve'
 import { and, asc, desc, gte, isNotNull, lte, sql } from 'drizzle-orm'
 import Database from '@app/server/Database.ts'
+import { calcMA, calcMA200SlopePct, determineStageConfirmed, returnPct } from '@app/server/StageAnalysisHelper.ts'
 import Utils from '@app/server/Utils.ts'
 import * as Schemas from '@app/server/schemas/index.ts'
 import type * as Types from '@app/server/Types.ts'
@@ -22,6 +23,7 @@ type HistRow = {
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
+// calcMA, returnPct, determineStage imported from StageAnalysisHelper
 
 function calcQEps(byKey: Map<string, HistRow>, year: number, quarter: number): number | null {
   const row = byKey.get(`${year}_${quarter}`)
@@ -47,46 +49,6 @@ function calcQEps(byKey: Map<string, HistRow>, year: number, quarter: number): n
   return (row.profitAttrOwner - prevProfit) / shares
 }
 
-function calcMA(prices: number[], period: number): number | null {
-  if (prices.length < period) {
-    return null
-  }
-  const slice = prices.slice(prices.length - period)
-  return slice.reduce((a, b) => a + b, 0) / period
-}
-
-function returnPct(current: number, past: number): number | null {
-  if (past <= 0 || !Number.isFinite(past) || !Number.isFinite(current)) {
-    return null
-  }
-  return ((current - past) / past) * 100
-}
-
-function determineStage(
-  price: number,
-  ma50: number | null,
-  ma150: number | null,
-  ma200: number | null,
-  ma200SlopePct: number | null
-): Types.StageNumber {
-  if (ma200 == null) {
-    if (ma50 != null && price > ma50 && (ma150 == null || ma50 > ma150)) {
-      return 2
-    }
-    return 1
-  }
-  const ma200up = ma200SlopePct != null && ma200SlopePct > 0
-  if (ma50 != null && ma150 != null && price > ma50 && ma50 > ma150 && ma150 > ma200 && ma200up) {
-    return 2
-  }
-  if (price < ma200 && !ma200up) {
-    return 4
-  }
-  if (ma50 != null && (price < ma50 || (ma150 != null && ma150 < ma200))) {
-    return 3
-  }
-  return 1
-}
 
 function calcEpsInfo(histRows: HistRow[]): {
   score: number
@@ -513,8 +475,7 @@ export async function GET(ctx: Context) {
     const ma50 = calcMA(closes, 50)
     const ma150 = calcMA(closes, 150)
     const ma200 = calcMA(closes, 200)
-    const ma200prev = closes.length > 22 ? closes[closes.length - 23] : closes[0]
-    const ma200SlopePct = ma200 != null ? returnPct(ma200, ma200prev) : null
+    const ma200SlopePct = calcMA200SlopePct(closes)
 
     const high52w = Math.max(...highs)
     const low52w = Math.min(...lows)
@@ -535,7 +496,7 @@ export async function GET(ctx: Context) {
     const trendScore = (trendCriteriaCount / 8) * 40
     const rsScore30 = (rsRank / 99) * 30
 
-    const stage = determineStage(price, ma50, ma150, ma200, ma200SlopePct)
+    const stage = determineStageConfirmed(closes)
 
     // Eksklusi saham fase distribusi (stage 3) dan markdown (stage 4)
     if (stage === 3 || stage === 4) continue

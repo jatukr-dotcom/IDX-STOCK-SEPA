@@ -6,50 +6,12 @@
 import type { Context } from '@neabyte/deserve'
 import { and, asc, desc, gte, lte } from 'drizzle-orm'
 import Database from '@app/server/Database.ts'
+import { calcMA, calcMA200SlopePct, determineStageConfirmedWithLabel, returnPct } from '@app/server/StageAnalysisHelper.ts'
 import Utils from '@app/server/Utils.ts'
 import * as Schemas from '@app/server/schemas/index.ts'
 import type * as Types from '@app/server/Types.ts'
 
-function calcMA(prices: number[], period: number): number | null {
-  if (prices.length < period) {
-    return null
-  }
-  const slice = prices.slice(prices.length - period)
-  return slice.reduce((a, b) => a + b, 0) / period
-}
-
-function returnPct(current: number, past: number): number | null {
-  if (past <= 0 || !Number.isFinite(past) || !Number.isFinite(current)) {
-    return null
-  }
-  return ((current - past) / past) * 100
-}
-
-function determineStage(
-  price: number,
-  ma50: number | null,
-  ma150: number | null,
-  ma200: number | null,
-  ma200SlopePct: number | null
-): { stage: Types.StageNumber; label: string } {
-  if (ma200 == null) {
-    if (ma50 != null && price > ma50 && (ma150 == null || ma50 > ma150)) {
-      return { stage: 2, label: 'Stage 2: Advancing' }
-    }
-    return { stage: 1, label: 'Stage 1: Basing' }
-  }
-  const ma200up = ma200SlopePct != null && ma200SlopePct > 0
-  if (ma50 != null && ma150 != null && price > ma50 && ma50 > ma150 && ma150 > ma200 && ma200up) {
-    return { stage: 2, label: 'Stage 2: Advancing' }
-  }
-  if (price < ma200 && !ma200up) {
-    return { stage: 4, label: 'Stage 4: Declining' }
-  }
-  if (ma50 != null && (price < ma50 || (ma150 != null && ma150 < ma200))) {
-    return { stage: 3, label: 'Stage 3: Topping' }
-  }
-  return { stage: 1, label: 'Stage 1: Basing' }
-}
+// calcMA, returnPct, determineStage imported from StageAnalysisHelper
 
 export async function GET(ctx: Context) {
   const stageFilter = Utils.queryString(ctx.query('stage'))
@@ -178,16 +140,9 @@ export async function GET(ctx: Context) {
       continue
     }
 
-    let ma200SlopePct: number | null = null
-    if (ma200 != null && closes.length >= 222) {
-      const olderCloses = closes.slice(0, closes.length - 22)
-      const ma200older = calcMA(olderCloses, 200)
-      if (ma200older != null && ma200older > 0) {
-        ma200SlopePct = ((ma200 - ma200older) / ma200older) * 100
-      }
-    }
+    const ma200SlopePct = calcMA200SlopePct(closes)
 
-    const { stage, label: stageLabel } = determineStage(price, ma50, ma150, ma200, ma200SlopePct)
+    const { stage, label: stageLabel } = determineStageConfirmedWithLabel(closes)
 
     if (stageFilter != null && stageFilter !== '' && stageFilter !== String(stage)) {
       continue

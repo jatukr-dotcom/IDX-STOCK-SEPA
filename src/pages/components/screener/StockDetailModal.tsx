@@ -470,7 +470,7 @@ export default function StockDetailModal({
                         </div>
                         <div className='idx-detail-item'>
                           <label>Trend Criteria</label>
-                          <span>{technicalLoading ? '...' : (technicalData?.stage?.trendCriteriaCount ?? 0)}/5</span>
+                          <span>{technicalLoading ? '...' : (technicalData?.stage?.trendCriteriaCount ?? 0)}/7</span>
                         </div>
                         <div className='idx-detail-item idx-detail-item-full'>
                           <label>Support/Resistance</label>

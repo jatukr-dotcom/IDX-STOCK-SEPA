@@ -9,50 +9,12 @@
 import type { Context } from '@neabyte/deserve'
 import { and, asc, desc, gte, lte } from 'drizzle-orm'
 import Database from '@app/server/Database.ts'
+import { calcMA, calcMA200SlopePct, determineStageConfirmed, returnPct } from '@app/server/StageAnalysisHelper.ts'
 import Utils from '@app/server/Utils.ts'
 import * as Schemas from '@app/server/schemas/index.ts'
 import type * as Types from '@app/server/Types.ts'
 
-function calcMA(prices: number[], period: number): number | null {
-  if (prices.length < period) {
-    return null
-  }
-  const slice = prices.slice(prices.length - period)
-  return slice.reduce((a, b) => a + b, 0) / period
-}
-
-function returnPct(current: number, past: number): number | null {
-  if (past <= 0 || !Number.isFinite(past) || !Number.isFinite(current)) {
-    return null
-  }
-  return ((current - past) / past) * 100
-}
-
-function determineStage(
-  price: number,
-  ma50: number | null,
-  ma150: number | null,
-  ma200: number | null,
-  ma200SlopePct: number | null
-): Types.StageNumber {
-  if (ma200 == null) {
-    if (ma50 != null && price > ma50 && (ma150 == null || ma50 > ma150)) {
-      return 2
-    }
-    return 1
-  }
-  const ma200up = ma200SlopePct != null && ma200SlopePct > 0
-  if (ma50 != null && ma150 != null && price > ma50 && ma50 > ma150 && ma150 > ma200 && ma200up) {
-    return 2
-  }
-  if (price < ma200 && !ma200up) {
-    return 4
-  }
-  if (ma50 != null && (price < ma50 || (ma150 != null && ma150 < ma200))) {
-    return 3
-  }
-  return 1
-}
+// calcMA, returnPct, determineStage imported from StageAnalysisHelper
 
 type OhlcEntry = { date: number; close: number; high: number; low: number; volume: number }
 
@@ -349,15 +311,8 @@ export async function GET(ctx: Context) {
       continue
     }
 
-    let ma200SlopePct: number | null = null
-    if (ma200 != null && closes.length >= 222) {
-      const olderCloses = closes.slice(0, closes.length - 22)
-      const ma200older = calcMA(olderCloses, 200)
-      if (ma200older != null && ma200older > 0) {
-        ma200SlopePct = ((ma200 - ma200older) / ma200older) * 100
-      }
-    }
-    const stage = determineStage(price, ma50, ma150, ma200, ma200SlopePct)
+    const ma200SlopePct = calcMA200SlopePct(closes)
+    const stage = determineStageConfirmed(closes)
     const ma200Trending = ma200SlopePct != null && ma200SlopePct > 0
     const last252 = rows.slice(Math.max(0, rows.length - 252))
     const high52w = Math.max(...last252.map((r) => r.high))
