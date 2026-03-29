@@ -20,7 +20,7 @@ export function useBasePatterns(pattern?: Types.BasePatternType) {
     setError(null)
     const query: Record<string, string | number> = {}
     if (pattern != null) {
-      query.pattern = pattern
+      query['pattern'] = pattern
     }
     const opts = signal ? { signal } : undefined
     Hooks.fetchApi<Types.BasePatternsResponse>('/api/screener/base-patterns', query, opts)

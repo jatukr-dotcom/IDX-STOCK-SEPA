@@ -793,7 +793,6 @@ export interface TechnicalAnalysisApiResponse {
   divergences: DivergenceSignal[]
 }
 
-
 export interface StockListItem {
   code: string
   name: string | null

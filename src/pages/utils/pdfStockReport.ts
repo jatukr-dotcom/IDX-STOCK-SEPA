@@ -3,7 +3,10 @@
  * SPDX-License-Identifier: MIT
  */
 
-import autoTable from 'jspdf-autotable'
+import autoTableFn from 'jspdf-autotable'
+import type { CellHookData } from 'jspdf-autotable'
+// deno-lint-ignore no-explicit-any
+const autoTable = autoTableFn as unknown as (doc: any, options: any) => void
 import type * as Types from '@app/pages/Types.ts'
 import {
   addFooter,
@@ -101,9 +104,7 @@ export function exportStockPdf(
       },
       {
         label: 'Saham Beredar',
-        value: detail.listedShares != null
-          ? `${(detail.listedShares / 1e9).toFixed(2)}M`
-          : '-'
+        value: detail.listedShares != null ? `${(detail.listedShares / 1e9).toFixed(2)}M` : '-'
       }
     ],
     10,
@@ -132,14 +133,14 @@ export function exportStockPdf(
       {
         label: 'ROE',
         value: fmtN(detail.roe, 1) + '%',
-        color: detail.roe != null && detail.roe >= 15 ? PDF_COLORS.up : undefined
+        ...(detail.roe != null && detail.roe >= 15 ? { color: PDF_COLORS.up } : {})
       },
       { label: 'ROA', value: fmtN(detail.roa, 1) + '%' },
       { label: 'NPM', value: fmtN(detail.npm, 1) + '%' },
       {
         label: 'DER',
         value: fmtN(detail.der, 2),
-        color: detail.der != null && detail.der > 2 ? PDF_COLORS.down : undefined
+        ...(detail.der != null && detail.der > 2 ? { color: PDF_COLORS.down } : {})
       }
     ],
     10,
@@ -229,16 +230,16 @@ export function exportStockPdf(
           value: volumeData.cmfCurrent != null
             ? `${volumeData.cmfCurrent >= 0 ? '+' : ''}${fmtN(volumeData.cmfCurrent, 3)}`
             : '-',
-          color: volumeData.cmfCurrent != null ? colorForPct(volumeData.cmfCurrent) : undefined
+          ...(volumeData.cmfCurrent != null ? { color: colorForPct(volumeData.cmfCurrent) } : {})
         },
         {
           label: 'MFI(14)',
           value: fmtN(volumeData.mfiCurrent, 1),
-          color: volumeData.mfiCurrent != null && volumeData.mfiCurrent >= 70
-            ? PDF_COLORS.down
+          ...(volumeData.mfiCurrent != null && volumeData.mfiCurrent >= 70
+            ? { color: PDF_COLORS.down }
             : volumeData.mfiCurrent != null && volumeData.mfiCurrent <= 30
-            ? PDF_COLORS.up
-            : undefined
+            ? { color: PDF_COLORS.up }
+            : {})
         },
         {
           label: 'OBV Tren',
@@ -247,11 +248,11 @@ export function exportStockPdf(
             : volumeData.obvTrend === 'down'
             ? 'Turun'
             : 'Flat',
-          color: volumeData.obvTrend === 'up'
-            ? PDF_COLORS.up
+          ...(volumeData.obvTrend === 'up'
+            ? { color: PDF_COLORS.up }
             : volumeData.obvTrend === 'down'
-            ? PDF_COLORS.down
-            : undefined
+            ? { color: PDF_COLORS.down }
+            : {})
         },
         {
           label: 'Vol Surge 5d',
@@ -356,7 +357,9 @@ export function exportStockPdf(
         macdMetrics.push({
           label: 'MACD Line',
           value: fmtN(lastMacd.macdLine, 3),
-          color: lastMacd.macdLine != null && lastMacd.macdLine >= 0 ? PDF_COLORS.up : PDF_COLORS.down
+          color: lastMacd.macdLine != null && lastMacd.macdLine >= 0
+            ? PDF_COLORS.up
+            : PDF_COLORS.down
         })
         macdMetrics.push({
           label: 'Signal',
@@ -365,18 +368,18 @@ export function exportStockPdf(
         macdMetrics.push({
           label: 'Histogram',
           value: histVal != null ? (histVal >= 0 ? '+' : '') + fmtN(histVal, 3) : '-',
-          color: histVal != null ? (histVal >= 0 ? PDF_COLORS.up : PDF_COLORS.down) : undefined
+          ...(histVal != null ? { color: histVal >= 0 ? PDF_COLORS.up : PDF_COLORS.down } : {})
         })
       }
       if (lastStoch) {
         macdMetrics.push({
           label: 'StochRSI %K',
           value: fmtN(lastStoch.k, 1),
-          color: lastStoch.k != null && lastStoch.k >= 80
-            ? PDF_COLORS.down
+          ...(lastStoch.k != null && lastStoch.k >= 80
+            ? { color: PDF_COLORS.down }
             : lastStoch.k != null && lastStoch.k <= 20
-            ? PDF_COLORS.up
-            : undefined
+            ? { color: PDF_COLORS.up }
+            : {})
         })
         macdMetrics.push({
           label: 'StochRSI %D',
@@ -429,12 +432,22 @@ export function exportStockPdf(
     const srLevels = advancedData.supportResistance.levels
     if (srLevels.length > 0) {
       y = checkPageBreak(doc, y, 50)
-      y = addSectionTitle(doc, `Support & Resistance  (Harga saat ini: ${fmtN(advancedData.supportResistance.currentClose, 0)})`, y)
+      y = addSectionTitle(
+        doc,
+        `Support & Resistance  (Harga saat ini: ${
+          fmtN(advancedData.supportResistance.currentClose, 0)
+        })`,
+        y
+      )
       const srHead = [['Tipe', 'Harga', '% dari Close', 'Kekuatan', 'Terakhir Disentuh']]
       const srBody = srLevels.map((lvl) => {
-        const pct = ((lvl.price - advancedData.supportResistance.currentClose) /
-          advancedData.supportResistance.currentClose * 100)
-        const strengthLabel = lvl.strength === 'strong' ? 'Kuat' : lvl.strength === 'moderate' ? 'Sedang' : 'Lemah'
+        const pct = (lvl.price - advancedData.supportResistance.currentClose) /
+          advancedData.supportResistance.currentClose * 100
+        const strengthLabel = lvl.strength === 'strong'
+          ? 'Kuat'
+          : lvl.strength === 'moderate'
+          ? 'Sedang'
+          : 'Lemah'
         return [
           lvl.type === 'resistance' ? 'Resistance' : 'Support',
           fmtN(lvl.price, 0),
@@ -448,10 +461,15 @@ export function exportStockPdf(
         head: srHead,
         body: srBody,
         margin: { left: 10, right: 10 },
-        headStyles: { fillColor: PDF_COLORS.headerBg, textColor: 255, fontStyle: 'bold', fontSize: 8 },
+        headStyles: {
+          fillColor: PDF_COLORS.headerBg,
+          textColor: 255,
+          fontStyle: 'bold',
+          fontSize: 8
+        },
         bodyStyles: { fontSize: 8, textColor: PDF_COLORS.text },
         alternateRowStyles: { fillColor: PDF_COLORS.bgLight },
-        didParseCell: (data) => {
+        didParseCell: (data: CellHookData) => {
           if (data.section === 'body' && data.column.index === 0) {
             data.cell.styles.textColor = data.cell.raw === 'Resistance'
               ? PDF_COLORS.down
@@ -498,7 +516,12 @@ export function exportStockPdf(
         head: fibHead,
         body: fibBody,
         margin: { left: 10, right: 10 },
-        headStyles: { fillColor: PDF_COLORS.headerBg, textColor: 255, fontStyle: 'bold', fontSize: 8 },
+        headStyles: {
+          fillColor: PDF_COLORS.headerBg,
+          textColor: 255,
+          fontStyle: 'bold',
+          fontSize: 8
+        },
         bodyStyles: { fontSize: 8, textColor: PDF_COLORS.text },
         alternateRowStyles: { fillColor: PDF_COLORS.bgLight },
         columnStyles: {
@@ -528,7 +551,11 @@ export function exportStockPdf(
         doc.setFont('helvetica', 'normal')
         doc.setTextColor(...PDF_COLORS.text)
         doc.text(
-          `${fmtDate(div.startDate)} → ${fmtDate(div.endDate)}  |  Harga: ${fmtN(div.priceStart, 0)} → ${fmtN(div.priceEnd, 0)}  |  ${indicator}: ${fmtN(div.indicatorStart, 1)} → ${fmtN(div.indicatorEnd, 1)}`,
+          `${fmtDate(div.startDate)} → ${fmtDate(div.endDate)}  |  Harga: ${
+            fmtN(div.priceStart, 0)
+          } → ${fmtN(div.priceEnd, 0)}  |  ${indicator}: ${fmtN(div.indicatorStart, 1)} → ${
+            fmtN(div.indicatorEnd, 1)
+          }`,
           55,
           y
         )

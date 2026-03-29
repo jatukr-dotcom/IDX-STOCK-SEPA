@@ -93,10 +93,10 @@ export default function BasePatternsView({ onRowClick }: { onRowClick: (code: st
               {f === 'all'
                 ? `Semua (${data?.totalCount ?? 0})`
                 : f === 'htf'
-                ? `HTF (${counts.htf ?? 0})`
+                ? `HTF (${counts['htf'] ?? 0})`
                 : f === 'cup-handle'
                 ? `Cup (${counts['cup-handle'] ?? 0})`
-                : `Flat (${counts.flat ?? 0})`}
+                : `Flat (${counts['flat'] ?? 0})`}
             </button>
           ))}
           <button

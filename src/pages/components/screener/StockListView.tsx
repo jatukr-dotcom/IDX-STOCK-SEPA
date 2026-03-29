@@ -67,7 +67,9 @@ export default function StockListView({
   const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const v = e.target.value
     setSearch(v)
-    if (debounceRef.current != null) clearTimeout(debounceRef.current)
+    if (debounceRef.current != null) {
+      clearTimeout(debounceRef.current)
+    }
     debounceRef.current = setTimeout(() => {
       debounceRef.current = null
       setSearchApplied(v)
@@ -105,7 +107,15 @@ export default function StockListView({
   return (
     <div className='idx-card'>
       {/* Search & filter bar */}
-      <div style={{ display: 'flex', gap: 8, padding: '10px 12px', borderBottom: '1px solid var(--idx-border)', flexWrap: 'wrap' }}>
+      <div
+        style={{
+          display: 'flex',
+          gap: 8,
+          padding: '10px 12px',
+          borderBottom: '1px solid var(--idx-border)',
+          flexWrap: 'wrap'
+        }}
+      >
         <div className='idx-table-search' style={{ flex: '1 1 220px', minWidth: 180 }}>
           <Search size={18} className='idx-table-search-icon' aria-hidden />
           <input
@@ -125,9 +135,7 @@ export default function StockListView({
           style={{ flex: '0 0 auto', minWidth: 160 }}
         >
           <option value=''>Semua Sektor</option>
-          {sectors.map((s) => (
-            <option key={s} value={s}>{s}</option>
-          ))}
+          {sectors.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
       </div>
 
@@ -178,7 +186,9 @@ export default function StockListView({
                 <td className='idx-table-col-watchlist'>
                   <button
                     type='button'
-                    className={`idx-watchlist-btn ${watchlistCodes.includes(item.code) ? 'idx-watchlist-on' : ''}`}
+                    className={`idx-watchlist-btn ${
+                      watchlistCodes.includes(item.code) ? 'idx-watchlist-on' : ''
+                    }`}
                     onClick={(e) => handleStarClick(item, e)}
                     onKeyDown={(e) => handleStarKeyDown(item, e)}
                     aria-label={watchlistCodes.includes(item.code)

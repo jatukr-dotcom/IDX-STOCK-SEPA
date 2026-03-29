@@ -3,7 +3,10 @@
  * SPDX-License-Identifier: MIT
  */
 
-import autoTable from 'jspdf-autotable'
+import autoTableFn from 'jspdf-autotable'
+import type { CellHookData } from 'jspdf-autotable'
+// deno-lint-ignore no-explicit-any
+const autoTable = autoTableFn as unknown as (doc: any, options: any) => void
 import type * as Types from '@app/pages/Types.ts'
 import {
   addFooter,
@@ -21,7 +24,6 @@ export function exportSepaPdf(
   rows: Types.SepaCandidateRow[]
 ): void {
   const doc = createDoc('l') // landscape
-  const _pw = doc.internal.pageSize.getWidth()
   const today = new Date()
   const dateStr = `${String(today.getDate()).padStart(2, '0')}/${
     String(today.getMonth() + 1).padStart(2, '0')
@@ -125,7 +127,7 @@ export function exportSepaPdf(
       11: { halign: 'right', cellWidth: 16 },
       12: { halign: 'right', cellWidth: 16 }
     },
-    didParseCell: (data) => {
+    didParseCell: (data: CellHookData) => {
       if (data.section === 'body') {
         const col = data.column.index
         const val = data.cell.raw as string

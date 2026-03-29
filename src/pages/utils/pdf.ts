@@ -208,7 +208,9 @@ export function drawMiniLineChart(
     const allVals: number[] = []
     for (const s of series) {
       for (const v of s.values) {
-        if (v != null) allVals.push(v)
+        if (v != null) {
+          allVals.push(v)
+        }
       }
     }
     for (const rl of refLines) {
@@ -227,12 +229,13 @@ export function drawMiniLineChart(
     yMax += rng * 0.08
   }
 
-  const scaleY = (v: number): number =>
-    cBottom - ((v - yMin) / (yMax - yMin)) * ch
+  const scaleY = (v: number): number => cBottom - ((v - yMin) / (yMax - yMin)) * ch
 
   for (const rl of refLines) {
     const ry = scaleY(rl.value)
-    if (ry < cy - 0.5 || ry > cBottom + 0.5) continue
+    if (ry < cy - 0.5 || ry > cBottom + 0.5) {
+      continue
+    }
     doc.setDrawColor(...rl.color)
     doc.setLineDashPattern([1.5, 1], 0)
     doc.setLineWidth(0.2)
@@ -248,7 +251,9 @@ export function drawMiniLineChart(
 
   for (const s of series) {
     const n = s.values.length
-    if (n === 0) continue
+    if (n === 0) {
+      continue
+    }
     doc.setDrawColor(...s.color)
     doc.setLineWidth(0.5)
     if (s.dashed === true) {
@@ -308,7 +313,9 @@ export function drawMacdChart(
 
   const allVals: number[] = []
   for (const v of [...histValues, ...macdLine, ...signalLine]) {
-    if (v != null) allVals.push(v)
+    if (v != null) {
+      allVals.push(v)
+    }
   }
 
   doc.setFillColor(...PDF_COLORS.bgLight)
@@ -327,8 +334,7 @@ export function drawMacdChart(
   const yMax = rawMax + rng * 0.1
   const yMin = rawMin - rng * 0.1
 
-  const scaleY = (v: number): number =>
-    cBottom - ((v - yMin) / (yMax - yMin)) * ch
+  const scaleY = (v: number): number => cBottom - ((v - yMin) / (yMax - yMin)) * ch
 
   const n = histValues.length
   const xStep = n > 1 ? cw / (n - 1) : 0
@@ -343,12 +349,16 @@ export function drawMacdChart(
   const barW = Math.max(0.3, xStep * 0.5)
   for (let i = 0; i < n; i++) {
     const v = histValues[i]
-    if (v == null) continue
+    if (v == null) {
+      continue
+    }
     const px = cx + i * xStep
     const vy = Math.max(cy, Math.min(cBottom, scaleY(v)))
     const rectTop = Math.min(zeroY, vy)
     const rectH = Math.abs(vy - zeroY)
-    if (rectH < 0.05) continue
+    if (rectH < 0.05) {
+      continue
+    }
     if (v >= 0) {
       doc.setFillColor(...PDF_COLORS.up)
     } else {
@@ -363,22 +373,37 @@ export function drawMacdChart(
   let prevPy: number | null = null
   for (let i = 0; i < macdLine.length; i++) {
     const v = macdLine[i]
-    if (v == null) { prevPx = null; prevPy = null; continue }
+    if (v == null) {
+      prevPx = null
+      prevPy = null
+      continue
+    }
     const px = cx + i * (cw / Math.max(macdLine.length - 1, 1))
     const py = Math.max(cy, Math.min(cBottom, scaleY(v)))
-    if (prevPx != null && prevPy != null) doc.line(prevPx, prevPy, px, py)
-    prevPx = px; prevPy = py
+    if (prevPx != null && prevPy != null) {
+      doc.line(prevPx, prevPy, px, py)
+    }
+    prevPx = px
+    prevPy = py
   }
 
   doc.setDrawColor(...PDF_COLORS.accent)
-  prevPx = null; prevPy = null
+  prevPx = null
+  prevPy = null
   for (let i = 0; i < signalLine.length; i++) {
     const v = signalLine[i]
-    if (v == null) { prevPx = null; prevPy = null; continue }
+    if (v == null) {
+      prevPx = null
+      prevPy = null
+      continue
+    }
     const px = cx + i * (cw / Math.max(signalLine.length - 1, 1))
     const py = Math.max(cy, Math.min(cBottom, scaleY(v)))
-    if (prevPx != null && prevPy != null) doc.line(prevPx, prevPy, px, py)
-    prevPx = px; prevPy = py
+    if (prevPx != null && prevPy != null) {
+      doc.line(prevPx, prevPy, px, py)
+    }
+    prevPx = px
+    prevPy = py
   }
 
   doc.setFillColor(...PDF_COLORS.up)

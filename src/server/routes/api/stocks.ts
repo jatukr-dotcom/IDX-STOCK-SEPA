@@ -38,9 +38,7 @@ export async function GET(ctx: Context) {
   // Client-side filter (search & sector) — screener table is small enough
   let filtered = screenerRows
   if (sectorFilter !== '') {
-    filtered = filtered.filter((r) =>
-      r.sector?.toLowerCase() === sectorFilter.toLowerCase()
-    )
+    filtered = filtered.filter((r) => r.sector?.toLowerCase() === sectorFilter.toLowerCase())
   }
   if (search !== '') {
     filtered = filtered.filter((r) =>

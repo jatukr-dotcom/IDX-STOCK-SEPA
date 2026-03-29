@@ -84,8 +84,8 @@ export async function GET(ctx: Context) {
     if (rows.length < 60) {
       continue
     }
-    const last = rows[rows.length - 1].close
-    const sixMonthAgoClose = rows.length >= 126 ? rows[rows.length - 126].close : rows[0].close
+    const last = rows[rows.length - 1]!.close
+    const sixMonthAgoClose = rows.length >= 126 ? rows[rows.length - 126]!.close : rows[0]!.close
     if (sixMonthAgoClose > 0) {
       rsScoreByCode.set(code, ((last - sixMonthAgoClose) / sixMonthAgoClose) * 100)
     }
@@ -109,7 +109,7 @@ export async function GET(ctx: Context) {
     }
 
     const closes = rows.map((r) => r.close)
-    const price = closes[closes.length - 1]
+    const price = closes[closes.length - 1]!
 
     const ma50 = calcMA(closes, 50)
     const ma150 = calcMA(closes, 150)

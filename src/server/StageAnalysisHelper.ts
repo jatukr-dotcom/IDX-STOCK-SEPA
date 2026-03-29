@@ -65,7 +65,10 @@ export function determineStage(
   ma200SlopePct: number | null
 ): Types.StageNumber {
   if (ma200 == null) {
-    if (ma50 != null && price > ma50 * PROXIMITY_PCT && (ma150 == null || ma50 > ma150 * PROXIMITY_PCT)) {
+    if (
+      ma50 != null && price > ma50 * PROXIMITY_PCT &&
+      (ma150 == null || ma50 > ma150 * PROXIMITY_PCT)
+    ) {
       return 2
     }
     return 1
@@ -86,7 +89,10 @@ export function determineStage(
     return 4
   }
   // Stage 3: Distribution/topping
-  if (ma50 != null && (price < ma50 * (2 - PROXIMITY_PCT) || (ma150 != null && ma150 < ma200 * (2 - PROXIMITY_PCT)))) {
+  if (
+    ma50 != null &&
+    (price < ma50 * (2 - PROXIMITY_PCT) || (ma150 != null && ma150 < ma200 * (2 - PROXIMITY_PCT)))
+  ) {
     return 3
   }
   // Stage 1: Basing
@@ -140,7 +146,7 @@ export function determineStageConfirmed(
 
   // If not enough data for multi-day, just compute current
   if (maxOffset < 1) {
-    const price = closes[closes.length - 1]
+    const price = closes[closes.length - 1]!
     const ma50 = calcMA(closes, 50)
     const ma150 = calcMA(closes, 150)
     const ma200 = calcMA(closes, 200)
@@ -152,9 +158,11 @@ export function determineStageConfirmed(
   for (let offset = 0; offset < Math.min(confirmDays, maxOffset + 1); offset++) {
     const endIdx = closes.length - offset
     const slice = closes.slice(0, endIdx)
-    if (slice.length < 50) break
+    if (slice.length < 50) {
+      break
+    }
 
-    const price = slice[slice.length - 1]
+    const price = slice[slice.length - 1]!
     const ma50 = calcMA(slice, 50)
     const ma150 = calcMA(slice, 150)
     const ma200 = calcMA(slice, 200)
@@ -180,7 +188,7 @@ export function determineStageConfirmed(
   }
 
   // No majority — use latest day's stage (votes[0] is day 0 = latest)
-  return votes[0]
+  return votes[0]!
 }
 
 /**

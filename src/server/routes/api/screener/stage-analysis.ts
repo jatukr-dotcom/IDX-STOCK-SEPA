@@ -6,7 +6,12 @@
 import type { Context } from '@neabyte/deserve'
 import { and, asc, desc, gte, lte } from 'drizzle-orm'
 import Database from '@app/server/Database.ts'
-import { calcMA, calcMA200SlopePct, determineStageConfirmedWithLabel, returnPct } from '@app/server/StageAnalysisHelper.ts'
+import {
+  calcMA,
+  calcMA200SlopePct,
+  determineStageConfirmedWithLabel,
+  returnPct
+} from '@app/server/StageAnalysisHelper.ts'
 import Utils from '@app/server/Utils.ts'
 import * as Schemas from '@app/server/schemas/index.ts'
 import type * as Types from '@app/server/Types.ts'
@@ -89,16 +94,16 @@ export async function GET(ctx: Context) {
     if (rows.length < 20) {
       continue
     }
-    const price = rows[rows.length - 1].close
+    const price = rows[rows.length - 1]!.close
     const r3m = rows.length >= 63
-      ? returnPct(price, rows[rows.length - 63].close)
-      : returnPct(price, rows[0].close)
+      ? returnPct(price, rows[rows.length - 63]!.close)
+      : returnPct(price, rows[0]!.close)
     if (r3m == null) {
       continue
     }
-    const r6m = rows.length >= 126 ? returnPct(price, rows[rows.length - 126].close) : null
-    const r9m = rows.length >= 189 ? returnPct(price, rows[rows.length - 189].close) : null
-    const r12m = rows.length >= 252 ? returnPct(price, rows[rows.length - 252].close) : null
+    const r6m = rows.length >= 126 ? returnPct(price, rows[rows.length - 126]!.close) : null
+    const r9m = rows.length >= 189 ? returnPct(price, rows[rows.length - 189]!.close) : null
+    const r12m = rows.length >= 252 ? returnPct(price, rows[rows.length - 252]!.close) : null
     let rsScore = r3m * 0.4
     let w = 0.4
     if (r6m != null) {
@@ -132,7 +137,7 @@ export async function GET(ctx: Context) {
       continue
     }
     const closes = rows.map((r) => r.close)
-    const price = closes[closes.length - 1]
+    const price = closes[closes.length - 1]!
     const ma50 = calcMA(closes, 50)
     const ma150 = calcMA(closes, 150)
     const ma200 = calcMA(closes, 200)

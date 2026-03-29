@@ -163,20 +163,21 @@ export default function TabHowTo() {
           mendatar. Smart money mulai menjual — <strong>hindari pembelian baru</strong>.
         </li>
         <li className='idx-home-li'>
-          <strong>Stage 4 — Downtrend (Mark-Down)</strong>: Harga di bawah MA200 yang menurun.
-          Saham dalam fase bearish — <strong>jangan ditahan</strong>.
+          <strong>Stage 4 — Downtrend (Mark-Down)</strong>: Harga di bawah MA200 yang menurun. Saham
+          dalam fase bearish — <strong>jangan ditahan</strong>.
         </li>
       </ol>
       <p className='idx-home-p'>
-        Volume akumulasi/distribusi (A/D) menunjukkan apakah volume mendukung tren harga.
-        Volume tinggi pada hari naik = akumulasi (bullish), volume tinggi pada hari turun =
-        distribusi (bearish).
+        Volume akumulasi/distribusi (A/D) menunjukkan apakah volume mendukung tren harga. Volume
+        tinggi pada hari naik = akumulasi (bullish), volume tinggi pada hari turun = distribusi
+        (bearish).
       </p>
 
       <h3 className='idx-home-h3'>9. SEPA &amp; Trend Template</h3>
       <p className='idx-home-p idx-home-p-mb8'>
-        Skor <strong>SEPA</strong> (Specific Entry Point Analysis) menilai kesesuaian saham dengan
-        template trend Mark Minervini. Delapan kriteria yang diperiksa:
+        Skor <strong>SEPA</strong>{' '}
+        (Specific Entry Point Analysis) menilai kesesuaian saham dengan template trend Mark
+        Minervini. Delapan kriteria yang diperiksa:
       </p>
       <ol className='idx-home-list idx-home-ol'>
         <li className='idx-home-li'>Harga di atas MA150 dan MA200</li>
@@ -196,9 +197,9 @@ export default function TabHowTo() {
       <h3 className='idx-home-h3'>10. New High &amp; RS Ranking</h3>
       <ul className='idx-home-ul'>
         <li className='idx-home-li'>
-          <strong>RS Rank</strong>: Persentil kekuatan relatif saham dibandingkan seluruh saham lain.
-          RS Rank 90 berarti saham tersebut lebih kuat dari 90% saham lainnya. Dihitung dari return
-          3, 6, 9, dan 12 bulan (bobot 40/20/20/20).
+          <strong>RS Rank</strong>: Persentil kekuatan relatif saham dibandingkan seluruh saham
+          lain. RS Rank 90 berarti saham tersebut lebih kuat dari 90% saham lainnya. Dihitung dari
+          return 3, 6, 9, dan 12 bulan (bobot 40/20/20/20).
         </li>
         <li className='idx-home-li'>
           <strong>RS Line New High</strong>: Terdeteksi saat RS Line (harga saham ÷ IHSG) mencapai
@@ -216,15 +217,16 @@ export default function TabHowTo() {
       </p>
       <ul className='idx-home-ul'>
         <li className='idx-home-li'>
-          <strong>Chart Candlestick</strong>: Grafik OHLC interaktif dengan MA10, MA20, MA50 overlay.
+          <strong>Chart Candlestick</strong>: Grafik OHLC interaktif dengan MA10, MA20, MA50
+          overlay.
         </li>
         <li className='idx-home-li'>
-          <strong>Support &amp; Resistance</strong>: Level S/R otomatis berdasarkan cluster
-          swing point, dilengkapi kekuatan level (strong/moderate/weak).
+          <strong>Support &amp; Resistance</strong>: Level S/R otomatis berdasarkan cluster swing
+          point, dilengkapi kekuatan level (strong/moderate/weak).
         </li>
         <li className='idx-home-li'>
-          <strong>Fibonacci Retracement</strong>: Level Fibonacci otomatis dari swing high/low
-          (0%, 23.6%, 38.2%, 50%, 61.8%, 78.6%, 100%).
+          <strong>Fibonacci Retracement</strong>: Level Fibonacci otomatis dari swing high/low (0%,
+          23.6%, 38.2%, 50%, 61.8%, 78.6%, 100%).
         </li>
         <li className='idx-home-li'>
           <strong>MACD</strong>: MACD Line, Signal Line, dan Histogram untuk mengidentifikasi
@@ -251,14 +253,16 @@ export default function TabHowTo() {
       </p>
       <ul className='idx-home-ul'>
         <li className='idx-home-li'>
-          <strong>Bullish Divergence</strong>: Harga mencetak <em>lower low</em> tapi indikator
-          mencetak <em>higher low</em>. Menandakan tekanan jual melemah — potensi reversal naik.
-          Hanya valid jika RSI &lt; 40 (dekat oversold).
+          <strong>Bullish Divergence</strong>: Harga mencetak <em>lower low</em>{' '}
+          tapi indikator mencetak{' '}
+          <em>higher low</em>. Menandakan tekanan jual melemah — potensi reversal naik. Hanya valid
+          jika RSI &lt; 40 (dekat oversold).
         </li>
         <li className='idx-home-li'>
-          <strong>Bearish Divergence</strong>: Harga mencetak <em>higher high</em> tapi indikator
-          mencetak <em>lower high</em>. Menandakan momentum beli melemah — potensi reversal turun.
-          Hanya valid jika RSI &gt; 60 (dekat overbought).
+          <strong>Bearish Divergence</strong>: Harga mencetak <em>higher high</em>{' '}
+          tapi indikator mencetak{' '}
+          <em>lower high</em>. Menandakan momentum beli melemah — potensi reversal turun. Hanya
+          valid jika RSI &gt; 60 (dekat overbought).
         </li>
         <li className='idx-home-li'>
           Divergence dideteksi pada RSI dan Stochastic RSI. Menggunakan 5-bar pivot pada 90 bar
@@ -268,8 +272,8 @@ export default function TabHowTo() {
 
       <h3 className='idx-home-h3'>13. Rekomendasi AI</h3>
       <p className='idx-home-p idx-home-p-mb8'>
-        Fitur AI Recommendation menilai dan meranking saham-saham berpotensi tinggi. Tersedia
-        3 mode:
+        Fitur AI Recommendation menilai dan meranking saham-saham berpotensi tinggi. Tersedia 3
+        mode:
       </p>
       <ol className='idx-home-list idx-home-ol'>
         <li className='idx-home-li'>
@@ -285,16 +289,16 @@ export default function TabHowTo() {
         </li>
       </ol>
       <p className='idx-home-p'>
-        Saham dengan skor gorengan tinggi (notasi X, UMA, market cap kecil, float rendah)
-        otomatis dieksklusi. Saham di <strong>Stage 3</strong> (distribusi) dan{' '}
-        <strong>Stage 4</strong> (markdown) juga dieksklusi karena berada di fase bearish.
+        Saham dengan skor gorengan tinggi (notasi X, UMA, market cap kecil, float rendah) otomatis
+        dieksklusi. Saham di <strong>Stage 3</strong> (distribusi) dan <strong>Stage 4</strong>{' '}
+        (markdown) juga dieksklusi karena berada di fase bearish.
       </p>
 
       <h3 className='idx-home-h3'>14. Ekspor PDF</h3>
       <p className='idx-home-p'>
-        Di halaman detail saham, klik tombol <strong>Ekspor PDF</strong> untuk mengunduh
-        laporan lengkap per emiten. Laporan berisi ringkasan fundamental, skor teknikal,
-        chart, dan indikator — siap untuk analisis offline atau presentasi.
+        Di halaman detail saham, klik tombol <strong>Ekspor PDF</strong>{' '}
+        untuk mengunduh laporan lengkap per emiten. Laporan berisi ringkasan fundamental, skor
+        teknikal, chart, dan indikator — siap untuk analisis offline atau presentasi.
       </p>
 
       <h3 className='idx-home-h3'>15. Watchlist</h3>
@@ -306,17 +310,18 @@ export default function TabHowTo() {
           Klik lagi ikon bintang yang sudah aktif untuk menghapus dari watchlist.
         </li>
         <li className='idx-home-li'>
-          Watchlist tersimpan di browser (localStorage) dan akan bertahan antar sesi.
-          Gunakan watchlist untuk memantau saham-saham pilihan secara cepat.
+          Watchlist tersimpan di browser (localStorage) dan akan bertahan antar sesi. Gunakan
+          watchlist untuk memantau saham-saham pilihan secara cepat.
         </li>
       </ul>
 
       <h3 className='idx-home-h3'>16. Narasi di Claude</h3>
       <p className='idx-home-p'>
-        Tombol <strong>&quot;Narasi di Claude&quot;</strong> tersedia di halaman AI Recommendation.
-        Saat diklik, sistem mengirim data top 10 saham ke Claude AI untuk menghasilkan narasi
-        pasar singkat (3-4 paragraf). Narasi berisi ringkasan sektor kuat, kesamaan setup,
-        dan konteks pasar — berguna sebagai rangkuman cepat. Narasi di-cache selama 1 jam.
+        Tombol <strong>&quot;Narasi di Claude&quot;</strong>{' '}
+        tersedia di halaman AI Recommendation. Saat diklik, sistem mengirim data top 10 saham ke
+        Claude AI untuk menghasilkan narasi pasar singkat (3-4 paragraf). Narasi berisi ringkasan
+        sektor kuat, kesamaan setup, dan konteks pasar — berguna sebagai rangkuman cepat. Narasi
+        di-cache selama 1 jam.
       </p>
 
       <p className='idx-home-note'>

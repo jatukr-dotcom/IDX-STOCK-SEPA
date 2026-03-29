@@ -21,8 +21,12 @@ export function useAllStocks(
     setLoading(true)
     setError(null)
     const params: Record<string, string | number> = { limit, offset }
-    if (search.trim() !== '') params['search'] = search.trim()
-    if (sector.trim() !== '') params['sector'] = sector.trim()
+    if (search.trim() !== '') {
+      params['search'] = search.trim()
+    }
+    if (sector.trim() !== '') {
+      params['sector'] = sector.trim()
+    }
     Hooks.fetchApi<Types.StockListResponse>('/api/stocks', params)
       .then(setData)
       .catch((err) => setError(err instanceof Error ? err.message : String(err)))

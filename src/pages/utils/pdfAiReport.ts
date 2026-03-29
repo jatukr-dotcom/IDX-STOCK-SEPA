@@ -7,7 +7,10 @@
 
 import type * as Types from '@app/pages/Types.ts'
 import { addFooter, addHeader, createDoc, fmtDate, fmtN, PDF_COLORS } from '@app/pages/utils/pdf.ts'
-import autoTable from 'jspdf-autotable'
+import autoTableFn from 'jspdf-autotable'
+import type { CellHookData } from 'jspdf-autotable'
+// deno-lint-ignore no-explicit-any
+const autoTable = autoTableFn as unknown as (doc: any, options: any) => void
 
 function nowDateStr(): string {
   const d = new Date()
@@ -88,7 +91,7 @@ export function exportAiReportPdf(
       fontSize: 8
     },
     alternateRowStyles: { fillColor: PDF_COLORS.bgLight as [number, number, number] },
-    didParseCell: (hookData) => {
+    didParseCell: (hookData: CellHookData) => {
       if (hookData.section !== 'body') {
         return
       }

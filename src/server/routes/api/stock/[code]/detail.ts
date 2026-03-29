@@ -87,7 +87,8 @@ export async function GET(ctx: Context) {
       .orderBy(asc(Schemas.summary.date))
 
     const validPerf = perfRows.filter(
-      (r) => r.priceClose != null && Number.isFinite(Number(r.priceClose)) && Number(r.priceClose) > 0
+      (r) =>
+        r.priceClose != null && Number.isFinite(Number(r.priceClose)) && Number(r.priceClose) > 0
     )
 
     if (validPerf.length >= 2) {
@@ -102,15 +103,25 @@ export async function GET(ctx: Context) {
             break
           }
         }
-        if (bestIdx == null) return null
+        if (bestIdx == null) {
+          return null
+        }
         const pastClose = Number(validPerf[bestIdx]!.priceClose)
         return pastClose > 0 ? ((currentClose - pastClose) / pastClose) * 100 : null
       }
 
-      if (computedWeek4PC == null) computedWeek4PC = findReturnByDays(28)
-      if (computedWeek13PC == null) computedWeek13PC = findReturnByDays(91)
-      if (computedWeek26PC == null) computedWeek26PC = findReturnByDays(182)
-      if (computedWeek52PC == null) computedWeek52PC = findReturnByDays(365)
+      if (computedWeek4PC == null) {
+        computedWeek4PC = findReturnByDays(28)
+      }
+      if (computedWeek13PC == null) {
+        computedWeek13PC = findReturnByDays(91)
+      }
+      if (computedWeek26PC == null) {
+        computedWeek26PC = findReturnByDays(182)
+      }
+      if (computedWeek52PC == null) {
+        computedWeek52PC = findReturnByDays(365)
+      }
     }
   }
 

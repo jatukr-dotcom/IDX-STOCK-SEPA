@@ -47,7 +47,9 @@ export class SectoralMovement {
       await Database.transaction(async (tx) => {
         for (const item of items) {
           const sectorCode = item.sectorCode ?? ''
-          if (!sectorCode) continue
+          if (!sectorCode) {
+            continue
+          }
           const id = `${year}_${String(month).padStart(2, '0')}_${sectorCode}`
           await tx
             .insert(Schemas.sectoralMovement)

@@ -62,7 +62,9 @@ export async function GET(ctx: Context) {
     const low = row.priceLow != null && Number.isFinite(Number(row.priceLow))
       ? Number(row.priceLow)
       : null
-    if (close == null || close <= 0 || high == null || low == null) continue
+    if (close == null || close <= 0 || high == null || low == null) {
+      continue
+    }
     rows.push({ date: Number(row.date), high, low, close })
   }
 
@@ -108,12 +110,17 @@ export async function GET(ctx: Context) {
   const srRows: CleanRow[] = []
   for (const row of srRawRows) {
     const close = row.priceClose != null && Number.isFinite(Number(row.priceClose))
-      ? Number(row.priceClose) : null
+      ? Number(row.priceClose)
+      : null
     const high = row.priceHigh != null && Number.isFinite(Number(row.priceHigh))
-      ? Number(row.priceHigh) : null
+      ? Number(row.priceHigh)
+      : null
     const low = row.priceLow != null && Number.isFinite(Number(row.priceLow))
-      ? Number(row.priceLow) : null
-    if (close == null || close <= 0 || high == null || low == null) continue
+      ? Number(row.priceLow)
+      : null
+    if (close == null || close <= 0 || high == null || low == null) {
+      continue
+    }
     srRows.push({ date: Number(row.date), high, low, close })
   }
 
@@ -133,7 +140,9 @@ export async function GET(ctx: Context) {
 
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i]!
-    if (r.date < start) continue
+    if (r.date < start) {
+      continue
+    }
 
     macd.push({
       date: r.date,

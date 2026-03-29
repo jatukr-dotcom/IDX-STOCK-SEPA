@@ -20,7 +20,7 @@ export function usePowerPlay(setup?: Types.PowerPlaySetupType) {
     setError(null)
     const query: Record<string, string | number> = {}
     if (setup != null) {
-      query.setup = setup
+      query['setup'] = setup
     }
     const opts = signal ? { signal } : undefined
     Hooks.fetchApi<Types.PowerPlayResponse>('/api/screener/power-play', query, opts)

@@ -83,12 +83,12 @@ export async function GET(ctx: Context) {
     if (rows.length < 20) {
       continue
     }
-    const price = rows[rows.length - 1].close
+    const price = rows[rows.length - 1]!.close
     const r3m = rows.length >= 63
-      ? ((price - rows[rows.length - 63].close) / rows[rows.length - 63].close) * 100
-      : ((price - rows[0].close) / rows[0].close) * 100
+      ? ((price - rows[rows.length - 63]!.close) / rows[rows.length - 63]!.close) * 100
+      : ((price - rows[0]!.close) / rows[0]!.close) * 100
     const r6m = rows.length >= 126
-      ? ((price - rows[rows.length - 126].close) / rows[rows.length - 126].close) * 100
+      ? ((price - rows[rows.length - 126]!.close) / rows[rows.length - 126]!.close) * 100
       : null
     let rsScore = r3m * 0.4
     let w = 0.4
@@ -114,7 +114,7 @@ export async function GET(ctx: Context) {
       continue
     }
 
-    const price = rows[rows.length - 1].close
+    const price = rows[rows.length - 1]!.close
     const last252 = rows.slice(Math.max(0, rows.length - 252))
     const high52w = Math.max(...last252.map((r) => r.high))
     const low52w = Math.min(...last252.map((r) => r.low))

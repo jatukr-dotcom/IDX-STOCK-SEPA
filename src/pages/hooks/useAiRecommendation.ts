@@ -32,13 +32,13 @@ export function useAiRecommendation(params: AiRecommendationParams = {}) {
         mode: params.mode ?? 'combined'
       }
       if (params.limit != null) {
-        query.limit = params.limit
+        query['limit'] = params.limit
       }
       if (params.minTechScore != null) {
-        query.minTechScore = params.minTechScore
+        query['minTechScore'] = params.minTechScore
       }
       if (params.minFundScore != null) {
-        query.minFundScore = params.minFundScore
+        query['minFundScore'] = params.minFundScore
       }
       const opts = signal ? { signal } : undefined
       Hooks.fetchApi<Types.AiRecommendationResponse>('/api/screener/ai-recommendation', query, opts)

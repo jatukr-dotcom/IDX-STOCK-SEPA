@@ -19,7 +19,11 @@ export async function GET(ctx: Context) {
 
   const allRows = await Database.select()
     .from(Schemas.sectoralMovement)
-    .orderBy(desc(Schemas.sectoralMovement.year), desc(Schemas.sectoralMovement.month), asc(Schemas.sectoralMovement.sectorCode))
+    .orderBy(
+      desc(Schemas.sectoralMovement.year),
+      desc(Schemas.sectoralMovement.month),
+      asc(Schemas.sectoralMovement.sectorCode)
+    )
 
   const data = year != null && month != null
     ? allRows.filter((r) => r.year === year && r.month === month)

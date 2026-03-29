@@ -105,16 +105,16 @@ export async function GET(ctx: Context) {
     if (rows.length < 20) {
       continue
     }
-    const price = rows[rows.length - 1].close
+    const price = rows[rows.length - 1]!.close
 
     const r3m = rows.length >= 63
-      ? returnPct(price, rows[rows.length - 63].close)
-      : returnPct(price, rows[0].close)
+      ? returnPct(price, rows[rows.length - 63]!.close)
+      : returnPct(price, rows[0]!.close)
     const r6m = rows.length >= 126
-      ? returnPct(price, rows[rows.length - 126].close)
-      : returnPct(price, rows[0].close)
-    const r9m = rows.length >= 189 ? returnPct(price, rows[rows.length - 189].close) : null
-    const r12m = rows.length >= 252 ? returnPct(price, rows[rows.length - 252].close) : null
+      ? returnPct(price, rows[rows.length - 126]!.close)
+      : returnPct(price, rows[0]!.close)
+    const r9m = rows.length >= 189 ? returnPct(price, rows[rows.length - 189]!.close) : null
+    const r12m = rows.length >= 252 ? returnPct(price, rows[rows.length - 252]!.close) : null
 
     // Weighted RS Score
     let rsScore = 0

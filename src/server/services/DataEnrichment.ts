@@ -27,20 +27,28 @@ interface LatestSummary {
 
 /** Compute TTM (Trailing 12 Months) profit in same unit as profitAttrOwner. */
 function computeTtmProfit(rows: FRRow[]): number | null {
-  if (rows.length === 0) return null
+  if (rows.length === 0) {
+    return null
+  }
   const sorted = [...rows].sort((a, b) =>
     a.year !== b.year ? b.year - a.year : b.quarter - a.quarter
   )
   const latest = sorted[0]!
-  if (latest.profitAttrOwner == null) return null
+  if (latest.profitAttrOwner == null) {
+    return null
+  }
 
   // Q4 = full year, TTM is directly the annual figure
-  if (latest.quarter === 4) return latest.profitAttrOwner
+  if (latest.quarter === 4) {
+    return latest.profitAttrOwner
+  }
 
   // For Q1-Q3: TTM = currentYtd + (prevFY - prevSameQ)
   const currentYtd = latest.profitAttrOwner
   const prevFy = sorted.find((r) => r.year === latest.year - 1 && r.quarter === 4)
-  if (prevFy?.profitAttrOwner == null) return currentYtd // best-effort: use YTD
+  if (prevFy?.profitAttrOwner == null) {
+    return currentYtd // best-effort: use YTD
+  }
 
   const prevSameQ = sorted.find((r) => r.year === latest.year - 1 && r.quarter === latest.quarter)
   if (prevSameQ?.profitAttrOwner != null) {
@@ -52,7 +60,9 @@ function computeTtmProfit(rows: FRRow[]): number | null {
 
 /** Compute corrected Book Value Per Share using current listed shares. */
 function computeCorrectedBvps(rows: FRRow[], listedShares: number): number | null {
-  if (listedShares <= 0) return null
+  if (listedShares <= 0) {
+    return null
+  }
 
   // Prefer latest Q4 (annual filing — most reliable shares count)
   const q4rows = rows
@@ -63,7 +73,9 @@ function computeCorrectedBvps(rows: FRRow[], listedShares: number): number | nul
     .sort((a, b) => a.year !== b.year ? b.year - a.year : b.quarter - a.quarter)
 
   const useRow = q4rows[0] ?? allWithBv[0]
-  if (useRow == null || useRow.bookValue == null) return null
+  if (useRow == null || useRow.bookValue == null) {
+    return null
+  }
 
   const rawBvps = useRow.bookValue
 
@@ -126,8 +138,12 @@ export class DataEnrichment {
     const summaryMap = new Map<string, LatestSummary>()
     const latestByCode = new Map<string, typeof allSummary[0]>()
     for (const row of allSummary) {
-      if (row.stockCode == null || row.listedShares == null || row.priceClose == null) continue
-      if (row.listedShares <= 0 || row.priceClose <= 0) continue
+      if (row.stockCode == null || row.listedShares == null || row.priceClose == null) {
+        continue
+      }
+      if (row.listedShares <= 0 || row.priceClose <= 0) {
+        continue
+      }
       const current = latestByCode.get(row.stockCode)
       if (current == null || (row.date ?? 0) > (current.date ?? 0)) {
         latestByCode.set(row.stockCode, row)
@@ -158,7 +174,9 @@ export class DataEnrichment {
     // Group dividends by stockCode, sum last 12 months
     const dividendByCode = new Map<string, number>()
     for (const d of dividendRows) {
-      if (d.cashPerShare == null || d.cashPerShare <= 0) continue
+      if (d.cashPerShare == null || d.cashPerShare <= 0) {
+        continue
+      }
       dividendByCode.set(d.stockCode, (dividendByCode.get(d.stockCode) ?? 0) + d.cashPerShare)
     }
 
@@ -167,10 +185,14 @@ export class DataEnrichment {
     let updateCount = 0
     for (const [code, rows] of Array.from(byCode.entries())) {
       const summary = summaryMap.get(code)
-      if (summary == null) continue
+      if (summary == null) {
+        continue
+      }
 
       const { listedShares, priceClose } = summary
-      if (listedShares <= 0 || priceClose <= 0) continue
+      if (listedShares <= 0 || priceClose <= 0) {
+        continue
+      }
 
       // TTM EPS
       const ttmProfit = computeTtmProfit(rows)
@@ -203,9 +225,13 @@ export class DataEnrichment {
 
     // Also update stocks that only have dividend data (even without financialHistory)
     for (const [code, totalDiv] of Array.from(dividendByCode.entries())) {
-      if (byCode.has(code)) continue // already handled above
+      if (byCode.has(code)) {
+        continue // already handled above
+      }
       const summary = summaryMap.get(code)
-      if (summary == null || summary.priceClose <= 0) continue
+      if (summary == null || summary.priceClose <= 0) {
+        continue
+      }
       const divYield = Math.round((totalDiv / summary.priceClose) * 10000) / 100
       await Database
         .update(Schemas.screener)

@@ -9,7 +9,11 @@
 import type { Context } from '@neabyte/deserve'
 import { and, asc, eq, gte, lte } from 'drizzle-orm'
 import Database from '@app/server/Database.ts'
-import { calcMA, calcMA200SlopePct, determineStageConfirmedWithLabel } from '@app/server/StageAnalysisHelper.ts'
+import {
+  calcMA,
+  calcMA200SlopePct,
+  determineStageConfirmedWithLabel
+} from '@app/server/StageAnalysisHelper.ts'
 import Utils from '@app/server/Utils.ts'
 import * as Schemas from '@app/server/schemas/index.ts'
 import * as Services from '@app/server/services/index.ts'
@@ -46,10 +50,18 @@ export async function GET(ctx: Context) {
   type OhlcEntry = { date: number; close: number; high: number; low: number }
   const rows: OhlcEntry[] = []
   for (const r of perfRows) {
-    const close = r.priceClose != null && Number.isFinite(Number(r.priceClose)) ? Number(r.priceClose) : null
-    if (close == null || close <= 0) continue
-    const high = r.priceHigh != null && Number.isFinite(Number(r.priceHigh)) ? Number(r.priceHigh) : close
-    const low = r.priceLow != null && Number.isFinite(Number(r.priceLow)) ? Number(r.priceLow) : close
+    const close = r.priceClose != null && Number.isFinite(Number(r.priceClose))
+      ? Number(r.priceClose)
+      : null
+    if (close == null || close <= 0) {
+      continue
+    }
+    const high = r.priceHigh != null && Number.isFinite(Number(r.priceHigh))
+      ? Number(r.priceHigh)
+      : close
+    const low = r.priceLow != null && Number.isFinite(Number(r.priceLow))
+      ? Number(r.priceLow)
+      : close
     rows.push({ date: Number(r.date), close, high, low })
   }
 

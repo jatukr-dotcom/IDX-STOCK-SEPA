@@ -254,7 +254,12 @@ export default function StockDetailModal({
                 className='idx-btn idx-btn-sm idx-btn-icon'
                 title='Download PDF'
                 onClick={() =>
-                  Utils.exportStockPdf(detail, volumeData ?? null, financialHistoryData ?? null, advancedData ?? null)}
+                  Utils.exportStockPdf(
+                    detail,
+                    volumeData ?? null,
+                    financialHistoryData ?? null,
+                    advancedData ?? null
+                  )}
               >
                 <FileDown size={15} aria-hidden />
                 <span>PDF</span>
@@ -438,23 +443,36 @@ export default function StockDetailModal({
                           <span style={{ fontWeight: 'bold', color: '#f59e0b' }}>
                             {technicalLoading ? '...' : (
                               technicalData?.stage
-                                ? `${technicalData.stage.stage} - ${['Akumulasi', 'Markup', 'Distribusi', 'Markdown'][technicalData.stage.stage - 1]}`
+                                ? `${technicalData.stage.stage} - ${
+                                  [
+                                    'Akumulasi',
+                                    'Markup',
+                                    'Distribusi',
+                                    'Markdown'
+                                  ][technicalData.stage.stage - 1]
+                                }`
                                 : '-'
                             )}
                           </span>
                         </div>
                         <div className='idx-detail-item'>
                           <label>Volume Signal</label>
-                          <span style={{
-                            fontWeight: 'bold',
-                            color: technicalData?.volume?.signal === 'accumulation' ? '#10b981'
-                              : technicalData?.volume?.signal === 'distribution' ? '#ef4444'
-                              : '#6b7280'
-                          }}>
+                          <span
+                            style={{
+                              fontWeight: 'bold',
+                              color: technicalData?.volume?.signal === 'accumulation'
+                                ? '#10b981'
+                                : technicalData?.volume?.signal === 'distribution'
+                                ? '#ef4444'
+                                : '#6b7280'
+                            }}
+                          >
                             {technicalLoading ? '...' : (
                               technicalData?.volume?.signal
-                                ? technicalData.volume.signal === 'accumulation' ? 'Akumulasi'
-                                  : technicalData.volume.signal === 'distribution' ? 'Distribusi'
+                                ? technicalData.volume.signal === 'accumulation'
+                                  ? 'Akumulasi'
+                                  : technicalData.volume.signal === 'distribution'
+                                  ? 'Distribusi'
                                   : 'Netral'
                                 : '-'
                             )}
@@ -462,15 +480,25 @@ export default function StockDetailModal({
                         </div>
                         <div className='idx-detail-item'>
                           <label>VCP</label>
-                          <span style={{ color: technicalData?.volume?.vcp?.isVcp ? '#ef4444' : '#6b7280' }}>
+                          <span
+                            style={{
+                              color: technicalData?.volume?.vcp?.isVcp ? '#ef4444' : '#6b7280'
+                            }}
+                          >
                             {technicalLoading ? '...' : (
-                              technicalData?.volume?.vcp?.isVcp ? `Ya (${technicalData.volume.vcp.contractions} kontraksi)` : 'Tidak'
+                              technicalData?.volume?.vcp?.isVcp
+                                ? `Ya (${technicalData.volume.vcp.contractions} kontraksi)`
+                                : 'Tidak'
                             )}
                           </span>
                         </div>
                         <div className='idx-detail-item'>
                           <label>Trend Criteria</label>
-                          <span>{technicalLoading ? '...' : (technicalData?.stage?.trendCriteriaCount ?? 0)}/7</span>
+                          <span>
+                            {technicalLoading
+                              ? '...'
+                              : (technicalData?.stage?.trendCriteriaCount ?? 0)}/7
+                          </span>
                         </div>
                         <div className='idx-detail-item idx-detail-item-full'>
                           <label>Support/Resistance</label>
@@ -720,7 +748,7 @@ export default function StockDetailModal({
                                     adLine: r.adLine,
                                     obv: r.obv
                                   }))}
-                                  margin={{ top: 8, right: 8, bottom: 8, left: 8 }}
+                                  margin={{ top: 8, right: 40, bottom: 8, left: 40 }}
                                 >
                                   <XAxis
                                     dataKey='date'
@@ -729,11 +757,22 @@ export default function StockDetailModal({
                                     tick={{ fill: 'var(--idx-text-muted)', fontSize: 10 }}
                                   />
                                   <YAxis
+                                    yAxisId='adl'
+                                    orientation='left'
+                                    axisLine={false}
+                                    tickLine={false}
+                                    tick={{ fill: 'var(--idx-primary)', fontSize: 9 }}
+                                    tickFormatter={(v) => Utils.Format.formatNum(v, 0)}
+                                    width={36}
+                                  />
+                                  <YAxis
+                                    yAxisId='obv'
                                     orientation='right'
                                     axisLine={false}
                                     tickLine={false}
-                                    tick={{ fill: 'var(--idx-text-muted)', fontSize: 10 }}
+                                    tick={{ fill: 'var(--idx-accent)', fontSize: 9 }}
                                     tickFormatter={(v) => Utils.Format.formatNum(v, 0)}
+                                    width={36}
                                   />
                                   <Tooltip
                                     content={({ active, payload, label }) => {
@@ -759,6 +798,7 @@ export default function StockDetailModal({
                                     }}
                                   />
                                   <Line
+                                    yAxisId='adl'
                                     type='monotone'
                                     dataKey='adLine'
                                     name='A/D Line'
@@ -768,6 +808,7 @@ export default function StockDetailModal({
                                     isAnimationActive={false}
                                   />
                                   <Line
+                                    yAxisId='obv'
                                     type='monotone'
                                     dataKey='obv'
                                     name='OBV'
@@ -1334,11 +1375,10 @@ export default function StockDetailModal({
                                     tick={{ fontSize: 10 }}
                                     tickLine={false}
                                     width={50}
-                                    tickFormatter={(v: number) =>
-                                      v != null ? v.toFixed(1) : ''}
+                                    tickFormatter={(v: number) => v != null ? v.toFixed(1) : ''}
                                   />
                                   <Tooltip
-                                    formatter={(v: number) => v?.toFixed(3) ?? '-'}
+                                    formatter={(v: unknown) => (typeof v === 'number' ? v.toFixed(3) : '-')}
                                     contentStyle={{
                                       fontSize: 11,
                                       background: 'var(--idx-bg)',
@@ -1411,7 +1451,7 @@ export default function StockDetailModal({
                                     width={35}
                                   />
                                   <Tooltip
-                                    formatter={(v: number) => v?.toFixed(1) ?? '-'}
+                                    formatter={(v: unknown) => (typeof v === 'number' ? v.toFixed(1) : '-')}
                                     contentStyle={{
                                       fontSize: 11,
                                       background: 'var(--idx-bg)',
@@ -1473,64 +1513,151 @@ export default function StockDetailModal({
                       <section className='idx-detail-section'>
                         <h4 className='idx-detail-section-title'>
                           Support &amp; Resistance
-                          <span style={{ fontSize: 'var(--idx-text-xs)', fontWeight: 400, color: 'var(--idx-text-muted)', marginLeft: 8 }}>
+                          <span
+                            style={{
+                              fontSize: 'var(--idx-text-xs)',
+                              fontWeight: 400,
+                              color: 'var(--idx-text-muted)',
+                              marginLeft: 8
+                            }}
+                          >
                             Berbasis cluster level yang sering disentuh harga (1 tahun)
                           </span>
                         </h4>
                         {advancedData.supportResistance.levels.length === 0
-                          ? <p className='idx-p-muted'>Tidak cukup data untuk mendeteksi level S/R.</p>
+                          ? (
+                            <p className='idx-p-muted'>
+                              Tidak cukup data untuk mendeteksi level S/R.
+                            </p>
+                          )
                           : (
                             <div>
                               {/* Current price reference */}
-                              <div style={{
-                                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                                padding: '5px 10px', marginBottom: 6, borderRadius: 4,
-                                background: 'rgba(99,102,241,0.1)', borderLeft: '3px solid var(--idx-accent)'
-                              }}>
-                                <span style={{ fontSize: 'var(--idx-text-sm)', fontWeight: 700, color: 'var(--idx-accent)' }}>Harga Saat Ini</span>
-                                <span style={{ fontSize: 'var(--idx-text-sm)', fontWeight: 700, color: 'var(--idx-accent)' }}>
-                                  {Utils.Format.formatNum(advancedData.supportResistance.currentClose, 0)}
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  padding: '5px 10px',
+                                  marginBottom: 6,
+                                  borderRadius: 4,
+                                  background: 'rgba(99,102,241,0.1)',
+                                  borderLeft: '3px solid var(--idx-accent)'
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    fontSize: 'var(--idx-text-sm)',
+                                    fontWeight: 700,
+                                    color: 'var(--idx-accent)'
+                                  }}
+                                >
+                                  Harga Saat Ini
+                                </span>
+                                <span
+                                  style={{
+                                    fontSize: 'var(--idx-text-sm)',
+                                    fontWeight: 700,
+                                    color: 'var(--idx-accent)'
+                                  }}
+                                >
+                                  {Utils.Format.formatNum(
+                                    advancedData.supportResistance.currentClose,
+                                    0
+                                  )}
                                 </span>
                               </div>
                               {/* Levels sorted price descending: resistance above, support below */}
                               {advancedData.supportResistance.levels.map((lvl, i) => {
                                 const isRes = lvl.type === 'resistance'
-                                const strengthDot = lvl.strength === 'strong' ? '●●●' : lvl.strength === 'moderate' ? '●●○' : '●○○'
+                                const strengthDot = lvl.strength === 'strong'
+                                  ? '●●●'
+                                  : lvl.strength === 'moderate'
+                                  ? '●●○'
+                                  : '●○○'
                                 const bg = isRes ? 'rgba(239,68,68,0.07)' : 'rgba(34,197,94,0.07)'
                                 const border = isRes ? 'var(--idx-down)' : 'var(--idx-up)'
-                                const pctFromClose = ((lvl.price - advancedData.supportResistance.currentClose) /
-                                  advancedData.supportResistance.currentClose * 100)
+                                const pctFromClose =
+                                  (lvl.price - advancedData.supportResistance.currentClose) /
+                                  advancedData.supportResistance.currentClose * 100
                                 return (
                                   <div
                                     key={i}
                                     style={{
-                                      display: 'flex', alignItems: 'center',
-                                      justifyContent: 'space-between', gap: 8,
-                                      padding: '5px 10px', marginBottom: 3,
-                                      borderRadius: 4, background: bg,
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'space-between',
+                                      gap: 8,
+                                      padding: '5px 10px',
+                                      marginBottom: 3,
+                                      borderRadius: 4,
+                                      background: bg,
                                       borderLeft: `3px solid ${border}`
                                     }}
                                   >
-                                    <span style={{ fontSize: 'var(--idx-text-xs)', fontWeight: 700, color: border, minWidth: 40 }}>
+                                    <span
+                                      style={{
+                                        fontSize: 'var(--idx-text-xs)',
+                                        fontWeight: 700,
+                                        color: border,
+                                        minWidth: 40
+                                      }}
+                                    >
                                       {isRes ? '▲ Res' : '▼ Sup'}
                                     </span>
-                                    <span style={{ fontSize: 'var(--idx-text-sm)', fontWeight: 700, flex: 1 }}>
+                                    <span
+                                      style={{
+                                        fontSize: 'var(--idx-text-sm)',
+                                        fontWeight: 700,
+                                        flex: 1
+                                      }}
+                                    >
                                       {Utils.Format.formatNum(lvl.price, 0)}
                                     </span>
-                                    <span style={{ fontSize: 'var(--idx-text-xs)', color: isRes ? 'var(--idx-down)' : 'var(--idx-up)', minWidth: 52, textAlign: 'right' }}>
-                                      {pctFromClose >= 0 ? '+' : ''}{pctFromClose.toFixed(1)}%
+                                    <span
+                                      style={{
+                                        fontSize: 'var(--idx-text-xs)',
+                                        color: isRes ? 'var(--idx-down)' : 'var(--idx-up)',
+                                        minWidth: 52,
+                                        textAlign: 'right'
+                                      }}
+                                    >
+                                      {pctFromClose >= 0 ? '+' : ''}
+                                      {pctFromClose.toFixed(1)}%
                                     </span>
-                                    <span style={{ fontSize: 10, color: 'var(--idx-text-muted)', minWidth: 28, textAlign: 'center' }} title={`Kekuatan: ${lvl.strength} (${lvl.touchCount} sentuhan)`}>
+                                    <span
+                                      style={{
+                                        fontSize: 10,
+                                        color: 'var(--idx-text-muted)',
+                                        minWidth: 28,
+                                        textAlign: 'center'
+                                      }}
+                                      title={`Kekuatan: ${lvl.strength} (${lvl.touchCount} sentuhan)`}
+                                    >
                                       {strengthDot}
                                     </span>
-                                    <span style={{ fontSize: 'var(--idx-text-xs)', color: 'var(--idx-text-muted)', minWidth: 52, textAlign: 'right' }}>
+                                    <span
+                                      style={{
+                                        fontSize: 'var(--idx-text-xs)',
+                                        color: 'var(--idx-text-muted)',
+                                        minWidth: 52,
+                                        textAlign: 'right'
+                                      }}
+                                    >
                                       {Utils.Format.formatDateInt(lvl.lastTouchDate)}
                                     </span>
                                   </div>
                                 )
                               })}
-                              <p style={{ fontSize: 'var(--idx-text-xs)', color: 'var(--idx-text-muted)', marginTop: 8 }}>
-                                ●●● Kuat &nbsp;·&nbsp; ●●○ Sedang &nbsp;·&nbsp; ●○○ Lemah &nbsp;·&nbsp; Tanggal = sentuhan terakhir
+                              <p
+                                style={{
+                                  fontSize: 'var(--idx-text-xs)',
+                                  color: 'var(--idx-text-muted)',
+                                  marginTop: 8
+                                }}
+                              >
+                                ●●● Kuat &nbsp;·&nbsp; ●●○ Sedang &nbsp;·&nbsp; ●○○ Lemah
+                                &nbsp;·&nbsp; Tanggal = sentuhan terakhir
                               </p>
                             </div>
                           )}
@@ -1542,34 +1669,81 @@ export default function StockDetailModal({
                         {advancedData.fibonacci
                           ? (
                             <>
-                              <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 10, flexWrap: 'wrap' }}>
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  gap: 12,
+                                  alignItems: 'center',
+                                  marginBottom: 10,
+                                  flexWrap: 'wrap'
+                                }}
+                              >
                                 <span
                                   style={{
                                     fontSize: 'var(--idx-text-sm)',
                                     fontWeight: 700,
-                                    color: advancedData.fibonacci.trend === 'up' ? 'var(--idx-up)' : 'var(--idx-down)',
+                                    color: advancedData.fibonacci.trend === 'up'
+                                      ? 'var(--idx-up)'
+                                      : 'var(--idx-down)',
                                     padding: '2px 8px',
                                     borderRadius: 4,
-                                    background: advancedData.fibonacci.trend === 'up' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)'
+                                    background: advancedData.fibonacci.trend === 'up'
+                                      ? 'rgba(34,197,94,0.1)'
+                                      : 'rgba(239,68,68,0.1)'
                                   }}
                                 >
-                                  {advancedData.fibonacci.trend === 'up' ? '▲ Uptrend' : '▼ Downtrend'}
+                                  {advancedData.fibonacci.trend === 'up'
+                                    ? '▲ Uptrend'
+                                    : '▼ Downtrend'}
                                 </span>
-                                <span style={{ fontSize: 'var(--idx-text-xs)', color: 'var(--idx-text-muted)' }}>
-                                  High: <strong>{Utils.Format.formatNum(advancedData.fibonacci.swingHigh, 0)}</strong>
-                                  {` (${Utils.Format.formatDateInt(advancedData.fibonacci.swingHighDate)})`}
+                                <span
+                                  style={{
+                                    fontSize: 'var(--idx-text-xs)',
+                                    color: 'var(--idx-text-muted)'
+                                  }}
+                                >
+                                  High:{' '}
+                                  <strong>
+                                    {Utils.Format.formatNum(advancedData.fibonacci.swingHigh, 0)}
+                                  </strong>
+                                  {` (${
+                                    Utils.Format.formatDateInt(advancedData.fibonacci.swingHighDate)
+                                  })`}
                                 </span>
-                                <span style={{ fontSize: 'var(--idx-text-xs)', color: 'var(--idx-text-muted)' }}>
-                                  Low: <strong>{Utils.Format.formatNum(advancedData.fibonacci.swingLow, 0)}</strong>
-                                  {` (${Utils.Format.formatDateInt(advancedData.fibonacci.swingLowDate)})`}
+                                <span
+                                  style={{
+                                    fontSize: 'var(--idx-text-xs)',
+                                    color: 'var(--idx-text-muted)'
+                                  }}
+                                >
+                                  Low:{' '}
+                                  <strong>
+                                    {Utils.Format.formatNum(advancedData.fibonacci.swingLow, 0)}
+                                  </strong>
+                                  {` (${
+                                    Utils.Format.formatDateInt(advancedData.fibonacci.swingLowDate)
+                                  })`}
                                 </span>
                               </div>
                               <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                                 {advancedData.fibonacci.levels.map((lvl) => {
-                                  const currentPrice = advancedData.supportResistance.currentClose ?? 0
-                                  const range = advancedData.fibonacci!.swingHigh - advancedData.fibonacci!.swingLow
-                                  const pct = range > 0 ? Math.min(100, Math.max(0, ((lvl.price - advancedData.fibonacci!.swingLow) / range) * 100)) : 0
-                                  const isCurrent = Math.abs(currentPrice - lvl.price) / Math.max(lvl.price, 1) < 0.03
+                                  const currentPrice =
+                                    advancedData.supportResistance.currentClose ?? 0
+                                  const range = advancedData.fibonacci!.swingHigh -
+                                    advancedData.fibonacci!.swingLow
+                                  const pct = range > 0
+                                    ? Math.min(
+                                      100,
+                                      Math.max(
+                                        0,
+                                        ((lvl.price - advancedData.fibonacci!.swingLow) / range) *
+                                          100
+                                      )
+                                    )
+                                    : 0
+                                  const isCurrent =
+                                    Math.abs(currentPrice - lvl.price) / Math.max(lvl.price, 1) <
+                                      0.03
                                   const fibColors: Record<string, string> = {
                                     '0%': 'var(--idx-text-muted)',
                                     '23.6%': '#6366f1',
@@ -1589,21 +1763,62 @@ export default function StockDetailModal({
                                         gap: 8,
                                         padding: '4px 8px',
                                         borderRadius: 4,
-                                        background: isCurrent ? 'var(--idx-bg-second)' : 'transparent',
-                                        border: isCurrent ? `1px solid ${levelColor}` : '1px solid transparent'
+                                        background: isCurrent
+                                          ? 'var(--idx-bg-second)'
+                                          : 'transparent',
+                                        border: isCurrent
+                                          ? `1px solid ${levelColor}`
+                                          : '1px solid transparent'
                                       }}
                                     >
-                                      <span style={{ fontSize: 'var(--idx-text-xs)', color: levelColor, fontWeight: 700, minWidth: 42, textAlign: 'right' }}>
+                                      <span
+                                        style={{
+                                          fontSize: 'var(--idx-text-xs)',
+                                          color: levelColor,
+                                          fontWeight: 700,
+                                          minWidth: 42,
+                                          textAlign: 'right'
+                                        }}
+                                      >
                                         {lvl.label}
                                       </span>
-                                      <div style={{ flex: 1, height: 6, background: 'var(--idx-bg-second)', borderRadius: 3, overflow: 'hidden' }}>
-                                        <div style={{ width: `${pct}%`, height: '100%', background: levelColor, borderRadius: 3, opacity: 0.7 }} />
+                                      <div
+                                        style={{
+                                          flex: 1,
+                                          height: 6,
+                                          background: 'var(--idx-bg-second)',
+                                          borderRadius: 3,
+                                          overflow: 'hidden'
+                                        }}
+                                      >
+                                        <div
+                                          style={{
+                                            width: `${pct}%`,
+                                            height: '100%',
+                                            background: levelColor,
+                                            borderRadius: 3,
+                                            opacity: 0.7
+                                          }}
+                                        />
                                       </div>
-                                      <span style={{ fontSize: 'var(--idx-text-sm)', fontWeight: isCurrent ? 700 : 400, minWidth: 70, textAlign: 'right' }}>
+                                      <span
+                                        style={{
+                                          fontSize: 'var(--idx-text-sm)',
+                                          fontWeight: isCurrent ? 700 : 400,
+                                          minWidth: 70,
+                                          textAlign: 'right'
+                                        }}
+                                      >
                                         {Utils.Format.formatNum(lvl.price, 0)}
                                       </span>
                                       {isCurrent && (
-                                        <span style={{ fontSize: 'var(--idx-text-xs)', color: levelColor, whiteSpace: 'nowrap' }}>
+                                        <span
+                                          style={{
+                                            fontSize: 'var(--idx-text-xs)',
+                                            color: levelColor,
+                                            whiteSpace: 'nowrap'
+                                          }}
+                                        >
                                           ← saat ini
                                         </span>
                                       )}

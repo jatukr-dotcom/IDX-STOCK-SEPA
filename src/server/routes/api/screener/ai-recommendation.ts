@@ -9,7 +9,12 @@
 import type { Context } from '@neabyte/deserve'
 import { and, asc, desc, gte, isNotNull, lte, sql } from 'drizzle-orm'
 import Database from '@app/server/Database.ts'
-import { calcMA, calcMA200SlopePct, determineStageConfirmed, returnPct } from '@app/server/StageAnalysisHelper.ts'
+import {
+  calcMA,
+  calcMA200SlopePct,
+  determineStageConfirmed,
+  returnPct
+} from '@app/server/StageAnalysisHelper.ts'
 import Utils from '@app/server/Utils.ts'
 import * as Schemas from '@app/server/schemas/index.ts'
 import type * as Types from '@app/server/Types.ts'
@@ -48,7 +53,6 @@ function calcQEps(byKey: Map<string, HistRow>, year: number, quarter: number): n
   const prevProfit = prev?.profitAttrOwner ?? 0
   return (row.profitAttrOwner - prevProfit) / shares
 }
-
 
 function calcEpsInfo(histRows: HistRow[]): {
   score: number
@@ -499,7 +503,9 @@ export async function GET(ctx: Context) {
     const stage = determineStageConfirmed(closes)
 
     // Eksklusi saham fase distribusi (stage 3) dan markdown (stage 4)
-    if (stage === 3 || stage === 4) continue
+    if (stage === 3 || stage === 4) {
+      continue
+    }
 
     // ── EPS & Fundamental ───────────────────────────────────────────────
     const epsInfo = calcEpsInfo(histRows)

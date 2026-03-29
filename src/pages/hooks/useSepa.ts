@@ -29,10 +29,10 @@ export function useSepa(params: SepaParams = {}) {
       setError(null)
       const query: Record<string, string | number> = {}
       if (params.minTrend != null) {
-        query.minTrend = params.minTrend
+        query['minTrend'] = params.minTrend
       }
       if (params.minRs != null) {
-        query.minRs = params.minRs
+        query['minRs'] = params.minRs
       }
       const opts = signal ? { signal } : undefined
       Hooks.fetchApi<Types.SepaResponse>('/api/screener/sepa', query, opts)

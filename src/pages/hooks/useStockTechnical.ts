@@ -42,7 +42,8 @@ export function useStockTechnical(code: string | null, dateRange?: { start: numb
         const opts = signal ? { signal } : undefined
         const [stageRes, volRes, techRes] = await Promise.all([
           Hooks.fetchApi<Types.StageAnalysisRow>(`/api/${code}/stage`, {}, opts).catch(() => null),
-          Hooks.fetchApi<Types.VolumeAnalysisResponse>(`/api/${code}/volume-analysis`, {}, opts).catch(() => null),
+          Hooks.fetchApi<Types.VolumeAnalysisResponse>(`/api/${code}/volume-analysis`, {}, opts)
+            .catch(() => null),
           Hooks.fetchApi<Types.TechnicalAnalysisApiResponse>(
             `/api/${code}/technical-analysis`,
             dateRange ? { start: dateRange.start, end: dateRange.end } : {},
@@ -58,8 +59,12 @@ export function useStockTechnical(code: string | null, dateRange?: { start: numb
           })
         }
       } catch (err: unknown) {
-        if (requestIdRef.current !== myId) return
-        if (err != null && typeof err === 'object' && (err as Error).name === 'AbortError') return
+        if (requestIdRef.current !== myId) {
+          return
+        }
+        if (err != null && typeof err === 'object' && (err as Error).name === 'AbortError') {
+          return
+        }
         setError(err instanceof Error ? err.message : String(err))
       } finally {
         if (requestIdRef.current === myId) {

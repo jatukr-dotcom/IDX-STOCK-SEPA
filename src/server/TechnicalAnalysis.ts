@@ -16,7 +16,9 @@ export default class TechnicalAnalysis {
 
   static calculateEMA(values: number[], period: number): (number | null)[] {
     const result: (number | null)[] = new Array(values.length).fill(null)
-    if (values.length < period) return result
+    if (values.length < period) {
+      return result
+    }
     const k = 2 / (period + 1)
     // Seed with SMA of first `period` values
     let ema = values.slice(0, period).reduce((a, b) => a + b, 0) / period
@@ -96,14 +98,20 @@ export default class TechnicalAnalysis {
       const window: number[] = []
       for (let j = i - stochPeriod + 1; j <= i; j++) {
         const v = rsiValues[j]
-        if (v != null) window.push(v)
+        if (v != null) {
+          window.push(v)
+        }
       }
-      if (window.length < stochPeriod) continue
+      if (window.length < stochPeriod) {
+        continue
+      }
 
       const hi = Math.max(...window)
       const lo = Math.min(...window)
       const cur = rsiValues[i]
-      if (cur == null) continue
+      if (cur == null) {
+        continue
+      }
 
       const kVal = hi === lo ? 50 : ((cur - lo) / (hi - lo)) * 100
       k[i] = Math.round(kVal * 100) / 100
@@ -187,7 +195,9 @@ export default class TechnicalAnalysis {
         }
       }
     }
-    if (cur != null) clusters.push(cur)
+    if (cur != null) {
+      clusters.push(cur)
+    }
 
     // Step 3 — Score each cluster
     const result: Types.SRLevel[] = []
@@ -207,14 +217,19 @@ export default class TechnicalAnalysis {
       }
 
       // Must have ≥2 swing points OR ≥3 candle touches to qualify
-      if (swingCount < 2 && candleTouches < 3) continue
+      if (swingCount < 2 && candleTouches < 3) {
+        continue
+      }
 
       // Total score: each swing counts double (stronger signal than a candle touch)
       const totalScore = swingCount * 2 + candleTouches
 
       const type: 'support' | 'resistance' = rep < currentClose ? 'support' : 'resistance'
-      const strength: 'strong' | 'moderate' | 'weak' =
-        totalScore >= 8 ? 'strong' : totalScore >= 4 ? 'moderate' : 'weak'
+      const strength: 'strong' | 'moderate' | 'weak' = totalScore >= 8
+        ? 'strong'
+        : totalScore >= 4
+        ? 'moderate'
+        : 'weak'
 
       result.push({
         price: Math.round(rep * 100) / 100,
@@ -239,7 +254,9 @@ export default class TechnicalAnalysis {
   // ─── Fibonacci Retracement ───────────────────────────────────────────────
 
   static calculateFibonacci(rows: OhlcRow[]): Types.FibonacciData | null {
-    if (rows.length < 2) return null
+    if (rows.length < 2) {
+      return null
+    }
 
     let swingHighIdx = 0
     let swingLowIdx = 0
@@ -258,7 +275,9 @@ export default class TechnicalAnalysis {
     }
 
     const range = swingHigh - swingLow
-    if (range <= 0) return null
+    if (range <= 0) {
+      return null
+    }
 
     const trend: 'up' | 'down' = swingHighIdx > swingLowIdx ? 'up' : 'down'
     const ratios = [
@@ -272,9 +291,7 @@ export default class TechnicalAnalysis {
     ]
 
     const levels: Types.FibonacciLevel[] = ratios.map(({ ratio, label }) => {
-      const price = trend === 'up'
-        ? swingHigh - ratio * range
-        : swingLow + ratio * range
+      const price = trend === 'up' ? swingHigh - ratio * range : swingLow + ratio * range
       return { ratio, label, price: Math.round(price * 100) / 100 }
     })
 
@@ -307,13 +324,17 @@ export default class TechnicalAnalysis {
     for (let i = startIdx + 2; i < rows.length - 2; i++) {
       const r = rows[i]!
       // Swing low: lower than 2 bars on each side
-      if (r.low < rows[i - 1]!.low && r.low < rows[i - 2]!.low &&
-          r.low < rows[i + 1]!.low && r.low < rows[i + 2]!.low) {
+      if (
+        r.low < rows[i - 1]!.low && r.low < rows[i - 2]!.low &&
+        r.low < rows[i + 1]!.low && r.low < rows[i + 2]!.low
+      ) {
         priceLows.push({ idx: i, price: r.low })
       }
       // Swing high: higher than 2 bars on each side
-      if (r.high > rows[i - 1]!.high && r.high > rows[i - 2]!.high &&
-          r.high > rows[i + 1]!.high && r.high > rows[i + 2]!.high) {
+      if (
+        r.high > rows[i - 1]!.high && r.high > rows[i - 2]!.high &&
+        r.high > rows[i + 1]!.high && r.high > rows[i + 2]!.high
+      ) {
         priceHighs.push({ idx: i, price: r.high })
       }
     }
@@ -332,11 +353,17 @@ export default class TechnicalAnalysis {
           const prev = priceLows[j]!
           const indPrev = values[prev.idx]
           const indCurr = values[curr.idx]
-          if (indPrev == null || indCurr == null) continue
+          if (indPrev == null || indCurr == null) {
+            continue
+          }
           // RSI zone filter: bullish only valid if RSI < 40 (near oversold)
-          if (name === 'rsi' && indCurr >= 40) continue
+          if (name === 'rsi' && indCurr >= 40) {
+            continue
+          }
           // Minimum threshold: require at least 3 points RSI difference
-          if (name === 'rsi' && Math.abs(indCurr - indPrev) < 3) continue
+          if (name === 'rsi' && Math.abs(indCurr - indPrev) < 3) {
+            continue
+          }
           if (curr.price < prev.price && indCurr > indPrev) {
             signals.push({
               type: 'bullish',
@@ -360,11 +387,17 @@ export default class TechnicalAnalysis {
           const prev = priceHighs[j]!
           const indPrev = values[prev.idx]
           const indCurr = values[curr.idx]
-          if (indPrev == null || indCurr == null) continue
+          if (indPrev == null || indCurr == null) {
+            continue
+          }
           // RSI zone filter: bearish only valid if RSI > 60 (near overbought)
-          if (name === 'rsi' && indCurr <= 60) continue
+          if (name === 'rsi' && indCurr <= 60) {
+            continue
+          }
           // Minimum threshold: require at least 3 points RSI difference
-          if (name === 'rsi' && Math.abs(indCurr - indPrev) < 3) continue
+          if (name === 'rsi' && Math.abs(indCurr - indPrev) < 3) {
+            continue
+          }
           if (curr.price > prev.price && indCurr < indPrev) {
             signals.push({
               type: 'bearish',

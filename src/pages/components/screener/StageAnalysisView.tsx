@@ -9,12 +9,6 @@ import * as Hooks from '@app/pages/hooks/index.ts'
 import * as Utils from '@app/pages/utils/index.ts'
 import type * as Types from '@app/pages/Types.ts'
 
-const _STAGE_LABELS: Record<Types.StageNumber, string> = {
-  1: 'Stage 1 – Basing',
-  2: 'Stage 2 – Advancing',
-  3: 'Stage 3 – Topping',
-  4: 'Stage 4 – Declining'
-}
 const STAGE_COLORS: Record<Types.StageNumber, string> = {
   1: 'var(--idx-accent)',
   2: 'var(--idx-up)',

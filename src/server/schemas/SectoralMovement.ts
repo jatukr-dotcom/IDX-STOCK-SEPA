@@ -9,7 +9,7 @@
 import { integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 
 export const sectoralMovement = sqliteTable('sectoral_movement', {
-  id: text('id').primaryKey(),          // "{year}_{month}_{sectorCode}"
+  id: text('id').primaryKey(), // "{year}_{month}_{sectorCode}"
   year: integer('year').notNull(),
   month: integer('month').notNull(),
   sectorCode: text('sector_code'),

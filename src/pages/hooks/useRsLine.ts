@@ -21,7 +21,7 @@ export function useRsLine(onlyNewHigh = false) {
     const opts = signal ? { signal } : undefined
     const query: Record<string, string | number> = {}
     if (onlyNewHigh) {
-      query.onlyNewHigh = '1'
+      query['onlyNewHigh'] = '1'
     }
     Hooks.fetchApi<Types.RsLineResponse>('/api/screener/rs-line', query, opts)
       .then((result) => {

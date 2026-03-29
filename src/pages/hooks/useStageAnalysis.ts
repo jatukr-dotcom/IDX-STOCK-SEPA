@@ -20,7 +20,7 @@ export function useStageAnalysis(stage?: Types.StageNumber) {
     setError(null)
     const query: Record<string, string | number> = {}
     if (stage != null) {
-      query.stage = stage
+      query['stage'] = stage
     }
     const opts = signal ? { signal } : undefined
     Hooks.fetchApi<Types.StageAnalysisResponse>('/api/screener/stage-analysis', query, opts)

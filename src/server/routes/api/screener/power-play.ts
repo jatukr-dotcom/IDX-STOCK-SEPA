@@ -9,7 +9,12 @@
 import type { Context } from '@neabyte/deserve'
 import { and, asc, desc, gte, lte } from 'drizzle-orm'
 import Database from '@app/server/Database.ts'
-import { calcMA, calcMA200SlopePct, determineStageConfirmed, returnPct } from '@app/server/StageAnalysisHelper.ts'
+import {
+  calcMA,
+  calcMA200SlopePct,
+  determineStageConfirmed,
+  returnPct
+} from '@app/server/StageAnalysisHelper.ts'
 import Utils from '@app/server/Utils.ts'
 import * as Schemas from '@app/server/schemas/index.ts'
 import type * as Types from '@app/server/Types.ts'
@@ -70,7 +75,7 @@ function detectSetup(rows: OhlcEntry[]): SetupResult {
     const avgRecentVol = avgVol(recent)
     const dryUpPct = avgPriorVol > 0 ? ((avgPriorVol - avgRecentVol) / avgPriorVol) * 100 : 0
 
-    const currentPrice = rows[rows.length - 1].close
+    const currentPrice = rows[rows.length - 1]!.close
     const nearBreakout = currentPrice >= wHigh * 0.98
 
     return {
@@ -100,7 +105,7 @@ function detectSetup(rows: OhlcEntry[]): SetupResult {
       continue
     }
 
-    const currentPrice = rows[rows.length - 1].close
+    const currentPrice = rows[rows.length - 1]!.close
     const pctAboveLow = wLow > 0 ? ((currentPrice - wLow) / wLow) * 100 : Infinity
     if (pctAboveLow > 3) {
       continue // must be near base low
@@ -188,16 +193,16 @@ export async function GET(ctx: Context) {
     if (rows.length < 20) {
       continue
     }
-    const price = rows[rows.length - 1].close
+    const price = rows[rows.length - 1]!.close
     const r3m = rows.length >= 63
-      ? returnPct(price, rows[rows.length - 63].close)
-      : returnPct(price, rows[0].close)
+      ? returnPct(price, rows[rows.length - 63]!.close)
+      : returnPct(price, rows[0]!.close)
     if (r3m == null) {
       continue
     }
-    const r6m = rows.length >= 126 ? returnPct(price, rows[rows.length - 126].close) : null
-    const r9m = rows.length >= 189 ? returnPct(price, rows[rows.length - 189].close) : null
-    const r12m = rows.length >= 252 ? returnPct(price, rows[rows.length - 252].close) : null
+    const r6m = rows.length >= 126 ? returnPct(price, rows[rows.length - 126]!.close) : null
+    const r9m = rows.length >= 189 ? returnPct(price, rows[rows.length - 189]!.close) : null
+    const r12m = rows.length >= 252 ? returnPct(price, rows[rows.length - 252]!.close) : null
     let rsScore = r3m * 0.4
     let w = 0.4
     if (r6m != null) {
