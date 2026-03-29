@@ -52,9 +52,9 @@ function calcMFI(
   let posFlow = 0
   let negFlow = 0
   for (let i = 1; i < slice.length; i++) {
-    const tp = (slice[i].high + slice[i].low + slice[i].close) / 3
-    const prevTp = (slice[i - 1].high + slice[i - 1].low + slice[i - 1].close) / 3
-    const mf = tp * slice[i].volume
+    const tp = (slice[i]!.high + slice[i]!.low + slice[i]!.close) / 3
+    const prevTp = (slice[i - 1]!.high + slice[i - 1]!.low + slice[i - 1]!.close) / 3
+    const mf = tp * slice[i]!.volume
     if (tp > prevTp) {
       posFlow += mf
     } else {
@@ -76,10 +76,10 @@ function calcOBVSeries(rows: { close: number; volume: number }[]): number[] {
       result.push(0)
       continue
     }
-    if (rows[i].close > rows[i - 1].close) {
-      obv += rows[i].volume
-    } else if (rows[i].close < rows[i - 1].close) {
-      obv -= rows[i].volume
+    if (rows[i]!.close > rows[i - 1]!.close) {
+      obv += rows[i]!.volume
+    } else if (rows[i]!.close < rows[i - 1]!.close) {
+      obv -= rows[i]!.volume
     }
     result.push(obv)
   }
@@ -91,8 +91,8 @@ function calcOBVTrend(obvSeries: number[]): 'up' | 'down' | 'flat' {
     return 'flat'
   }
   const recent = obvSeries.slice(-20)
-  const first = recent[0]
-  const last = recent[recent.length - 1]
+  const first = recent[0]!
+  const last = recent[recent.length - 1]!
   const diff = last - first
   const scale = Math.abs(first) || 1
   const pct = diff / scale

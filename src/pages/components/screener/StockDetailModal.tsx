@@ -1378,7 +1378,9 @@ export default function StockDetailModal({
                                     tickFormatter={(v: number) => v != null ? v.toFixed(1) : ''}
                                   />
                                   <Tooltip
-                                    formatter={(v: unknown) => (typeof v === 'number' ? v.toFixed(3) : '-')}
+                                    formatter={(
+                                      v: unknown
+                                    ) => (typeof v === 'number' ? v.toFixed(3) : '-')}
                                     contentStyle={{
                                       fontSize: 11,
                                       background: 'var(--idx-bg)',
@@ -1451,7 +1453,9 @@ export default function StockDetailModal({
                                     width={35}
                                   />
                                   <Tooltip
-                                    formatter={(v: unknown) => (typeof v === 'number' ? v.toFixed(1) : '-')}
+                                    formatter={(
+                                      v: unknown
+                                    ) => (typeof v === 'number' ? v.toFixed(1) : '-')}
                                     contentStyle={{
                                       fontSize: 11,
                                       background: 'var(--idx-bg)',

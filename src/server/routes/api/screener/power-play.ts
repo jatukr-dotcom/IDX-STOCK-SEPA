@@ -248,7 +248,7 @@ export async function GET(ctx: Context) {
     }
 
     const closes = rows.map((r) => r.close)
-    const price = closes[closes.length - 1]
+    const price = closes[closes.length - 1]!
     const ma50 = calcMA(closes, 50)
     const ma150 = calcMA(closes, 150)
     const ma200 = calcMA(closes, 200)

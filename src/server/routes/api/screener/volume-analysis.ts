@@ -49,9 +49,9 @@ function calcMFI14(
   let posFlow = 0
   let negFlow = 0
   for (let i = 1; i < slice.length; i++) {
-    const tp = (slice[i].high + slice[i].low + slice[i].close) / 3
-    const prevTp = (slice[i - 1].high + slice[i - 1].low + slice[i - 1].close) / 3
-    const mf = tp * slice[i].volume
+    const tp = (slice[i]!.high + slice[i]!.low + slice[i]!.close) / 3
+    const prevTp = (slice[i - 1]!.high + slice[i - 1]!.low + slice[i - 1]!.close) / 3
+    const mf = tp * slice[i]!.volume
     if (tp > prevTp) {
       posFlow += mf
     } else {
@@ -75,16 +75,16 @@ function calcOBVTrend(rows: { close: number; volume: number }[]): 'up' | 'down' 
       obvSeries.push(0)
       continue
     }
-    if (rows[i].close > rows[i - 1].close) {
-      obv += rows[i].volume
-    } else if (rows[i].close < rows[i - 1].close) {
-      obv -= rows[i].volume
+    if (rows[i]!.close > rows[i - 1]!.close) {
+      obv += rows[i]!.volume
+    } else if (rows[i]!.close < rows[i - 1]!.close) {
+      obv -= rows[i]!.volume
     }
     obvSeries.push(obv)
   }
   const recent = obvSeries.slice(-20)
-  const first = recent[0]
-  const last = recent[recent.length - 1]
+  const first = recent[0]!
+  const last = recent[recent.length - 1]!
   const scale = Math.abs(first) || 1
   const pct = (last - first) / scale
   if (pct > 0.05) {
@@ -120,16 +120,16 @@ function detectVCP(
 
   let contractions = 0
   for (let i = 1; i < analyzed.length; i++) {
-    if (analyzed[i].range < analyzed[i - 1].range * 0.85) {
+    if (analyzed[i]!.range < analyzed[i - 1]!.range * 0.85) {
       contractions++
     }
   }
 
-  const volumeDrying = analyzed[2].avgVol < analyzed[0].avgVol * 0.75
+  const volumeDrying = analyzed[2]!.avgVol < analyzed[0]!.avgVol * 0.75
 
   const last252 = rows.slice(Math.max(0, rows.length - 252))
   const high52w = Math.max(...last252.map((r) => r.high))
-  const currentClose = rows[rows.length - 1].close
+  const currentClose = rows[rows.length - 1]!.close
   const pctFromHigh = high52w > 0 ? ((currentClose - high52w) / high52w) * 100 : -100
   const nearHighs = pctFromHigh >= -20
 
@@ -254,7 +254,7 @@ export async function GET(ctx: Context) {
     }
 
     const fund = screenerMap.get(code)
-    const currentClose = rows[rows.length - 1].close
+    const currentClose = rows[rows.length - 1]!.close
 
     results.push({
       code,

@@ -75,10 +75,7 @@ export async function GET(ctx: Context) {
       end,
       macd: [],
       stochRsi: [],
-      supportResistance: {
-        pivotLevels: { pivot: 0, s1: 0, s2: 0, s3: 0, r1: 0, r2: 0, r3: 0 },
-        swingLevels: []
-      },
+      supportResistance: { currentClose: 0, levels: [] },
       fibonacci: null,
       divergences: []
     }
@@ -106,7 +103,6 @@ export async function GET(ctx: Context) {
     )
     .orderBy(asc(Schemas.summary.date))
 
-  type CleanRow = { date: number; high: number; low: number; close: number }
   const srRows: CleanRow[] = []
   for (const row of srRawRows) {
     const close = row.priceClose != null && Number.isFinite(Number(row.priceClose))

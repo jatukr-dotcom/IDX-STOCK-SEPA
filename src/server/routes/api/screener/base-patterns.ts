@@ -71,7 +71,7 @@ function detectHTF(rows: OhlcEntry[]): PatternResult {
     if (poleStart.length === 0) {
       continue
     }
-    const startClose = poleStart[0].close
+    const startClose = poleStart[0]!.close
     const peakClose = Math.max(...poleStart.map((r) => r.high))
     if (peakClose / startClose < 2.0) {
       continue
@@ -308,7 +308,7 @@ export async function GET(ctx: Context) {
     }
 
     const closes = rows.map((r) => r.close)
-    const price = closes[closes.length - 1]
+    const price = closes[closes.length - 1]!
     const ma50 = calcMA(closes, 50)
     const ma150 = calcMA(closes, 150)
     const ma200 = calcMA(closes, 200)

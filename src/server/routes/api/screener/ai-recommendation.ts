@@ -392,16 +392,16 @@ export async function GET(ctx: Context) {
     }
     const closes = entries.map((e) => e.close)
     const r3m = closes.length >= 63
-      ? returnPct(closes[closes.length - 1], closes[closes.length - 63])
+      ? returnPct(closes[closes.length - 1]!, closes[closes.length - 63]!)
       : null
     const r6m = closes.length >= 126
-      ? returnPct(closes[closes.length - 1], closes[closes.length - 126])
+      ? returnPct(closes[closes.length - 1]!, closes[closes.length - 126]!)
       : null
     const r9m = closes.length >= 189
-      ? returnPct(closes[closes.length - 1], closes[closes.length - 189])
+      ? returnPct(closes[closes.length - 1]!, closes[closes.length - 189]!)
       : null
     const r12m = closes.length >= 252
-      ? returnPct(closes[closes.length - 1], closes[closes.length - 252])
+      ? returnPct(closes[closes.length - 1]!, closes[closes.length - 252]!)
       : null
     const rsScore = (r3m ?? 0) * 0.40 + (r6m ?? 0) * 0.20 + (r9m ?? 0) * 0.20 +
       (r12m ?? 0) * 0.20
@@ -410,7 +410,7 @@ export async function GET(ctx: Context) {
   const sortedByRs = Array.from(rsScores.entries()).sort((a, b) => b[1].score - a[1].score)
   for (let i = 0; i < sortedByRs.length; i++) {
     const pct = Math.round(((i / sortedByRs.length) * 99) + 1)
-    rsScores.get(sortedByRs[i][0])!.rank = pct
+    rsScores.get(sortedByRs[i]![0])!.rank = pct
   }
 
   // ── Process each stock ───────────────────────────────────────────────────
@@ -421,7 +421,7 @@ export async function GET(ctx: Context) {
       continue
     }
 
-    const lastEntry = entries[entries.length - 1]
+    const lastEntry = entries[entries.length - 1]!
     const price = lastEntry.close
     const lastDate = lastEntry.date
     const sc = screenerMap.get(code)
@@ -463,7 +463,7 @@ export async function GET(ctx: Context) {
     }
 
     const avgVol20d = volumes.slice(-20).reduce((a, b) => a + b, 0) / 20
-    if (volumes[volumes.length - 1] > avgVol20d * 10) {
+    if (volumes[volumes.length - 1]! > avgVol20d * 10) {
       gorenganScore += 10
     }
 
@@ -599,7 +599,7 @@ export async function GET(ctx: Context) {
     if (entries.length >= 15) {
       const ma10 = calcMA(closes, 10)
       const maxDownVol10d = Math.max(
-        ...entries.slice(-10).filter((e, i, a) => i > 0 && e.close < a[i - 1].close).map((e) =>
+        ...entries.slice(-10).filter((e, i, a) => i > 0 && e.close < a[i - 1]!.close).map((e) =>
           e.volume
         ).concat([0])
       )
@@ -607,8 +607,8 @@ export async function GET(ctx: Context) {
         if (i <= 0) {
           continue
         }
-        const prev = entries[i - 1]
-        const cur = entries[i]
+        const prev = entries[i - 1]!
+        const cur = entries[i]!
         if (
           cur.close > prev.close && cur.volume > maxDownVol10d && ma10 != null &&
           cur.close >= ma10
@@ -659,9 +659,9 @@ export async function GET(ctx: Context) {
     if (hasPocketPivot) {
       techScore += 10
     }
-    if (patternType === 'htf') {
+    if ((patternType as Types.BasePatternType) === 'htf') {
       techScore += 6
-    } else if (patternType === 'cup-handle') {
+    } else if ((patternType as Types.BasePatternType) === 'cup-handle') {
       techScore += 4
     } else if (patternType === 'flat') {
       techScore += 2
@@ -718,9 +718,9 @@ export async function GET(ctx: Context) {
     }
     if (patternType !== 'none') {
       reasons.push(
-        patternType === 'htf'
+        (patternType as Types.BasePatternType) === 'htf'
           ? 'High Tight Flag pattern'
-          : patternType === 'cup-handle'
+          : (patternType as Types.BasePatternType) === 'cup-handle'
           ? 'Cup-and-Handle pattern'
           : 'Flat Base pattern'
       )
