@@ -150,6 +150,12 @@ export default function Screener() {
     error: aiRecError,
     refetch: refetchAiRec
   } = Hooks.useAiRecommendation({ mode: aiRecMode })
+  const {
+    data: breakoutsData,
+    loading: breakoutsLoading,
+    error: breakoutsError,
+    refetch: refetchBreakouts
+  } = Hooks.useBreakouts()
 
   const handleParamsChange = useCallback((partial: Partial<Types.CandidatesParams>) => {
     setParams((prevParams: Types.CandidatesParams) => ({ ...prevParams, ...partial, offset: 0 }))
@@ -314,6 +320,14 @@ export default function Screener() {
           >
             <Brain size={16} aria-hidden />
             <span>AI Rekomendasi</span>
+          </button>
+          <button
+            type='button'
+            className={`idx-tab idx-tab-inline ${mainTab === 'breakouts' ? 'idx-tab-active' : ''}`}
+            onClick={() => setMainTab('breakouts')}
+          >
+            <TrendingUp size={16} aria-hidden />
+            <span>Breakout</span>
           </button>
           <button
             type='button'
@@ -502,6 +516,17 @@ export default function Screener() {
               emptyMessage='Belum ada emiten di watchlist. Dari tab Analisa Fundamental, klik bintang di baris kandidat untuk menambah.'
               watchlistCodes={watchlistCodes}
               onWatchlistToggle={toggleWatchlist}
+            />
+          </div>
+        )}
+        {mainTab === 'breakouts' && (
+          <div className='idx-mt-24'>
+            <ScreenerComps.BreakoutView
+              data={breakoutsData}
+              loading={breakoutsLoading}
+              error={breakoutsError}
+              onRefetch={refetchBreakouts}
+              onRowClick={handleRowClick}
             />
           </div>
         )}

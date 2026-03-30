@@ -183,6 +183,7 @@ export type MainAnalysisTab =
   | 'momentum'
   | 'aiRec'
   | 'stocklist'
+  | 'breakouts'
 
 export interface OhlcApiRow extends StockDetailOhlcRow {
   bidVolume: number | null
@@ -752,6 +753,41 @@ export interface TechnicalAnalysisApiResponse {
   supportResistance: SupportResistanceData
   fibonacci: FibonacciData | null
   divergences: DivergenceSignal[]
+}
+
+export interface BreakoutRow {
+  code: string
+  name: string | null
+  sector: string | null
+  price: number
+  stage: number
+  rsRank: number
+  breakoutSignal: 'breakout' | 'approaching' | 'none'
+  pivotPoint: number | null
+  breakoutVolRatio: number | null
+  atr: number | null
+  atrPct: number | null
+  bbSqueeze: boolean
+  bbWidth: number | null
+  vcpIsVcp: boolean
+  shakeoutDetected: boolean
+  patternType: string
+  trendCriteriaCount: number
+  pctFrom52wHigh: number | null
+}
+
+export interface BreakoutsResponse {
+  date: number
+  totalCount: number
+  data: BreakoutRow[]
+}
+
+export interface BreakoutViewProps {
+  data: BreakoutsResponse | null
+  loading: boolean
+  error: string | null
+  onRefetch: () => void
+  onRowClick?: (code: string) => void
 }
 
 export interface StockListItem {

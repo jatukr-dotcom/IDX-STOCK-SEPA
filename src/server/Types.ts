@@ -49,6 +49,33 @@ export interface ScreenerApiResponse {
   results?: ScreenerResult[]
 }
 
+export interface BreakoutRow {
+  code: string
+  name: string | null
+  sector: string | null
+  price: number
+  stage: number
+  rsRank: number
+  breakoutSignal: 'breakout' | 'approaching' | 'none'
+  pivotPoint: number | null
+  breakoutVolRatio: number | null
+  atr: number | null
+  atrPct: number | null
+  bbSqueeze: boolean
+  bbWidth: number | null
+  vcpIsVcp: boolean
+  shakeoutDetected: boolean
+  patternType: string
+  trendCriteriaCount: number
+  pctFrom52wHigh: number | null
+}
+
+export interface BreakoutsResponse {
+  date: number
+  totalCount: number
+  data: BreakoutRow[]
+}
+
 export interface StockSummaryItem {
   Date?: string
   StockCode?: string

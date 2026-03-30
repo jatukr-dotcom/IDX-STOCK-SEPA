@@ -10,20 +10,33 @@ Screener saham Indonesia dengan metode **Momentum Masters** (Minervini, Ryan, Za
 
 ## Fitur Utama
 
+### Web UI
 - **SEPA Candidates** — Filter kandidat saham berdasarkan kriteria Minervini SEPA: trend template, RS ranking, EPS growth, liquidity filter.
 - **Trend Template** — 8 kriteria teknikal Minervini (MA50 > MA150 > MA200, harga di atas semua MA, dll).
 - **RS Ranking** — Peringkat Relative Strength saham terhadap seluruh pasar IDX.
 - **New Highs 52W** — Daftar saham mencetak harga tertinggi 52 minggu.
-- **Volume A/D** — Analisis volume (CMF, MFI, OBV, ADL, net foreign) + deteksi VCP otomatis.
-- **Stage Analysis** — Klasifikasi otomatis Stage 1–4 Minervini untuk setiap saham.
+- **Volume A/D** — Analisis volume (CMF, MFI, OBV, ADL, net foreign 20h, volume surge) + deteksi VCP + 5-criteria model akumulasi/distribusi.
+- **Stage Analysis** — Klasifikasi otomatis Stage 1–4 Minervini dengan konfirmasi 3-of-5 hari untuk mencegah flipping.
 - **Pocket Pivot** — Deteksi sinyal beli berbasis volume David Ryan (vol up-day > max down-day vol 10 hari).
 - **RS Line New High** — Deteksi RS Line (harga / IHSG proxy) mencetak new high 52 minggu — leading indicator terkuat.
 - **Base Pattern Detection** — Identifikasi Flat Base, Cup-and-Handle, dan High Tight Flag beserta base count.
 - **Power Play / Low Cheat** — Setup entry Minervini: konsolidasi ketat + volume kering sebelum breakout.
-- **EPS Historis** — EPS per kuartal 2022–2025, dihitung dari `profitAttrOwner / shares` (year-end basis).
+- **🆕 Breakout Screener** — Deteksi saham yang breakout dari pivot base (volume ≥1.5× avg50d) atau mendekati pivot (dalam 3%), dengan ATR(14) dan Bollinger Band Squeeze.
+- **AI Rekomendasi** — Skor terpadu teknikal + fundamental, narasi Claude AI (opsional), export PDF.
 - **Export PDF** — Semua tab utama bisa diekspor ke PDF (per saham, SEPA bulk, VCP bulk, Momentum Masters).
 - **Watchlist** — Simpan saham favorit dengan bintang.
 - **API + SQLite** — Backend Deno, data di SQLite, cron tiap jam fetch data IDX.
+
+### Terminal Screener (`screen.ts`)
+- **Lebih cepat dari web UI** — query langsung ke SQLite, semua kalkulasi in-process
+- **Semua sinyal Minervini** — Stage, Trend Template, RS Rank, EPS, VCP, Pocket Pivot, Cup-Handle, Flat Base, HTF, Power Play
+- **5-criteria volume model** — CMF, MFI, OBV, Volume Surge, Foreign Flow (net asing IDX)
+- **Sinyal entry presisi** — Breakout detection (BKT), Approaching pivot (APR), Pullback EMA21 (PB), Shakeout
+- **Sinyal exit** — Climax Top, Upper BB 3d+, 7% Stop Breach
+- **Quant signals** — ATR(14), Bollinger Band Squeeze, Multi-Factor Momentum (0–100), Sharpe Ratio
+- **Position sizing** — hitung lot berdasarkan ATR stop + portfolio size
+- **Workflow tools** — Watchlist (save/load/compare), CSV export, Alert system, Backtest sederhana
+- **Mode & filter** — `breakout`, `vcp`, `pullback`, `momentum`, `technical`, `fundamental`, `combined`
 
 ---
 
@@ -373,6 +386,79 @@ Minervini mensyaratkan EPS growth minimal **25% YoY** selama setidaknya 2 kuarta
 
 ---
 
+### Breakout Screener
+
+Tab **Breakout** mendeteksi saham yang sedang atau akan segera breakout dari pola konsolidasi, menggunakan pivot point berbasis pola yang terdeteksi.
+
+**Pivot Point (basis pola):**
+| Pola | Lookback Pivot |
+|---|---|
+| High Tight Flag | 15 hari terakhir |
+| VCP | 20 hari terakhir |
+| Cup-and-Handle | 5 hari terakhir (handle) |
+| Flat Base / Default | 25 hari terakhir |
+
+**Sinyal Breakout:**
+```
+BREAKOUT    = Close > Pivot AND Volume hari ini > 1.5× avg volume 50 hari
+MENDEKATI   = Harga dalam 3% di bawah pivot (belum breakout)
+```
+
+**Indikator pendukung:**
+- **ATR(14)** — Average True Range: mengukur volatilitas harian rata-rata (digunakan untuk position sizing)
+- **BB Squeeze** — Bollinger Band width di level 6 bulan (126 hari) terendah → volatilitas terkompresi, sering mendahului pergerakan besar
+- **Shakeout** — Harga sempat turun di bawah MA50 intraday tapi close kembali di atas MA50 (tanda supply habis)
+
+**Logika filter:**
+- Hanya Stage 1 dan 2 (Stage 3/4 di-exclude)
+- Gorengan filter aktif (notation X, market cap < 100B)
+- Breakout ditampilkan pertama, diurutkan RS Rank tertinggi
+
+---
+
+### Quant Signals (Terminal Screener)
+
+#### Multi-Factor Momentum Score (0–100)
+Skor komposit yang menggabungkan lima faktor dengan bobot berbeda:
+
+| Faktor | Bobot | Formula |
+|---|---|---|
+| RS Rank | 30% | rsRank / 99 × 30 |
+| EPS Score | 20% | epsScore / 15 × 20 |
+| Trend Template | 20% | trendCriteriaCount / 8 × 20 |
+| Volume Criteria | 15% | volCriteriaCount / 5 × 15 |
+| Foreign Flow | 15% | (foreignNetPct + 10) / 20 × 15, capped [-10,+10] |
+
+#### ATR & Position Sizing
+```
+ATR(14) = rata-rata True Range 14 hari
+TR      = max(High−Low, |High−PrevClose|, |Low−PrevClose|)
+
+Stop Distance = max(ATR × 1.5, Harga × 7%)
+Risk per Trade = Portfolio × RiskPct%
+Lot            = floor(Risk per Trade / Stop Distance / Harga / 100) × 100 lembar
+```
+
+#### Bollinger Band Squeeze
+```
+BB Width = (Upper − Lower) / Middle × 100
+           = 4 × StdDev(20) / SMA(20) × 100
+
+BB Squeeze = BB Width saat ini ≤ BB Width minimum 126 hari terakhir
+```
+Squeeze adalah kondisi saat volatilitas terkompresi ke level paling sempit dalam 6 bulan — sering mendahului gerakan besar (breakout atau breakdown).
+
+#### Sharpe Ratio (Simplified)
+```
+Sharpe = (Mean Daily Return − Risk Free) / StdDev × √252
+
+Risk Free = 6% / 252 ≈ 0.0238% per hari (BI rate proxy)
+Window    = 63 hari (3 bulan)
+```
+Sharpe > 1.0 = return bagus relatif terhadap risikonya.
+
+---
+
 ### AI Rekomendasi Saham
 
 Fitur AI Rekomendasi menggabungkan **semua sinyal teknikal dan fundamental** menjadi satu skor terpadu, membantu pengguna menemukan kandidat saham terbaik tanpa harus menganalisis setiap tab secara manual. Sistem ini dilengkapi dengan:
@@ -439,6 +525,129 @@ Setiap rekomendasi menampilkan:
 - **Daftar alasan terperinci**: semua sinyal yang berkontribusi ke skor (klik baris untuk expand)
 - **Gorengan Score**: transparansi filter keamanan
 - **PDF Export**: landscape A4 dengan tabel lengkap + narasi AI di halaman kedua (jika tersedia)
+
+---
+
+## Terminal Screener (`screen.ts`)
+
+Alternatif screening via terminal — lebih cepat dari web UI karena query langsung ke SQLite.
+
+### Cara Menjalankan
+
+```bash
+# Dari root direktori project
+deno run -A screen.ts
+```
+
+### Opsi Lengkap
+
+```
+--mode technical|fundamental|combined|momentum|breakout|vcp|pullback
+--top N              (default: 15)
+--min-score N        (default: 0)
+--sector "nama"      (filter sektor)
+--sort rs|eps|volume|foreign|momentum|atr
+--compact            (tabel minimal)
+--detail KODE        (checklist lengkap 1 saham)
+--portfolio N        (ukuran portofolio IDR, untuk position sizing)
+--risk-pct N         (risiko per trade %, default 1)
+--export csv         (output CSV)
+--output file.csv    (simpan ke file)
+--watchlist save|load|show|compare <nama>
+--alert set|list|clear
+--backtest KODE --days N
+```
+
+### Contoh Penggunaan
+
+```bash
+# Screening harian — top 20 saham terbaik
+deno run -A screen.ts --top 20
+
+# Hanya saham yang sedang breakout
+deno run -A screen.ts --mode breakout
+
+# Hanya VCP
+deno run -A screen.ts --mode vcp
+
+# Pullback ke EMA21 (beli di area support)
+deno run -A screen.ts --mode pullback
+
+# Urutkan berdasarkan Momentum Factor
+deno run -A screen.ts --mode momentum --top 15
+
+# Filter sektor + minimum score
+deno run -A screen.ts --sector "Financials" --min-score 65
+
+# Detail saham + position sizing
+deno run -A screen.ts --detail BBRI --portfolio 100000000 --risk-pct 1
+
+# Urutkan RS Rank tertinggi
+deno run -A screen.ts --sort rs --top 20
+
+# Export ke CSV
+deno run -A screen.ts --export csv --output screening.csv
+
+# Simpan hasil ke watchlist
+deno run -A screen.ts --watchlist save harian
+
+# Bandingkan skor sekarang vs tersimpan
+deno run -A screen.ts --watchlist compare harian
+
+# Set alert harga
+deno run -A screen.ts --alert set BBRI price_above 5000
+deno run -A screen.ts --alert set TLKM rs_above 80
+deno run -A screen.ts --alert list
+
+# Cek alert otomatis (saat run normal)
+deno run -A screen.ts
+
+# Backtest sederhana
+deno run -A screen.ts --backtest BBRI --days 30
+```
+
+### Interpretasi Output
+
+```
+#   Kode   Nama                  Score  Tech  Fund  Stage  RS  Pola  Entry Signals
+1   BBRI   Bank Rakyat Indonesia  75.2  78.5  70.1  S2      85  VCP   BKT, PP, RS-NH, Akum
+```
+
+| Kolom | Arti |
+|---|---|
+| Score | Skor sesuai mode (Combined = 60% Tech + 40% Fund) |
+| Stage | S2 = ideal (hijau), S1 = ok (kuning), S3/S4 = dihindari |
+| RS | Relative Strength Rank 1–99 (cari ≥70, terbaik ≥85) |
+| Pola | VCP (ungu) atau — |
+| BKT | Breakout aktif (pivot terlampaui + vol ≥1.5×) |
+| APR | Mendekati pivot (dalam 3%) |
+| PP | Pocket Pivot (dalam 5 hari terakhir) |
+| RS-NH | RS Line New High |
+| PB | Pullback ke EMA21 |
+| Akum | Volume Akumulasi (CMF + OBV + MFI) |
+| Shakeout | Undercut MA50 dan recover |
+
+### Alur Screening Harian
+
+```bash
+# 1. Cek alert dari kemarin
+deno run -A screen.ts
+
+# 2. Lihat saham breakout hari ini
+deno run -A screen.ts --mode breakout
+
+# 3. Lihat VCP setup yang terbentuk
+deno run -A screen.ts --mode vcp
+
+# 4. Urutkan momentum terkuat
+deno run -A screen.ts --mode momentum --top 20
+
+# 5. Detail saham menarik + position sizing
+deno run -A screen.ts --detail KODE --portfolio 100000000
+
+# 6. Simpan kandidat ke watchlist
+deno run -A screen.ts --watchlist save $(date +%Y%m%d)
+```
 
 ---
 

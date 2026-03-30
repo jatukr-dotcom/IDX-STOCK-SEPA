@@ -25,3 +25,4 @@ export { default as BasePatternsView } from '@app/pages/components/screener/Base
 export { default as PowerPlayView } from '@app/pages/components/screener/PowerPlayView.tsx'
 export { default as AiRecommendationView } from '@app/pages/components/screener/AiRecommendationView.tsx'
 export { default as StockListView } from '@app/pages/components/screener/StockListView.tsx'
+export { default as BreakoutView } from '@app/pages/components/screener/BreakoutView.tsx'
