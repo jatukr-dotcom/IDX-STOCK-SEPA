@@ -814,6 +814,22 @@ deno task ui:dev
 
 ---
 
+## Changelog
+
+### 2026-03-30 — Perbaikan Bug `screen.ts`
+
+Lima bug ditemukan dan diperbaiki pada terminal screener:
+
+| # | Fungsi | Bug | Dampak | Perbaikan |
+|---|--------|-----|--------|-----------|
+| 1 | `countBases` | Off-by-one: setelah breakout ditemukan, `i` di-set `winLen+1` lalu `i++` dieksekusi lagi → skip 1 window terlalu jauh | Base count bisa under-count | `i = i + winLen` (tanpa +1, karena `i++` sudah ada) |
+| 2 | `calcBBSqueeze` | Parameter `lookback` (default 126 hari) diabaikan — loop scan seluruh histori data | BB Squeeze sangat jarang terdeteksi karena all-time minimum terlalu sulit dilampaui | Loop mulai dari `max(period, closes.length - lookback)` |
+| 3 | `volumeSignal` | `accumScoreSimple` double-count CMF: dua dari tiga kriteria buatan berbasis CMF saja (`vC1: cmf>0` dan `cmf>0.05`) | CMF>0.05 saja → sinyal 'akumulasi' tanpa konfirmasi MFI/OBV (false positive) | Gunakan `[vC1, vC2, vC3]` (CMF + MFI + OBV) — tiga indikator independen |
+| 4 | `--mode momentum` | Filter `--min-score` dan default sort menggunakan `combinedScore`, bukan `momentumFactor` | `--mode momentum` tidak benar-benar mem-filter dan men-sort berdasarkan Momentum Factor | Semua jalur sort/filter cek `argMode === 'momentum'` → gunakan `momentumFactor` |
+| 5 | Tampilan tabel | Kolom Score pada tabel compact & full menggunakan `combinedScore` untuk mode momentum | Kolom Score tampilkan angka yang salah di output terminal `--mode momentum` | Konsisten: `argMode === 'momentum'` → tampilkan `momentumFactor` |
+
+---
+
 ## Lisensi
 
 Proyek ini dilisensikan di bawah MIT. Lihat berkas [LICENSE](LICENSE) untuk detail.

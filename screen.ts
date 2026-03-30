@@ -351,7 +351,7 @@ function countBases(rows: OhlcEntry[]): number {
       if (breakoutHigh > wHigh && breakoutHigh > prevHigh) {
         bases++
         prevHigh = breakoutHigh
-        i = i + winLen + 1
+        i = i + winLen
         break
       }
     }
@@ -404,7 +404,7 @@ function calcBBSqueeze(closes: number[], period = 20, stdMult = 2, lookback = 12
   const currentWidth = calcBBWidth(closes, period, stdMult)
   if (currentWidth == null) return false
   let minWidth = Infinity
-  for (let i = period; i < closes.length - 1; i++) {
+  for (let i = Math.max(period, closes.length - lookback); i < closes.length - 1; i++) {
     const slice = closes.slice(i - period, i)
     if (slice.length < period) continue
     const w = calcBBWidth(slice, period, stdMult)
@@ -935,7 +935,7 @@ for (const [code, entries] of ohlcByCode) {
   const volCriteriaCount = [vC1, vC2, vC3, vC4, vC5].filter(Boolean).length
 
   // Signal determination
-  const accumScoreSimple = [vC1, vC3, cmf != null && cmf > 0.05].filter(Boolean).length
+  const accumScoreSimple = [vC1, vC2, vC3].filter(Boolean).length
   const distC1 = cmf != null && cmf < -0.05
   const distC2 = mfi != null && mfi < 35
   const distC3 = obvTrend === 'down'
@@ -1054,7 +1054,7 @@ for (const [code, entries] of ohlcByCode) {
   const foreignComponent = ((foreignClamped + 10) / 20) * 15
   const momentumFactor = Math.round(rsComponent + epsComponent + trendComponent + volComponent + foreignComponent)
 
-  const sortScore = argMode === 'technical' ? techScore : argMode === 'fundamental' ? finalFundScore : combinedScore
+  const sortScore = argMode === 'technical' ? techScore : argMode === 'fundamental' ? finalFundScore : argMode === 'momentum' ? momentumFactor : combinedScore
   if (sortScore < minScore) continue
 
   // Reasons
@@ -1116,8 +1116,8 @@ filteredResults.sort((a, b) => {
   if (sortBy === 'momentum') return b.momentumFactor - a.momentumFactor
   if (sortBy === 'atr') return (b.atrPct ?? 0) - (a.atrPct ?? 0)
   // default sort by score
-  const sa = argMode === 'technical' ? a.techScore : argMode === 'fundamental' ? a.fundScore : a.combinedScore
-  const sb = argMode === 'technical' ? b.techScore : argMode === 'fundamental' ? b.fundScore : b.combinedScore
+  const sa = argMode === 'technical' ? a.techScore : argMode === 'fundamental' ? a.fundScore : argMode === 'momentum' ? a.momentumFactor : a.combinedScore
+  const sb = argMode === 'technical' ? b.techScore : argMode === 'fundamental' ? b.fundScore : argMode === 'momentum' ? b.momentumFactor : b.combinedScore
   return sb - sa
 })
 
@@ -1289,7 +1289,7 @@ if (compactMode) {
     else if (r.breakoutSignal === 'approaching') signals.push('\x1b[33mAPR\x1b[0m')
     if (r.hasPocketPivot) signals.push('PP')
     if (r.hasRsLineNewHigh) signals.push('RS-NH')
-    const score = argMode === 'technical' ? r.techScore : argMode === 'fundamental' ? r.fundScore : r.combinedScore
+    const score = argMode === 'technical' ? r.techScore : argMode === 'fundamental' ? r.fundScore : argMode === 'momentum' ? r.momentumFactor : r.combinedScore
     const polaLabel = r.patternType === 'htf' ? 'HTF' : r.patternType === 'cup-handle' ? 'Cup' : r.patternType === 'flat' ? 'Flat' : '—'
     console.log(`  ${pad(String(i + 1), 3)} ${pad(r.code, 6)} ${colorScore(score).padStart(12)} ${String(r.rsRank).padStart(3)} ${pad(polaLabel, 7)} ${signals.slice(0, 2).join(', ')}`)
   }
@@ -1315,7 +1315,7 @@ if (compactMode) {
     if (r.volumeSignal === 'distribusi') signals.push('\x1b[31mDist\x1b[0m')
     if (r.sellSignal) signals.push(`\x1b[31m${r.sellSignal}\x1b[0m`)
 
-    const score = argMode === 'technical' ? r.techScore : argMode === 'fundamental' ? r.fundScore : r.combinedScore
+    const score = argMode === 'technical' ? r.techScore : argMode === 'fundamental' ? r.fundScore : argMode === 'momentum' ? r.momentumFactor : r.combinedScore
     const vcpLabel = r.vcpIsVcp ? '\x1b[35mVCP\x1b[0m  ' : pad('—', 5)
     console.log(
       `  ${pad(String(i + 1), 3)} ${pad(r.code, 6)} ${pad(r.name?.slice(0, 22) ?? '-', 22)} ${colorScore(score).padStart(12)} ${r.techScore.toFixed(1).padStart(5)} ${r.fundScore.toFixed(1).padStart(5)} ${colorStage(r.stage).padStart(11)}  ${String(r.rsRank).padStart(3)} ${vcpLabel} ${String(r.momentumFactor).padStart(4)} ${signals.join(', ')}`
