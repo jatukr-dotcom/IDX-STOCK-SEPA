@@ -34,9 +34,10 @@ Screener saham Indonesia dengan metode **Momentum Masters** (Minervini, Ryan, Za
 - **Sinyal entry presisi** — Breakout detection (BKT), Approaching pivot (APR), Pullback EMA21 (PB), Shakeout
 - **Sinyal exit** — Climax Top, Upper BB 3d+, 7% Stop Breach
 - **Quant signals** — ATR(14), Bollinger Band Squeeze, Multi-Factor Momentum (0–100), Sharpe Ratio
+- **Sinyal institusional** — `smt` mode: 6 sinyal jejak asing/institusional (total 100 pts), sinyal hingga STRONG BUY
 - **Position sizing** — hitung lot berdasarkan ATR stop + portfolio size
 - **Workflow tools** — Watchlist (save/load/compare), CSV export, Alert system, Backtest sederhana
-- **Mode & filter** — `breakout`, `vcp`, `pullback`, `momentum`, `technical`, `fundamental`, `combined`
+- **Mode & filter** — `breakout`, `vcp`, `pullback`, `momentum`, `technical`, `fundamental`, `combined`, `smt`
 
 ---
 
@@ -613,11 +614,11 @@ deno run -A screen.ts
 ### Opsi Lengkap
 
 ```
---mode technical|fundamental|combined|momentum|breakout|vcp|pullback
+--mode technical|fundamental|combined|momentum|breakout|vcp|pullback|smt
 --top N              (default: 15)
 --min-score N        (default: 0)
 --sector "nama"      (filter sektor)
---sort rs|eps|volume|foreign|momentum|atr
+--sort rs|eps|volume|foreign|momentum|atr|smt
 --compact            (tabel minimal)
 --detail KODE        (checklist lengkap 1 saham)
 --portfolio N        (ukuran portofolio IDR, untuk position sizing)
@@ -710,13 +711,16 @@ deno run -A screen.ts --mode breakout
 # 3. Lihat VCP setup yang terbentuk
 deno run -A screen.ts --mode vcp
 
-# 4. Urutkan momentum terkuat
+# 4. Cari jejak institusional / asing (Smart Money Tracker)
+deno run -A screen.ts --mode smt --top 20
+
+# 5. Urutkan momentum terkuat
 deno run -A screen.ts --mode momentum --top 20
 
-# 5. Detail saham menarik + position sizing
+# 6. Detail saham menarik + position sizing
 deno run -A screen.ts --detail KODE --portfolio 100000000
 
-# 6. Simpan kandidat ke watchlist
+# 7. Simpan kandidat ke watchlist
 deno run -A screen.ts --watchlist save $(date +%Y%m%d)
 ```
 
@@ -815,6 +819,40 @@ deno task ui:dev
 ---
 
 ## Changelog
+
+### 2026-03-31 — Fitur SMT + Perbaikan 8 Bug
+
+#### Fitur Baru: Smart Money Tracker (`--mode smt`)
+
+Mode terminal screener baru untuk mendeteksi jejak institusional dan asing:
+
+| Sinyal | Pts | Deskripsi |
+|--------|-----|-----------|
+| Foreign Flow Momentum | 30 | Akselerasi net-buy asing 5d vs rata-rata 20d |
+| Foreign Flow Streak | 10 | Hari berturut-turut asing net-buy |
+| OBV Divergence | 15 | OBV naik saat harga turun = akumulasi tersembunyi |
+| Trade Size Profile | 20 | Ukuran transaksi naik = blok institusional |
+| Bid/Offer Pressure | 10 | Bid vol > Offer vol terbaru |
+| Cross-Signal Alignment | 15 | Berapa banyak sinyal di atas aktif serentak |
+
+Sinyal: `≥75 STRONG BUY` · `≥55 BUY` · `≥35 NETRAL` · `≥20 SELL` · `<20 STRONG SELL`
+
+Penggunaan: `deno run -A screen.ts --mode smt` / `--sort smt`
+
+#### Perbaikan Bug
+
+| # | File | Bug | Perbaikan |
+|---|------|-----|-----------|
+| 1 | `BrokerStockMetrics.ts` | `date` kolom pakai `real` → float equality fragile | Ganti ke `integer('date')` |
+| 2 | `BrokerStockMetrics.ts` | `brokerCount` pakai `real` padahal selalu bilangan bulat | Ganti ke `integer('broker_count')` |
+| 3 | `broker-flow.ts` | `stockCode` dimasukkan langsung ke URL IDX tanpa encoding | Tambah `encodeURIComponent(stockCode)` |
+| 4 | `smart-money.ts` | Komentar header: broker bonus "+5 pts" tidak sesuai kode (max 10 pts) | Koreksi komentar |
+| 5 | `SmartMoneyView.tsx` | `onRowClick ?? (() => {})` signature tidak match prop `(code: string) => void` | Ganti ke `(_code: string) => {}` |
+| 6 | `screen.ts` | SMT table: `colorScore().padStart(12)` — ANSI escape merusak lebar kolom | Pad angka dulu → baru wrap warna |
+| 7 | `screen.ts` | Vol-Price Divergence: branch 'OBV up' bisa double-trigger saat `priceTrend === 'down'` | Tambah guard `&& smtPriceTrend !== 'down'` |
+| 8 | `screen.ts` | Help text tidak menyebutkan mode `smt` dan sort `smt` | Tambah `smt` ke daftar `--mode` dan `--sort` |
+
+---
 
 ### 2026-03-30 — Perbaikan Bug `screen.ts`
 
