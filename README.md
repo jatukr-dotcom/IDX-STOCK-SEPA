@@ -459,6 +459,77 @@ Sharpe > 1.0 = return bagus relatif terhadap risikonya.
 
 ---
 
+### Selling Rules — Kapan Harus Keluar (Minervini)
+
+Membeli di titik yang tepat hanya separuh dari trading yang baik. Mengetahui **kapan harus keluar** sama pentingnya. Tiga sinyal exit ini aktif di terminal screener (`screen.ts --detail KODE`) dan hanya berlaku untuk saham Stage 2.
+
+#### 1. Climax Top
+
+**Definisi:** Saham yang sudah naik panjang tiba-tiba mencetak **hari kenaikan harga terbesar sepanjang run-nya**, disertai **volume tertinggi** dalam periode terakhir.
+
+Ini bukan tanda kekuatan — ini adalah tanda **euforia akhir**. Institusi memanfaatkan antusiasme retail untuk mendistribusikan (menjual) posisi besar mereka dengan harga puncak.
+
+> *"When a stock makes its biggest one-day point gain of the entire move on the heaviest volume, that's a climax run — get out."* — Mark Minervini
+
+**Cara deteksi:**
+```
+1. Hitung gain % harian sepanjang 252 hari terakhir
+2. Jika salah satu dari 5 hari terakhir adalah hari gain % TERBESAR di seluruh run
+   DAN volume hari itu adalah TERTINGGI dalam 20 hari terakhir
+   → Climax Top terdeteksi
+```
+
+**Tindakan:** Jual semua atau mayoritas posisi segera. Ini adalah sinyal paling serius.
+
+---
+
+#### 2. Upper BB 3d+ (Upper Bollinger Band 3 Hari Berturut-turut)
+
+**Definisi:** Harga berada **di atas Bollinger Band atas** (SMA20 + 2×StdDev) selama 3 hari atau lebih berturut-turut.
+
+Bollinger Band atas adalah batas statistik di mana harga secara historis cenderung kembali ke mean (rata-rata). Ketika harga bertahan di atas band selama 3+ hari, saham berada dalam kondisi **overbought ekstrem** — biasanya diikuti koreksi atau reversal tajam.
+
+**Cara deteksi:**
+```
+BB Atas   = SMA(20) + 2 × StdDev(20)
+Hitungan  = Berapa hari berturut-turut close > BB Atas (dari hari ini ke belakang)
+→ Jika ≥ 3 hari → Upper BB 3d+
+```
+
+**Tindakan:** Trim 30–50% posisi, perketat stop loss. Berbeda dari Climax Top, sinyal ini bisa muncul di tengah run (bukan harus di puncak).
+
+---
+
+#### 3. 7% Stop Breach
+
+**Definisi:** Harga sudah turun **lebih dari 7% di bawah pivot point** yang menjadi basis entry. Ini adalah aturan stop loss **tidak dapat dikompromikan** dari Minervini.
+
+> *"I never lose more than 7-8% on any trade, ever. This is non-negotiable."* — Mark Minervini
+
+Ketika harga turun 7–8% dari pivot breakout, berarti setup sudah **invalidated**: breakout tersebut kemungkinan besar palsu (failed breakout), atau ada perubahan kondisi yang tidak terlihat sebelumnya. Keluar dari posisi melindungi kapital untuk setup berikutnya.
+
+**Cara deteksi:**
+```
+Pivot Point = high tertinggi dari lookback sesuai pola (HTF=15h, VCP=20h, Flat=25h, dll)
+→ Jika harga saat ini < Pivot × 0.93 (turun > 7%) → 7% Stop Breach
+```
+
+**Penting:** Ini bukan berarti saham jelek selamanya — mungkin saja fundamental masih bagus. Tapi dari sudut pandang trade management, posisi ini harus ditutup.
+
+---
+
+#### Perbandingan Tiga Sinyal Exit
+
+| Sinyal | Kondisi | Urgensi | Tindakan |
+|---|---|---|---|
+| **Climax Top** | Hari gain terbesar + volume terbesar setelah run panjang | 🔴 Sangat tinggi | Jual semua segera |
+| **Upper BB 3d+** | Harga di atas BB atas ≥ 3 hari berturut | 🟡 Sedang | Trim 30–50%, perketat stop |
+| **7% Stop Breach** | Harga turun >7% dari pivot entry | 🔴 Tinggi | Cut loss, keluar sepenuhnya |
+
+> **Catatan implementasi:** Di `screen.ts`, sinyal exit muncul di output `--detail KODE` untuk saham Stage 2 yang lolos screening. Kemunculannya berarti saham punya skor bagus tetapi ada **peringatan manajemen posisi** yang perlu diperhatikan.
+
+---
+
 ### AI Rekomendasi Saham
 
 Fitur AI Rekomendasi menggabungkan **semua sinyal teknikal dan fundamental** menjadi satu skor terpadu, membantu pengguna menemukan kandidat saham terbaik tanpa harus menganalisis setiap tab secara manual. Sistem ini dilengkapi dengan:

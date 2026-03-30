@@ -501,6 +501,115 @@ export default function TabHowTo() {
         gunakan checklist ini sebagai panduan prioritas, bukan syarat mutlak.
       </p>
 
+      <h3 className='idx-home-h3'>19. Kapan Harus Keluar — Selling Rules (Minervini)</h3>
+      <p className='idx-home-p'>
+        Membeli di titik tepat hanya separuh dari trading yang baik. Tiga sinyal exit berikut
+        tersedia di terminal screener (<code>--detail KODE</code>) dan hanya aktif untuk saham Stage
+        2. Masing-masing menandakan kondisi berbeda yang memerlukan tindakan segera.
+      </p>
+
+      <p className='idx-home-p'>
+        <strong>1. Climax Top</strong>
+      </p>
+      <p className='idx-home-p'>
+        Saham yang sudah naik panjang tiba-tiba mencetak{' '}
+        <strong>
+          hari kenaikan harga terbesar sepanjang run-nya
+        </strong>{' '}
+        disertai <strong>volume tertinggi</strong>{' '}
+        dalam periode terakhir. Ini bukan tanda kekuatan — ini tanda{' '}
+        <strong>euforia akhir distribusi</strong>. Institusi memanfaatkan antusiasme retail untuk
+        keluar dari posisi besar mereka di harga puncak.
+      </p>
+      <p className='idx-home-p'>
+        <em>
+          Deteksi: salah satu dari 5 hari terakhir adalah hari gain % terbesar dalam 252 hari
+          terakhir DAN volume hari itu tertinggi dalam 20 hari.
+        </em>
+      </p>
+      <p className='idx-home-note'>
+        Tindakan: <strong>Jual semua atau mayoritas posisi segera.</strong> Sinyal paling serius.
+      </p>
+
+      <p className='idx-home-p'>
+        <strong>2. Upper BB 3d+ (Bollinger Band Atas 3 Hari Berturut-turut)</strong>
+      </p>
+      <p className='idx-home-p'>
+        Harga berada <strong>di atas Bollinger Band atas</strong>{' '}
+        (SMA20 + 2×StdDev) selama 3 hari atau lebih berturut-turut. BB atas adalah batas statistik
+        di mana harga cenderung kembali ke rata-rata. Bertahan di atasnya selama 3+ hari = kondisi
+        {' '}
+        <strong>overbought ekstrem</strong>.
+      </p>
+      <p className='idx-home-p'>
+        <em>
+          Deteksi: hitung hari berturut-turut close &gt; SMA20 + 2×StdDev. Jika ≥ 3 → sinyal aktif.
+        </em>
+      </p>
+      <p className='idx-home-note'>
+        Tindakan: <strong>Trim 30–50% posisi, perketat stop loss.</strong>{' '}
+        Bisa muncul di tengah run.
+      </p>
+
+      <p className='idx-home-p'>
+        <strong>3. 7% Stop Breach</strong>
+      </p>
+      <p className='idx-home-p'>
+        Harga sudah turun <strong>lebih dari 7% di bawah pivot point</strong>{' '}
+        basis entry. Aturan stop loss Minervini yang tidak dapat dikompromikan:{' '}
+        <em>"I never lose more than 7-8% on any trade, ever."</em>{' '}
+        Ketika harga turun 7–8% dari pivot, setup sudah <strong>invalidated</strong>{' '}
+        — breakout kemungkinan palsu atau ada perubahan kondisi.
+      </p>
+      <p className='idx-home-p'>
+        <em>
+          Deteksi: pivot = high tertinggi sesuai pola. Jika harga &lt; pivot × 0.93 → sinyal aktif.
+        </em>
+      </p>
+      <p className='idx-home-note'>
+        Tindakan: <strong>Cut loss, keluar sepenuhnya.</strong>{' '}
+        Lindungi kapital untuk setup berikutnya.
+      </p>
+
+      <div className='idx-home-table-wrap'>
+        <table className='idx-home-table'>
+          <thead>
+            <tr>
+              <th>Sinyal</th>
+              <th>Kondisi</th>
+              <th>Urgensi</th>
+              <th>Tindakan</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>
+                <strong>Climax Top</strong>
+              </td>
+              <td>Gain hari terbesar + volume terbesar setelah run panjang</td>
+              <td>🔴 Sangat tinggi</td>
+              <td>Jual semua segera</td>
+            </tr>
+            <tr>
+              <td>
+                <strong>Upper BB 3d+</strong>
+              </td>
+              <td>Harga di atas BB atas ≥ 3 hari berturut</td>
+              <td>🟡 Sedang</td>
+              <td>Trim 30–50%, perketat stop</td>
+            </tr>
+            <tr>
+              <td>
+                <strong>7% Stop Breach</strong>
+              </td>
+              <td>Harga turun &gt;7% dari pivot entry</td>
+              <td>🔴 Tinggi</td>
+              <td>Cut loss, keluar sepenuhnya</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
       <p className='idx-home-note'>
         Gunakan informasi di <strong>screener</strong> dan <strong>detail saham</strong>{' '}
         sebagai awal riset, bukan satu-satunya dasar keputusan. Selalu lakukan riset mandiri dan
