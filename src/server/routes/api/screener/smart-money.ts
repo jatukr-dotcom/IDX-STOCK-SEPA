@@ -421,27 +421,33 @@ export async function GET(ctx: Context) {
     })
   }
 
-  // Fetch broker concentration data for latest date
-  const brokerRows = await Database.select({
-    stockCode: Schemas.brokerStockMetrics.stockCode,
-    top3VolumePct: Schemas.brokerStockMetrics.top3VolumePct,
-    dominantBrokerCode: Schemas.brokerStockMetrics.dominantBrokerCode,
-    dominantBrokerName: Schemas.brokerStockMetrics.dominantBrokerName,
-    dominantBrokerVolumePct: Schemas.brokerStockMetrics.dominantBrokerVolumePct
-  })
-    .from(Schemas.brokerStockMetrics)
-    .where(eq(Schemas.brokerStockMetrics.date, dateRef))
+  // Fetch broker concentration data for latest date (optional — degrades gracefully if table empty)
   const brokerMap = new Map<string, {
     top3VolumePct: number | null
     dominantBrokerName: string | null
   }>()
-  for (const r of brokerRows) {
-    brokerMap.set(r.stockCode, {
-      top3VolumePct: r.top3VolumePct != null ? Number(r.top3VolumePct) : null,
-      dominantBrokerName: r.dominantBrokerName ?? null
+  let hasBrokerData = false
+  try {
+    const brokerRows = await Database.select({
+      stockCode: Schemas.brokerStockMetrics.stockCode,
+      top3VolumePct: Schemas.brokerStockMetrics.top3VolumePct,
+      dominantBrokerCode: Schemas.brokerStockMetrics.dominantBrokerCode,
+      dominantBrokerName: Schemas.brokerStockMetrics.dominantBrokerName,
+      dominantBrokerVolumePct: Schemas.brokerStockMetrics.dominantBrokerVolumePct
     })
+      .from(Schemas.brokerStockMetrics)
+      .where(eq(Schemas.brokerStockMetrics.date, dateRef))
+    for (const r of brokerRows) {
+      brokerMap.set(r.stockCode, {
+        top3VolumePct: r.top3VolumePct != null ? Number(r.top3VolumePct) : null,
+        dominantBrokerName: r.dominantBrokerName ?? null
+      })
+    }
+    hasBrokerData = brokerRows.length > 0
+  } catch {
+    // broker_stock_metrics table may not exist or be empty — run db:push + db:fetch-broker to populate
+    hasBrokerData = false
   }
-  const hasBrokerData = brokerRows.length > 0
 
   const results: Types.SmartMoneyRow[] = []
 
