@@ -246,7 +246,78 @@ export default function TabHowTo() {
         </li>
       </ul>
 
-      <h3 className='idx-home-h3'>12. Sinyal Divergence</h3>
+      <h3 className='idx-home-h3'>12. Cara Membaca Grafik A/D Line &amp; OBV</h3>
+      <p className='idx-home-p idx-home-p-mb8'>
+        Di tab <strong>Volume A/D</strong> pada detail saham, terdapat grafik yang menampilkan{' '}
+        <strong>A/D Line</strong> (garis merah, sumbu kiri) dan <strong>OBV</strong>{' '}
+        (garis biru, sumbu kanan) dalam satu chart. Keduanya memiliki skala berbeda sehingga
+        masing-masing terlihat proporsional.
+      </p>
+      <p className='idx-home-p idx-home-p-mb8'>
+        <strong>A/D Line (Accumulation/Distribution Line):</strong>
+      </p>
+      <ul className='idx-home-ul'>
+        <li className='idx-home-li'>
+          <strong>Garis naik</strong>: Uang masuk — pembeli dominan (akumulasi).
+        </li>
+        <li className='idx-home-li'>
+          <strong>Garis turun</strong>: Uang keluar — penjual dominan (distribusi).
+        </li>
+        <li className='idx-home-li'>
+          <strong>Naik saat harga sideways</strong>: Akumulasi tersembunyi — potensi breakout ke
+          atas.
+        </li>
+        <li className='idx-home-li'>
+          <strong>Naik saat harga turun (divergensi bullish)</strong>: Tekanan jual melemah, potensi
+          reversal naik.
+        </li>
+        <li className='idx-home-li'>
+          <strong>Turun saat harga naik (divergensi bearish)</strong>: Kenaikan tidak didukung
+          volume beli — rawan koreksi.
+        </li>
+      </ul>
+      <p className='idx-home-p idx-home-p-mb8'>
+        <strong>OBV (On-Balance Volume):</strong>
+      </p>
+      <ul className='idx-home-ul'>
+        <li className='idx-home-li'>
+          <strong>Naik konsisten</strong>: Volume beli mendominasi — uptrend valid dan kuat.
+        </li>
+        <li className='idx-home-li'>
+          <strong>Naik mendahului harga</strong>: Smart money sudah masuk sebelum harga bergerak —
+          sinyal leading yang kuat.
+        </li>
+        <li className='idx-home-li'>
+          <strong>Turun saat harga naik (divergensi bearish)</strong>: Distribusi tersembunyi —
+          waspadai pembalikan.
+        </li>
+        <li className='idx-home-li'>
+          <strong>Flat saat harga naik</strong>: Kenaikan tanpa dukungan volume — kurang meyakinkan.
+        </li>
+      </ul>
+      <p className='idx-home-p idx-home-p-mb8'>
+        <strong>Membaca keduanya bersama:</strong>
+      </p>
+      <ul className='idx-home-ul'>
+        <li className='idx-home-li'>
+          Harga naik + A/D naik + OBV naik → <strong>Uptrend kuat dan valid</strong>.
+        </li>
+        <li className='idx-home-li'>
+          Harga naik + A/D turun + OBV turun → <strong>Distribusi tersembunyi</strong>{' '}
+          — waspadai pembalikan turun.
+        </li>
+        <li className='idx-home-li'>
+          Harga turun + A/D naik + OBV naik → <strong>Akumulasi di bawah</strong>{' '}
+          — potensi reversal naik.
+        </li>
+      </ul>
+      <p className='idx-home-note'>
+        Kunci utama: perhatikan <strong>divergensi</strong>{' '}
+        antara arah harga dan arah A/D Line / OBV. Ketika A/D dan OBV sama-sama bergerak berlawanan
+        dengan harga, sinyalnya lebih kuat dan lebih dapat diandalkan.
+      </p>
+
+      <h3 className='idx-home-h3'>13. Sinyal Divergence (RSI &amp; Stochastic RSI)</h3>
       <p className='idx-home-p idx-home-p-mb8'>
         Divergence mendeteksi ketidaksinkronan antara harga dan indikator, menandakan potensi
         pembalikan arah:
@@ -270,7 +341,7 @@ export default function TabHowTo() {
         </li>
       </ul>
 
-      <h3 className='idx-home-h3'>13. Rekomendasi AI</h3>
+      <h3 className='idx-home-h3'>14. Rekomendasi AI</h3>
       <p className='idx-home-p idx-home-p-mb8'>
         Fitur AI Recommendation menilai dan meranking saham-saham berpotensi tinggi. Tersedia 3
         mode:
@@ -294,14 +365,14 @@ export default function TabHowTo() {
         (markdown) juga dieksklusi karena berada di fase bearish.
       </p>
 
-      <h3 className='idx-home-h3'>14. Ekspor PDF</h3>
+      <h3 className='idx-home-h3'>15. Ekspor PDF</h3>
       <p className='idx-home-p'>
         Di halaman detail saham, klik tombol <strong>Ekspor PDF</strong>{' '}
         untuk mengunduh laporan lengkap per emiten. Laporan berisi ringkasan fundamental, skor
         teknikal, chart, dan indikator — siap untuk analisis offline atau presentasi.
       </p>
 
-      <h3 className='idx-home-h3'>15. Watchlist</h3>
+      <h3 className='idx-home-h3'>16. Watchlist</h3>
       <ul className='idx-home-ul'>
         <li className='idx-home-li'>
           Klik ikon <strong>★</strong> (bintang) pada baris saham untuk menambahkan ke watchlist.
@@ -315,7 +386,7 @@ export default function TabHowTo() {
         </li>
       </ul>
 
-      <h3 className='idx-home-h3'>16. Narasi di Claude</h3>
+      <h3 className='idx-home-h3'>17. Narasi di Claude</h3>
       <p className='idx-home-p'>
         Tombol <strong>&quot;Narasi di Claude&quot;</strong>{' '}
         tersedia di halaman AI Recommendation. Saat diklik, sistem mengirim data top 10 saham ke

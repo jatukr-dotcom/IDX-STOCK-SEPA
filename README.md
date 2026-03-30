@@ -273,6 +273,40 @@ Jika Close = Close kemarin → OBV tidak berubah
 
 OBV trend naik mengkonfirmasi tren harga naik. OBV trend turun saat harga naik = peringatan distribusi (divergensi bearish).
 
+#### Cara Membaca Grafik A/D Line & OBV (Detail Saham → Volume A/D)
+
+Di halaman detail saham, tab **Volume A/D** menampilkan grafik A/D Line dan OBV dalam satu chart dengan **dua sumbu Y terpisah** — A/D Line di kiri (merah), OBV di kanan (biru). Keduanya ditampilkan bersamaan untuk memudahkan perbandingan.
+
+**A/D Line:**
+
+| Kondisi | Interpretasi |
+|---|---|
+| Garis naik | Uang masuk — pembeli dominan (akumulasi) |
+| Garis turun | Uang keluar — penjual dominan (distribusi) |
+| Naik saat harga sideways | Akumulasi tersembunyi — potensi breakout |
+| **Naik saat harga turun** | **Divergensi bullish** — tekanan jual melemah, potensi reversal naik |
+| **Turun saat harga naik** | **Divergensi bearish** — kenaikan tidak didukung volume beli, rawan koreksi |
+
+**OBV:**
+
+| Kondisi | Interpretasi |
+|---|---|
+| Naik konsisten | Volume beli mendominasi — uptrend valid dan kuat |
+| Turun konsisten | Volume jual mendominasi — downtrend dikonfirmasi |
+| Naik mendahului harga | Smart money sudah masuk sebelum harga bergerak |
+| **Turun saat harga naik** | **Divergensi bearish** — distribusi tersembunyi, waspadai |
+| Flat saat harga naik | Kenaikan tanpa dukungan volume — kurang meyakinkan |
+
+**Membaca keduanya bersama:**
+
+```
+Harga naik + A/D naik + OBV naik  → Uptrend KUAT, konfirmasi valid
+Harga naik + A/D turun + OBV turun → Distribusi tersembunyi — waspadai pembalikan
+Harga turun + A/D naik + OBV naik  → Akumulasi di bawah — potensi reversal naik
+```
+
+> **Kunci:** Divergensi antara harga dan A/D Line / OBV adalah sinyal paling berharga. Ketika keduanya kompak (A/D dan OBV sama-sama divergen), sinyalnya lebih kuat.
+
 #### MFI — Money Flow Index (14 hari)
 
 RSI berbasis volume — mengukur tekanan beli/jual menggunakan nilai transaksi:
