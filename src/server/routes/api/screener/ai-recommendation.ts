@@ -407,9 +407,9 @@ export async function GET(ctx: Context) {
       (r12m ?? 0) * 0.20
     rsScores.set(code, { score: rsScore, rank: 0 })
   }
-  const sortedByRs = Array.from(rsScores.entries()).sort((a, b) => b[1].score - a[1].score)
+  const sortedByRs = Array.from(rsScores.entries()).sort((a, b) => a[1].score - b[1].score)
   for (let i = 0; i < sortedByRs.length; i++) {
-    const pct = Math.round(((i / sortedByRs.length) * 99) + 1)
+    const pct = Math.max(1, Math.round(((i + 1) / sortedByRs.length) * 99))
     rsScores.get(sortedByRs[i]![0])!.rank = pct
   }
 
@@ -481,8 +481,9 @@ export async function GET(ctx: Context) {
     const ma200 = calcMA(closes, 200)
     const ma200SlopePct = calcMA200SlopePct(closes)
 
-    const high52w = Math.max(...highs)
-    const low52w = Math.min(...lows)
+    const last252Entries = entries.slice(-252)
+    const high52w = Math.max(...last252Entries.map((e) => e.high))
+    const low52w = Math.min(...last252Entries.map((e) => e.low))
     const rsRank = rsScores.get(code)?.rank ?? 0
 
     const criteria: Types.TrendTemplateCriteria = {
@@ -596,23 +597,21 @@ export async function GET(ctx: Context) {
 
     // ── Pocket Pivot (last 5 sessions) ──────────────────────────────────
     let hasPocketPivot = false
-    if (entries.length >= 15) {
-      const ma10 = calcMA(closes, 10)
-      const maxDownVol10d = Math.max(
-        ...entries.slice(-10).filter((e, i, a) => i > 0 && e.close < a[i - 1]!.close).map((e) =>
-          e.volume
-        ).concat([0])
-      )
+    if (entries.length >= 20) {
       for (let i = entries.length - 5; i < entries.length; i++) {
-        if (i <= 0) {
+        if (i <= 10) {
           continue
         }
         const prev = entries[i - 1]!
         const cur = entries[i]!
-        if (
-          cur.close > prev.close && cur.volume > maxDownVol10d && ma10 != null &&
-          cur.close >= ma10
-        ) {
+        const ma10i = closes.slice(i - 9, i + 1).reduce((a, b) => a + b, 0) / 10
+        const maxDV = Math.max(
+          ...entries.slice(i - 10, i)
+            .filter((e, j, a) => j > 0 && e.close < a[j - 1]!.close)
+            .map((e) => e.volume)
+            .concat([0])
+        )
+        if (cur.close > prev.close && cur.volume > maxDV && cur.close >= ma10i) {
           hasPocketPivot = true
           break
         }
@@ -631,16 +630,34 @@ export async function GET(ctx: Context) {
       }
     }
 
+    // HTF: pole ≥80% in 20-40 days, then flag ≤25% range over last 15 days
+    if (patternType === 'none' && entries.length >= 55) {
+      const poleStartClose = entries[entries.length - 40]!.close
+      const poleHigh = Math.max(...highs.slice(-40, -15))
+      const poleGain = poleStartClose > 0 ? (poleHigh - poleStartClose) / poleStartClose : 0
+      if (poleGain >= 0.80) {
+        const flagH = Math.max(...highs.slice(-15))
+        const flagL = Math.min(...lows.slice(-15))
+        const flagRange = flagH > 0 ? (flagH - flagL) / flagH : 1
+        if (flagRange <= 0.25) {
+          patternType = 'htf'
+        }
+      }
+    }
+
     // ── Power Play / Low Cheat ──────────────────────────────────────────
     let setupType: Types.PowerPlaySetupType = 'none'
-    if (closes.length >= 5) {
+    if (closes.length >= 25) {
       const last5 = closes.slice(-5)
       const range = Math.max(...last5) - Math.min(...last5)
       const avg = last5.reduce((a, b) => a + b) / 5
+      const avgVol5d = volumes.slice(-5).reduce((a, b) => a + b, 0) / 5
+      const avgVol20Prior = volumes.slice(-25, -5).reduce((a, b) => a + b, 0) / 20
+      const volumeDryUpPct = avgVol20Prior > 0 ? (1 - avgVol5d / avgVol20Prior) * 100 : 0
       if (avg > 0) {
-        if (range / avg < 0.03) {
+        if (range / avg < 0.03 && volumeDryUpPct > 30) {
           setupType = 'power-play'
-        } else if (range / avg < 0.05) {
+        } else if (range / avg < 0.05 && volumeDryUpPct > 20) {
           setupType = 'low-cheat'
         }
       }
