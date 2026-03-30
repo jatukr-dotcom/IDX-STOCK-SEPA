@@ -559,19 +559,15 @@ const dateStr = String(dateRef)
 const dateFmt = `${dateStr.slice(0, 4)}-${dateStr.slice(4, 6)}-${dateStr.slice(6, 8)}`
 
 if (detailCode) {
-  const row = results.find((r) => r.code === detailCode) ?? (() => {
-    // Try from all results (might be filtered out)
-    for (const [code, entries] of ohlcByCode) {
-      if (code === detailCode) {
-        console.log(`\nSaham ${detailCode} ditemukan di database tapi tidak lolos filter screening.`)
-        return null
-      }
-    }
-    return null
-  })()
+  const row = results.find((r) => r.code === detailCode)
 
   if (!row) {
-    console.log(`\nSaham ${detailCode} tidak ditemukan atau dieksklusi (gorengan / Stage 3-4).`)
+    const existsInDb = ohlcByCode.has(detailCode)
+    if (existsInDb) {
+      console.log(`\nSaham ${detailCode} ditemukan di database tapi tidak lolos filter screening (gorengan / Stage 3-4).`)
+    } else {
+      console.log(`\nSaham ${detailCode} tidak ditemukan di database.`)
+    }
     Deno.exit(0)
   }
 
