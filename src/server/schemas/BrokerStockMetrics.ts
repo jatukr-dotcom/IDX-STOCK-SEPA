@@ -6,7 +6,7 @@
  * Fullstack developer with a focus on security and experience in trading systems.
  */
 
-import { real, sqliteTable, text } from 'drizzle-orm/sqlite-core'
+import { integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 
 /**
  * Broker concentration metrics per stock per date.
@@ -15,9 +15,9 @@ import { real, sqliteTable, text } from 'drizzle-orm/sqlite-core'
  */
 export const brokerStockMetrics = sqliteTable('broker_stock_metrics', {
   id: text('id').primaryKey(), // "{dateInt}-{stockCode}"
-  date: real('date').notNull(),
+  date: integer('date').notNull(),
   stockCode: text('stock_code').notNull(),
-  brokerCount: real('broker_count'), // total unique brokers active
+  brokerCount: integer('broker_count'), // total unique brokers active
   top3VolumePct: real('top3_volume_pct'), // % of total volume by top 3 brokers
   top5VolumePct: real('top5_volume_pct'), // % of total volume by top 5 brokers
   dominantBrokerCode: text('dominant_broker_code'), // broker with most volume

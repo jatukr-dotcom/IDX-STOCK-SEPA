@@ -1098,16 +1098,21 @@ for (const [code, entries] of ohlcByCode) {
   // ─── SMT computation ───────────────────────────────────────────────────────
   const smtReasons: string[] = []
   let smtBullishCount = 0
+  const smtHasEnoughData = entries.length >= 20
 
-  // 1. Foreign Flow Momentum (30 pts)
+  // 1. Foreign Flow Momentum (30 pts) — requires 20+ days
+  let smtForeignFlowScore = 0
   const smtFNet5d = entries.slice(-5).reduce((s: number, e: OhlcvEntry) => s + e.foreignBuy - e.foreignSell, 0)
-  const smtFNet20d = entries.length >= 20 ? entries.slice(-20).reduce((s: number, e: OhlcvEntry) => s + e.foreignBuy - e.foreignSell, 0) : null
-  const smtFAvg5 = smtFNet5d / 5
-  const smtFAvg20 = smtFNet20d != null ? smtFNet20d / 20 : 0
-  const smtFAccel = smtFAvg5 - smtFAvg20
-  const smtAvgVol20 = entries.length >= 20 ? entries.slice(-20).reduce((s: number, e: OhlcvEntry) => s + e.volume, 0) / 20 : 1
-  const smtAccelNorm = smtAvgVol20 > 0 ? smtFAccel / smtAvgVol20 : 0
-  const smtForeignFlowScore = Math.round(Math.max(0, Math.min(1, (smtAccelNorm + 0.1) / 0.2)) * 30)
+  let smtFAccel = 0
+  if (smtHasEnoughData) {
+    const smtFNet20d = entries.slice(-20).reduce((s: number, e: OhlcvEntry) => s + e.foreignBuy - e.foreignSell, 0)
+    const smtFAvg5 = smtFNet5d / 5
+    const smtFAvg20 = smtFNet20d / 20
+    smtFAccel = smtFAvg5 - smtFAvg20
+    const smtAvgVol20 = entries.slice(-20).reduce((s: number, e: OhlcvEntry) => s + e.volume, 0) / 20
+    const smtAccelNorm = smtAvgVol20 > 0 ? smtFAccel / smtAvgVol20 : 0
+    smtForeignFlowScore = Math.round(Math.max(0, Math.min(1, (smtAccelNorm + 0.1) / 0.2)) * 30)
+  }
 
   // 2. Foreign Flow Streak (10 pts)
   let smtStreak = 0
@@ -1124,20 +1129,22 @@ for (const [code, entries] of ohlcByCode) {
   const smtPriceTrend = entries.length >= 10
     ? (() => { const f = entries[entries.length - 10]!.close; const l = entries[entries.length - 1]!.close; const p = f > 0 ? (l - f) / f : 0; return p > 0.03 ? 'up' : p < -0.03 ? 'down' : 'flat' })()
     : 'flat'
-  if (obvTrend === 'up' && smtPriceTrend === 'down') { smtVolPriceScore = 12; smtBullishCount++; smtReasons.push('Divergence bullish: OBV naik, harga turun') }
-  else if (obvTrend === 'up') { smtVolPriceScore = 15; smtBullishCount++; smtReasons.push('OBV naik (akumulasi volume)') }
+  if (obvTrend === 'up' && smtPriceTrend === 'down') { smtVolPriceScore = 15; smtBullishCount++; smtReasons.push('Divergence bullish: OBV naik, harga turun') }
+  else if (obvTrend === 'up' && smtPriceTrend !== 'down') { smtVolPriceScore = 12; smtBullishCount++; smtReasons.push('OBV naik (akumulasi volume)') }
   else if (obvTrend === 'flat') smtVolPriceScore = 5
 
   // 4. Trade Size Profile (20 pts)
   let smtTradeSizeScore = 0
   let smtTradeSizeChange: number | null = null
-  if (entries.length >= 20) {
+  let smtAvgTradeSize5d: number | null = null
+  if (smtHasEnoughData) {
     const smtTs5Freq = entries.slice(-5).reduce((s: number, e: OhlcvEntry) => s + e.frequency, 0)
     const smtTs5Val = entries.slice(-5).reduce((s: number, e: OhlcvEntry) => s + e.value, 0)
     const smtTs20Freq = entries.slice(-20).reduce((s: number, e: OhlcvEntry) => s + e.frequency, 0)
     const smtTs20Val = entries.slice(-20).reduce((s: number, e: OhlcvEntry) => s + e.value, 0)
     const smtTs5 = smtTs5Freq > 0 ? smtTs5Val / smtTs5Freq : null
     const smtTs20 = smtTs20Freq > 0 ? smtTs20Val / smtTs20Freq : null
+    smtAvgTradeSize5d = smtTs5
     if (smtTs5 != null && smtTs20 != null && smtTs20 > 0) {
       smtTradeSizeChange = Math.round(((smtTs5 - smtTs20) / smtTs20) * 1000) / 10
       smtTradeSizeScore = Math.round(Math.max(0, Math.min(1, (smtTradeSizeChange + 30) / 80)) * 20)
@@ -1175,7 +1182,7 @@ for (const [code, entries] of ohlcByCode) {
     foreignNet5d: smtFNet5d,
     foreignAcceleration: smtFAccel,
     consecutiveForeignBuyDays: smtStreak,
-    avgTradeSize5d: null,
+    avgTradeSize5d: smtAvgTradeSize5d,
     avgTradeSizeChange: smtTradeSizeChange,
     bidOfferRatio: smtBidOfferRatio
   })
@@ -1396,8 +1403,10 @@ if (argMode === 'smt') {
     const smtTxChg = r.avgTradeSizeChange != null ? `${r.avgTradeSizeChange >= 0 ? '+' : ''}${r.avgTradeSizeChange.toFixed(1)}%` : '—'
     const smtBo = r.bidOfferRatio != null ? r.bidOfferRatio.toFixed(2) : '—'
     const smtSigLabel = r.smtSignal === 'strong-buy' ? '\x1b[32mSTRONG BUY\x1b[0m' : '\x1b[32mBUY\x1b[0m'
+    const smtScoreStr = String(r.smtScore).padStart(5)
+    const smtScoreColored = r.smtScore >= 75 ? `\x1b[32m${smtScoreStr}\x1b[0m` : r.smtScore >= 55 ? `\x1b[33m${smtScoreStr}\x1b[0m` : `\x1b[90m${smtScoreStr}\x1b[0m`
     console.log(
-      `  ${pad(String(i + 1), 3)} ${pad(r.code, 6)} ${pad(r.name?.slice(0, 22) ?? '-', 22)} ${colorScore(r.smtScore).padStart(12)} ${smtFn5d.padStart(8)} ${smtStreak.padStart(7)} ${smtTxChg.padStart(7)} ${smtBo.padStart(5)} ${smtSigLabel}`
+      `  ${pad(String(i + 1), 3)} ${pad(r.code, 6)} ${pad(r.name?.slice(0, 22) ?? '-', 22)} ${smtScoreColored} ${smtFn5d.padStart(8)} ${smtStreak.padStart(7)} ${smtTxChg.padStart(7)} ${smtBo.padStart(5)} ${smtSigLabel}`
     )
   }
   console.log(dline)
@@ -1483,8 +1492,8 @@ if (watchlistAction === 'save' && watchlistName) {
 }
 
 console.log(`  Untuk detail saham: deno run -A screen.ts --detail KODE`)
-console.log(`  Mode: --mode technical|fundamental|combined|momentum|breakout|vcp|pullback`)
-console.log(`  Sort: --sort rs|eps|volume|foreign|momentum|atr`)
+console.log(`  Mode: --mode technical|fundamental|combined|momentum|breakout|vcp|pullback|smt`)
+console.log(`  Sort: --sort rs|eps|volume|foreign|momentum|atr|smt`)
 console.log(`  Lainnya: --top N --min-score N --sector "nama" --compact --portfolio N --risk-pct N`)
 console.log(`  Export: --export csv [--output file.csv]`)
 console.log(`  Watchlist: --watchlist save|load|show|compare <nama>`)

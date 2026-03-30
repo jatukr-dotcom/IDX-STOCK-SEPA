@@ -156,7 +156,7 @@ function BidOfferCell({ ratio }: { ratio: number | null }) {
 }
 
 function SmartMoneyRow(
-  { row, onRowClick }: { row: Types.SmartMoneyRow; onRowClick: (code: string) => void }
+  { row, onRowClick, hasBroker }: { row: Types.SmartMoneyRow; onRowClick: (code: string) => void; hasBroker: boolean }
 ) {
   return (
     <tr
@@ -190,20 +190,24 @@ function SmartMoneyRow(
       <td className='idx-text-center'>
         <BidOfferCell ratio={row.bidOfferRatio} />
       </td>
-      {row.topBrokerConcentration != null && (
+      {hasBroker && (
         <td className='idx-text-center'>
-          <span
-            style={{
-              fontSize: 12,
-              color: row.topBrokerConcentration >= 70
-                ? 'var(--idx-up)'
-                : row.topBrokerConcentration >= 50
-                ? 'var(--idx-accent)'
-                : 'inherit'
-            }}
-          >
-            {row.topBrokerConcentration.toFixed(0)}%
-          </span>
+          {row.topBrokerConcentration != null
+            ? (
+              <span
+                style={{
+                  fontSize: 12,
+                  color: row.topBrokerConcentration >= 70
+                    ? 'var(--idx-up)'
+                    : row.topBrokerConcentration >= 50
+                    ? 'var(--idx-accent)'
+                    : 'inherit'
+                }}
+              >
+                {row.topBrokerConcentration.toFixed(0)}%
+              </span>
+            )
+            : <span className='idx-text-muted'>—</span>}
         </td>
       )}
       <td className='idx-text-center'>
@@ -216,9 +220,7 @@ function SmartMoneyRow(
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function SmartMoneyView(
-  { data, loading, error, onRefetch, onRowClick }: Types.SmartMoneyViewProps & {
-    onRowClick?: (code: string) => void
-  }
+  { data, loading, error, onRefetch, onRowClick }: Types.SmartMoneyViewProps
 ) {
   const [signalFilter, setSignalFilter] = useState<SignalFilter>('all')
   const [sectorFilter, setSectorFilter] = useState('')
@@ -396,7 +398,8 @@ export default function SmartMoneyView(
                 <SmartMoneyRow
                   key={row.code}
                   row={row}
-                  onRowClick={onRowClick ?? (() => {})}
+                  onRowClick={onRowClick ?? ((_code: string) => {})}
+                  hasBroker={hasBroker}
                 />
               ))}
           </tbody>

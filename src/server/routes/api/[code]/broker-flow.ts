@@ -41,7 +41,7 @@ export async function GET(ctx: Context) {
   if (dateInt != null) {
     try {
       const client = new Client()
-      const url = `${IDX_BROKER_URL}?date=${dateInt}&stockCode=${stockCode}&length=10&start=0`
+      const url = `${IDX_BROKER_URL}?date=${dateInt}&stockCode=${encodeURIComponent(stockCode)}&length=10&start=0`
       const res = await client.get(url)
       if (res.ok) {
         const json = await res.json() as {

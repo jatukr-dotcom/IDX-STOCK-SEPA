@@ -13,7 +13,8 @@
  *   5. Bid/Offer Pressure (10 pts): bid vol > offer vol on latest day
  *   6. Cross-Signal Alignment (15 pts): how many of the above are bullish simultaneously
  * Broker concentration bonus (from broker_stock_metrics table, if data exists):
- *   +5 pts added to brokerScore when top3VolumePct > 60% (high concentration = institutional)
+ *   up to 10 pts added to brokerScore based on top3VolumePct concentration:
+ *   top3 ≥ 70% → 10 pts, 60–70% → 7 pts, 50–60% → 4 pts (high = institutional)
  * Total: 100 pts.  Signal: strong-buy ≥75, buy ≥55, neutral ≥35, sell ≥20, strong-sell <20
  */
 
@@ -197,15 +198,16 @@ function computeSmtScore(
   let volumePriceScore = 0
   const obvTrend = calcOBVTrend(rows)
   const prTrend = priceTrend(rows)
-  if (obvTrend === 'up' && prTrend !== 'down') {
+  if (obvTrend === 'up' && prTrend === 'down') {
+    // Bullish divergence: OBV up while price down — strongest accumulation signal
     volumePriceScore = 15
     bullishCount++
-    reasons.push('OBV naik (akumulasi volume)')
-  } else if (obvTrend === 'up' && prTrend === 'down') {
-    // Bullish divergence: OBV up while price down
+    reasons.push('Divergence bullish: OBV naik, harga turun')
+  } else if (obvTrend === 'up') {
+    // OBV confirming price — normal accumulation
     volumePriceScore = 12
     bullishCount++
-    reasons.push('Divergence bullish: OBV naik, harga turun')
+    reasons.push('OBV naik (akumulasi volume)')
   } else if (obvTrend === 'flat') {
     volumePriceScore = 5
   }
