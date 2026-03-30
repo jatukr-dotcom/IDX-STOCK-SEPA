@@ -41,10 +41,18 @@ type ScreenRow = {
   hasRsLineNewHigh: boolean
   hasPocketPivot: boolean
   patternType: string
+  baseCount: number
   setupType: string
   volumeSignal: string
   cmf: number | null
+  mfi: number | null
   obvTrend: string
+  foreignNetPct: number | null
+  volSurgePct: number | null
+  volCriteriaCount: number
+  vcpIsVcp: boolean
+  vcpContractions: number
+  vcpVolumeDrying: boolean
   reasons: string[]
 }
 
@@ -212,6 +220,113 @@ function calcOBVTrend(rows: { close: number; volume: number }[]): 'up' | 'down' 
   return 'flat'
 }
 
+function detectVCP(
+  rows: { high: number; low: number; close: number; volume: number }[]
+): { isVcp: boolean; contractions: number; volumeDrying: boolean } {
+  if (rows.length < 60) return { isVcp: false, contractions: 0, volumeDrying: false }
+
+  const windows = [
+    rows.slice(rows.length - 60, rows.length - 40),
+    rows.slice(rows.length - 40, rows.length - 20),
+    rows.slice(rows.length - 20)
+  ]
+
+  const analyzed = windows.map((w) => {
+    const maxH = Math.max(...w.map((r) => r.high))
+    const minL = Math.min(...w.map((r) => r.low))
+    const midpoint = (maxH + minL) / 2
+    const range = midpoint > 0 ? ((maxH - minL) / midpoint) * 100 : 0
+    const avgVol = w.reduce((s, r) => s + r.volume, 0) / w.length
+    return { range, avgVol }
+  })
+
+  let contractions = 0
+  for (let i = 1; i < analyzed.length; i++) {
+    if (analyzed[i]!.range < analyzed[i - 1]!.range * 0.85) contractions++
+  }
+
+  const volumeDrying = analyzed[2]!.avgVol < analyzed[0]!.avgVol * 0.75
+
+  const last252 = rows.slice(Math.max(0, rows.length - 252))
+  const high52w = Math.max(...last252.map((r) => r.high))
+  const currentClose = rows[rows.length - 1]!.close
+  const pctFromHigh = high52w > 0 ? ((currentClose - high52w) / high52w) * 100 : -100
+  const nearHighs = pctFromHigh >= -20
+
+  return {
+    isVcp: contractions >= 1 && volumeDrying && nearHighs,
+    contractions,
+    volumeDrying
+  }
+}
+
+function calcMFI14(rows: { high: number; low: number; close: number; volume: number }[]): number | null {
+  if (rows.length < 15) return null
+  const slice = rows.slice(-15)
+  let posFlow = 0; let negFlow = 0
+  for (let i = 1; i < slice.length; i++) {
+    const tp = (slice[i]!.high + slice[i]!.low + slice[i]!.close) / 3
+    const prevTp = (slice[i - 1]!.high + slice[i - 1]!.low + slice[i - 1]!.close) / 3
+    const mf = tp * slice[i]!.volume
+    if (tp > prevTp) posFlow += mf
+    else negFlow += mf
+  }
+  if (negFlow === 0) return 100
+  return 100 - (100 / (1 + posFlow / negFlow))
+}
+
+type OhlcEntry = { date: number; close: number; high: number; low: number; volume: number }
+
+function detectCupHandle(rows: OhlcEntry[]): { detected: boolean; depthPct: number | null; lengthDays: number | null } {
+  if (rows.length < 45) return { detected: false, depthPct: null, lengthDays: null }
+  for (let cupLen = 45; cupLen <= Math.min(90, rows.length - 5); cupLen++) {
+    const cup = rows.slice(-(cupLen + 5), -5)
+    if (cup.length < 30) continue
+    const leftHigh = Math.max(...cup.slice(0, 10).map((r) => r.high))
+    const rightHigh = Math.max(...cup.slice(-10).map((r) => r.high))
+    const bottom = Math.min(...cup.map((r) => r.low))
+    if (leftHigh <= 0 || bottom <= 0) continue
+    const depthPct = ((leftHigh - bottom) / leftHigh) * 100
+    if (depthPct < 12 || depthPct > 35) continue
+    if (rightHigh / leftHigh < 0.92) continue
+    const handle = rows.slice(-5)
+    const handleHigh = Math.max(...handle.map((r) => r.high))
+    const handleLow = Math.min(...handle.map((r) => r.low))
+    const handleRange = handleHigh > 0 ? ((handleHigh - handleLow) / handleHigh) * 100 : Infinity
+    if (handleRange > 12) continue
+    return { detected: true, depthPct, lengthDays: cupLen }
+  }
+  return { detected: false, depthPct: null, lengthDays: null }
+}
+
+function countBases(rows: OhlcEntry[]): number {
+  if (rows.length < 40) return 0
+  let bases = 0
+  let i = 20
+  let prevHigh = Math.max(...rows.slice(0, 20).map((r) => r.high))
+  while (i < rows.length - 10) {
+    for (let winLen = 15; winLen <= 40 && i + winLen < rows.length; winLen++) {
+      const win = rows.slice(i, i + winLen)
+      const wHigh = Math.max(...win.map((r) => r.high))
+      const wLow = Math.min(...win.map((r) => r.low))
+      const mid = (wHigh + wLow) / 2
+      if (mid <= 0) continue
+      const rangePct = ((wHigh - wLow) / mid) * 100
+      if (rangePct > 15) break
+      const afterBase = rows.slice(i + winLen, i + winLen + 10)
+      const breakoutHigh = Math.max(...afterBase.map((r) => r.high))
+      if (breakoutHigh > wHigh && breakoutHigh > prevHigh) {
+        bases++
+        prevHigh = breakoutHigh
+        i = i + winLen + 1
+        break
+      }
+    }
+    i++
+  }
+  return bases
+}
+
 // ─── Formatting helpers ───────────────────────────────────────────────────────
 
 function pad(s: string, len: number, right = false): string {
@@ -266,12 +381,13 @@ const dateStart = (() => {
   return Number(`${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`)
 })()
 
-// Query OHLCV
+// Query OHLCV + foreign flow
 const summaryRows = await query<{
   stock_code: string; date: number; price_close: number; price_high: number; price_low: number
   volume: number; value: number; listed_shares: number | null; tradable_shares: number | null
+  foreign_buy: number | null; foreign_sell: number | null
 }>(
-  'SELECT stock_code, date, price_close, price_high, price_low, volume, value, listed_shares, tradable_shares FROM stock_summary WHERE date >= ? AND date <= ? ORDER BY stock_code, date',
+  'SELECT stock_code, date, price_close, price_high, price_low, volume, value, listed_shares, tradable_shares, foreign_buy, foreign_sell FROM stock_summary WHERE date >= ? AND date <= ? ORDER BY stock_code, date',
   [dateStart, dateRef]
 )
 
@@ -306,7 +422,7 @@ for (const r of finRows) {
 }
 
 // Build OHLCV by code
-type OhlcvEntry = { date: number; close: number; high: number; low: number; volume: number; value: number }
+type OhlcvEntry = { date: number; close: number; high: number; low: number; volume: number; value: number; foreignBuy: number; foreignSell: number }
 const ohlcByCode = new Map<string, OhlcvEntry[]>()
 const floatByCode = new Map<string, { listed: number; tradable: number }>()
 
@@ -314,7 +430,7 @@ for (const r of summaryRows) {
   const close = Number(r.price_close)
   if (!Number.isFinite(close) || close <= 0) continue
   const list = ohlcByCode.get(r.stock_code) ?? []
-  list.push({ date: Number(r.date), close, high: Number(r.price_high) || close, low: Number(r.price_low) || close, volume: Number(r.volume) || 0, value: Number(r.value) || 0 })
+  list.push({ date: Number(r.date), close, high: Number(r.price_high) || close, low: Number(r.price_low) || close, volume: Number(r.volume) || 0, value: Number(r.value) || 0, foreignBuy: Number(r.foreign_buy) || 0, foreignSell: Number(r.foreign_sell) || 0 })
   ohlcByCode.set(r.stock_code, list)
   if (r.listed_shares != null && r.tradable_shares != null) floatByCode.set(r.stock_code, { listed: Number(r.listed_shares), tradable: Number(r.tradable_shares) })
 }
@@ -463,15 +579,9 @@ for (const [code, entries] of ohlcByCode) {
     }
   }
 
-  // Base Pattern
+  // Base Pattern (priority: HTF > Cup-Handle > Flat)
   let patternType = 'none'
-  if (entries.length >= 25) {
-    const last25H = highs.slice(-25); const last25L = lows.slice(-25)
-    const rng = Math.max(...last25H) - Math.min(...last25L)
-    const mid = (Math.max(...last25H) + Math.min(...last25L)) / 2
-    if (mid > 0 && rng / mid <= 0.15) patternType = 'flat'
-  }
-  if (patternType === 'none' && entries.length >= 55) {
+  if (entries.length >= 55) {
     const poleStartClose = entries[entries.length - 40]!.close
     const poleHigh = Math.max(...highs.slice(-40, -15))
     const poleGain = poleStartClose > 0 ? (poleHigh - poleStartClose) / poleStartClose : 0
@@ -480,6 +590,19 @@ for (const [code, entries] of ohlcByCode) {
       if (flagH > 0 && (flagH - flagL) / flagH <= 0.25) patternType = 'htf'
     }
   }
+  if (patternType === 'none') {
+    const cupResult = detectCupHandle(entries)
+    if (cupResult.detected) patternType = 'cup-handle'
+  }
+  if (patternType === 'none' && entries.length >= 25) {
+    const last25H = highs.slice(-25); const last25L = lows.slice(-25)
+    const rng = Math.max(...last25H) - Math.min(...last25L)
+    const mid = (Math.max(...last25H) + Math.min(...last25L)) / 2
+    if (mid > 0 && rng / mid <= 0.15) patternType = 'flat'
+  }
+
+  // Base Count
+  const baseCount = countBases(entries)
 
   // Power Play (with volume dry-up)
   let setupType = 'none'
@@ -496,18 +619,40 @@ for (const [code, entries] of ohlcByCode) {
     }
   }
 
-  // Volume A/D signal
+  // Volume A/D signal (5-criteria model)
   const ohlcvForVol = entries.map((e) => ({ high: e.high, low: e.low, close: e.close, volume: e.volume }))
   const cmf = calcCMF20(ohlcvForVol)
+  const mfi = calcMFI14(ohlcvForVol)
   const obvTrend = calcOBVTrend(ohlcvForVol)
-  const accumC1 = cmf != null && cmf > 0
-  const accumC2 = obvTrend === 'up'
-  const accumC3 = cmf != null && cmf > 0.05
+
+  // Volume surge: 5d vs 20d
+  const vol5d = volumes.slice(-5).reduce((a, b) => a + b, 0) / 5
+  const vol20d = volumes.slice(-20).reduce((a, b) => a + b, 0) / 20
+  const volSurgePct = vol20d > 0 ? ((vol5d - vol20d) / vol20d) * 100 : null
+
+  // Foreign flow: net asing 20d as % of volume
+  const totalForeignNet = entries.slice(-20).reduce((s, e) => s + (e.foreignBuy - e.foreignSell), 0)
+  const totalVol20 = entries.slice(-20).reduce((s, e) => s + e.volume, 0)
+  const foreignNetPct = totalVol20 > 0 ? (totalForeignNet / totalVol20) * 100 : null
+
+  // 5 accumulation criteria
+  const vC1 = cmf != null && cmf > 0
+  const vC2 = mfi != null && mfi >= 40 && mfi <= 80
+  const vC3 = obvTrend === 'up'
+  const vC4 = volSurgePct != null && volSurgePct > 20
+  const vC5 = foreignNetPct != null && foreignNetPct > 0
+  const volCriteriaCount = [vC1, vC2, vC3, vC4, vC5].filter(Boolean).length
+
+  // Signal determination
+  const accumScoreSimple = [vC1, vC3, cmf != null && cmf > 0.05].filter(Boolean).length
   const distC1 = cmf != null && cmf < -0.05
-  const distC2 = obvTrend === 'down'
-  const accumScore2 = [accumC1, accumC2, accumC3].filter(Boolean).length
-  const distScore = [distC1, distC2].filter(Boolean).length
-  const volumeSignal = accumScore2 >= 2 ? 'akumulasi' : distScore >= 2 ? 'distribusi' : 'netral'
+  const distC2 = mfi != null && mfi < 35
+  const distC3 = obvTrend === 'down'
+  const distScore = [distC1, distC2, distC3].filter(Boolean).length
+  const volumeSignal = accumScoreSimple >= 2 ? 'akumulasi' : distScore >= 2 ? 'distribusi' : 'netral'
+
+  // VCP detection
+  const vcpResult = detectVCP(ohlcvForVol)
 
   // Tech Score
   let techScore = (sepaScore / 100) * 50
@@ -516,9 +661,11 @@ for (const [code, entries] of ohlcByCode) {
   if (rsLineNewHigh) techScore += 10
   if (hasPocketPivot) techScore += 10
   if (patternType === 'htf') techScore += 6
+  else if (patternType === 'cup-handle') techScore += 4
   else if (patternType === 'flat') techScore += 2
   if (setupType === 'power-play') techScore += 4
   else if (setupType === 'low-cheat') techScore += 2
+  if (vcpResult.isVcp) techScore += 5
   techScore = Math.min(100, techScore)
 
   const finalFundScore = Math.min(100, fundScoreFull)
@@ -539,11 +686,17 @@ for (const [code, entries] of ohlcByCode) {
   }
   if (roe > 20 || npm > 15) reasons.push(`ROE ${roe.toFixed(1)}%, NPM ${npm.toFixed(1)}%`)
   if (hasPocketPivot) reasons.push('Pocket Pivot')
-  if (patternType !== 'none') reasons.push(patternType === 'htf' ? 'High Tight Flag' : 'Flat Base')
+  if (patternType !== 'none') {
+    const pLabel = patternType === 'htf' ? 'High Tight Flag' : patternType === 'cup-handle' ? 'Cup & Handle' : 'Flat Base'
+    reasons.push(pLabel)
+  }
+  if (baseCount > 0) reasons.push(`Base #${baseCount}`)
   if (setupType !== 'none') reasons.push(setupType === 'power-play' ? 'Power Play' : 'Low Cheat')
-  if (volumeSignal === 'akumulasi') reasons.push(`Vol: Akumulasi (CMF ${(cmf ?? 0).toFixed(3)})`)
+  if (volumeSignal === 'akumulasi') reasons.push(`Vol: Akumulasi (CMF ${(cmf ?? 0).toFixed(3)}, ${volCriteriaCount}/5)`)
+  if (foreignNetPct != null && foreignNetPct > 0) reasons.push(`Asing: +${foreignNetPct.toFixed(1)}%`)
+  if (vcpResult.isVcp) reasons.push(`VCP (kontraksi: ${vcpResult.contractions}, vol kering)`)
 
-  results.push({ code, name: sc?.name ?? null, sector: sc?.sector ?? null, price, stage, rsRank, sepaScore, techScore, fundScore: finalFundScore, combinedScore, gorenganScore, epsGrowthPct: epsInfo.latestGrowthPct, roe: roe > 0 ? roe : null, der: der < 999 ? der : null, trendCriteriaCount, hasRsLineNewHigh: rsLineNewHigh, hasPocketPivot, patternType, setupType, volumeSignal, cmf, obvTrend, reasons })
+  results.push({ code, name: sc?.name ?? null, sector: sc?.sector ?? null, price, stage, rsRank, sepaScore, techScore, fundScore: finalFundScore, combinedScore, gorenganScore, epsGrowthPct: epsInfo.latestGrowthPct, roe: roe > 0 ? roe : null, der: der < 999 ? der : null, trendCriteriaCount, hasRsLineNewHigh: rsLineNewHigh, hasPocketPivot, patternType, baseCount, setupType, volumeSignal, cmf, mfi, obvTrend, foreignNetPct, volSurgePct, volCriteriaCount, vcpIsVcp: vcpResult.isVcp, vcpContractions: vcpResult.contractions, vcpVolumeDrying: vcpResult.volumeDrying, reasons })
 }
 
 // Sort
@@ -590,9 +743,12 @@ if (detailCode) {
   console.log(`  ${tick((row.roe ?? 0) >= 15)} ROE: ${fNum(row.roe)}%  DER: ${fNum(row.der)}`)
   console.log(`  ${tick(row.hasRsLineNewHigh)} RS Line New High: ${row.hasRsLineNewHigh ? 'Ya' : 'Tidak'}`)
   console.log(`  ${tick(row.hasPocketPivot)} Pocket Pivot: ${row.hasPocketPivot ? 'Ya (dalam 5 hari)' : 'Tidak'}`)
-  console.log(`  ${tick(row.patternType !== 'none')} Base Pattern: ${row.patternType === 'none' ? 'Tidak terdeteksi' : row.patternType.toUpperCase()}`)
+  const pLabel = row.patternType === 'htf' ? 'HIGH TIGHT FLAG' : row.patternType === 'cup-handle' ? 'CUP & HANDLE' : row.patternType === 'flat' ? 'FLAT BASE' : 'Tidak terdeteksi'
+  console.log(`  ${tick(row.patternType !== 'none')} Base Pattern: ${pLabel}${row.baseCount > 0 ? ` (Base #${row.baseCount})` : ''}`)
   console.log(`  ${tick(row.setupType !== 'none')} Power Play/Low Cheat: ${row.setupType === 'none' ? 'Tidak' : row.setupType}`)
-  console.log(`  ${tick(row.volumeSignal === 'akumulasi')} Volume: ${row.volumeSignal.toUpperCase()} | CMF: ${fNum(row.cmf, 3)} | OBV: ${row.obvTrend}`)
+  console.log(`  ${tick(row.vcpIsVcp)} VCP (Pola): ${row.vcpIsVcp ? `Ya (kontraksi: ${row.vcpContractions}, vol kering: ${row.vcpVolumeDrying ? 'Ya' : 'Tidak'})` : 'Tidak terdeteksi'}`)
+  console.log(`  ${tick(row.volumeSignal === 'akumulasi')} Volume: ${row.volumeSignal.toUpperCase()} | Kriteria: ${row.volCriteriaCount}/5 | CMF: ${fNum(row.cmf, 3)} | MFI: ${fNum(row.mfi, 1)} | OBV: ${row.obvTrend}`)
+  console.log(`  ${tick((row.foreignNetPct ?? 0) > 0)} Foreign Flow: ${row.foreignNetPct != null ? `${row.foreignNetPct > 0 ? '+' : ''}${row.foreignNetPct.toFixed(1)}%` : '—'}${row.volSurgePct != null ? ` | Vol Surge: ${row.volSurgePct > 0 ? '+' : ''}${row.volSurgePct.toFixed(1)}%` : ''}`)
   console.log(line)
   console.log(`  Skor: Tech=${row.techScore.toFixed(1)} | Fund=${row.fundScore.toFixed(1)} | Combined=${colorScore(row.combinedScore)}`)
   console.log(`  Gorengan Score: ${row.gorenganScore} ${row.gorenganScore < 30 ? '(aman)' : '(waspada)'}`)
@@ -612,7 +768,7 @@ console.log(`  IDX SCREENER — Terminal Report`)
 console.log(`  Data: ${dateFmt} | Mode: ${mode.toUpperCase()} | Top ${topN} dari ${results.length} kandidat`)
 if (sectorFilter) console.log(`  Sektor: ${sectorFilter}`)
 console.log(dline)
-console.log(`  ${pad('#', 3)} ${pad('Kode', 6)} ${pad('Nama', 22)} ${'Score'.padStart(6)} ${'Tech'.padStart(5)} ${'Fund'.padStart(5)} ${pad('Stage', 5)} ${'RS'.padStart(3)} ${pad('Entry Signals', 30)}`)
+console.log(`  ${pad('#', 3)} ${pad('Kode', 6)} ${pad('Nama', 22)} ${'Score'.padStart(6)} ${'Tech'.padStart(5)} ${'Fund'.padStart(5)} ${pad('Stage', 5)} ${'RS'.padStart(3)} ${pad('Pola', 5)} ${pad('Entry Signals', 28)}`)
 console.log(`  ${line.slice(0, 98)}`)
 
 for (let i = 0; i < top.length; i++) {
@@ -628,8 +784,9 @@ for (let i = 0; i < top.length; i++) {
   if (r.volumeSignal === 'distribusi') signals.push('\x1b[31mDist\x1b[0m')
 
   const score = mode === 'technical' ? r.techScore : mode === 'fundamental' ? r.fundScore : r.combinedScore
+  const vcpLabel = r.vcpIsVcp ? '\x1b[35mVCP\x1b[0m  ' : pad('—', 5)
   console.log(
-    `  ${pad(String(i + 1), 3)} ${pad(r.code, 6)} ${pad(r.name?.slice(0, 22) ?? '-', 22)} ${colorScore(score).padStart(12)} ${r.techScore.toFixed(1).padStart(5)} ${r.fundScore.toFixed(1).padStart(5)} ${colorStage(r.stage).padStart(11)}  ${String(r.rsRank).padStart(3)}  ${signals.join(', ')}`
+    `  ${pad(String(i + 1), 3)} ${pad(r.code, 6)} ${pad(r.name?.slice(0, 22) ?? '-', 22)} ${colorScore(score).padStart(12)} ${r.techScore.toFixed(1).padStart(5)} ${r.fundScore.toFixed(1).padStart(5)} ${colorStage(r.stage).padStart(11)}  ${String(r.rsRank).padStart(3)} ${vcpLabel} ${signals.join(', ')}`
   )
 }
 
