@@ -26,3 +26,4 @@ export { default as PowerPlayView } from '@app/pages/components/screener/PowerPl
 export { default as AiRecommendationView } from '@app/pages/components/screener/AiRecommendationView.tsx'
 export { default as StockListView } from '@app/pages/components/screener/StockListView.tsx'
 export { default as BreakoutView } from '@app/pages/components/screener/BreakoutView.tsx'
+export { default as SmartMoneyView } from '@app/pages/components/screener/SmartMoneyView.tsx'

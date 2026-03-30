@@ -6,6 +6,7 @@
  * Fullstack developer with a focus on security and experience in trading systems.
  */
 
+export * from '@app/server/services/BrokerStockMetrics.ts'
 export * from '@app/server/services/Client.ts'
 export * from '@app/server/services/Composite.ts'
 export * from '@app/server/services/DataEnrichment.ts'

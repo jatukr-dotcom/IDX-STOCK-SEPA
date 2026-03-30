@@ -22,5 +22,8 @@ export class Fetcher {
     await Services.Dividend.run(this.client)
     await Services.SectoralMovement.run(this.client)
     await Services.DataEnrichment.run()
+    // Sync broker concentration metrics for the latest trading day
+    const latestDateInt = Services.CronDate.getDateIntForDayOffset(0)
+    await Services.BrokerStockMetrics.run(this.client, latestDateInt)
   }
 }

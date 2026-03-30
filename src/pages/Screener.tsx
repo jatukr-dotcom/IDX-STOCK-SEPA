@@ -16,6 +16,7 @@ import {
   List,
   Medal,
   Rocket,
+  SearchCheck,
   Star,
   TrendingUp,
   Zap
@@ -156,6 +157,12 @@ export default function Screener() {
     error: breakoutsError,
     refetch: refetchBreakouts
   } = Hooks.useBreakouts()
+  const {
+    data: smartMoneyData,
+    loading: smartMoneyLoading,
+    error: smartMoneyError,
+    refetch: refetchSmartMoney
+  } = Hooks.useSmartMoney()
 
   const handleParamsChange = useCallback((partial: Partial<Types.CandidatesParams>) => {
     setParams((prevParams: Types.CandidatesParams) => ({ ...prevParams, ...partial, offset: 0 }))
@@ -328,6 +335,14 @@ export default function Screener() {
           >
             <TrendingUp size={16} aria-hidden />
             <span>Breakout</span>
+          </button>
+          <button
+            type='button'
+            className={`idx-tab idx-tab-inline ${mainTab === 'smartMoney' ? 'idx-tab-active' : ''}`}
+            onClick={() => setMainTab('smartMoney')}
+          >
+            <SearchCheck size={16} aria-hidden />
+            <span>Smart Money</span>
           </button>
           <button
             type='button'
@@ -526,6 +541,17 @@ export default function Screener() {
               loading={breakoutsLoading}
               error={breakoutsError}
               onRefetch={refetchBreakouts}
+              onRowClick={handleRowClick}
+            />
+          </div>
+        )}
+        {mainTab === 'smartMoney' && (
+          <div className='idx-mt-24'>
+            <ScreenerComps.SmartMoneyView
+              data={smartMoneyData}
+              loading={smartMoneyLoading}
+              error={smartMoneyError}
+              onRefetch={refetchSmartMoney}
               onRowClick={handleRowClick}
             />
           </div>

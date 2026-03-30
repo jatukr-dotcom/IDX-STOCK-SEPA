@@ -3,7 +3,7 @@
  * Jalankan: deno run -A screen.ts [options]
  *
  * Options:
- *   --mode technical|fundamental|combined|momentum|breakout|vcp|pullback
+ *   --mode technical|fundamental|combined|momentum|breakout|vcp|pullback|smt
  *   --top N                                (default: 15)
  *   --min-score N                          (default: 0)
  *   --sector "nama sektor"                 (default: semua)
@@ -73,6 +73,16 @@ type ScreenRow = {
   sharpeRatio: number | null
   pullbackSignal: boolean
   ema21: number | null
+  // SMT fields
+  smtScore: number
+  smtSignal: 'strong-buy' | 'buy' | 'neutral' | 'sell' | 'strong-sell'
+  smtReasons: string[]
+  foreignNet5d: number | null
+  foreignAcceleration: number | null
+  consecutiveForeignBuyDays: number
+  avgTradeSize5d: number | null
+  avgTradeSizeChange: number | null
+  bidOfferRatio: number | null
 }
 
 type WatchlistEntry = { code: string; name: string | null; score: number; rsRank: number; stage: StageNumber }
@@ -609,13 +619,14 @@ const dateStart = (() => {
   return Number(`${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`)
 })()
 
-// Query OHLCV + foreign flow
+// Query OHLCV + foreign flow + bid/offer/frequency for SMT
 const summaryRows = await query<{
   stock_code: string; date: number; price_close: number; price_high: number; price_low: number
-  volume: number; value: number; listed_shares: number | null; tradable_shares: number | null
+  volume: number; value: number; frequency: number | null; listed_shares: number | null; tradable_shares: number | null
   foreign_buy: number | null; foreign_sell: number | null
+  bid_volume: number | null; offer_volume: number | null
 }>(
-  'SELECT stock_code, date, price_close, price_high, price_low, volume, value, listed_shares, tradable_shares, foreign_buy, foreign_sell FROM stock_summary WHERE date >= ? AND date <= ? ORDER BY stock_code, date',
+  'SELECT stock_code, date, price_close, price_high, price_low, volume, value, frequency, listed_shares, tradable_shares, foreign_buy, foreign_sell, bid_volume, offer_volume FROM stock_summary WHERE date >= ? AND date <= ? ORDER BY stock_code, date',
   [dateStart, dateRef]
 )
 
@@ -678,7 +689,7 @@ for (const r of finRows) {
 }
 
 // Build OHLCV by code
-type OhlcvEntry = { date: number; close: number; high: number; low: number; volume: number; value: number; foreignBuy: number; foreignSell: number }
+type OhlcvEntry = { date: number; close: number; high: number; low: number; volume: number; value: number; frequency: number; foreignBuy: number; foreignSell: number; bidVolume: number; offerVolume: number }
 const ohlcByCode = new Map<string, OhlcvEntry[]>()
 const floatByCode = new Map<string, { listed: number; tradable: number }>()
 
@@ -686,7 +697,7 @@ for (const r of summaryRows) {
   const close = Number(r.price_close)
   if (!Number.isFinite(close) || close <= 0) continue
   const list = ohlcByCode.get(r.stock_code) ?? []
-  list.push({ date: Number(r.date), close, high: Number(r.price_high) || close, low: Number(r.price_low) || close, volume: Number(r.volume) || 0, value: Number(r.value) || 0, foreignBuy: Number(r.foreign_buy) || 0, foreignSell: Number(r.foreign_sell) || 0 })
+  list.push({ date: Number(r.date), close, high: Number(r.price_high) || close, low: Number(r.price_low) || close, volume: Number(r.volume) || 0, value: Number(r.value) || 0, frequency: Number(r.frequency) || 0, foreignBuy: Number(r.foreign_buy) || 0, foreignSell: Number(r.foreign_sell) || 0, bidVolume: Number(r.bid_volume) || 0, offerVolume: Number(r.offer_volume) || 0 })
   ohlcByCode.set(r.stock_code, list)
   if (r.listed_shares != null && r.tradable_shares != null) floatByCode.set(r.stock_code, { listed: Number(r.listed_shares), tradable: Number(r.tradable_shares) })
 }
@@ -1084,6 +1095,73 @@ for (const [code, entries] of ohlcByCode) {
   if (shakeoutDetected) reasons.push('Shakeout terdeteksi')
   if (sellSignal) reasons.push(`JUAL: ${sellSignal}`)
 
+  // ─── SMT computation ───────────────────────────────────────────────────────
+  const smtReasons: string[] = []
+  let smtBullishCount = 0
+
+  // 1. Foreign Flow Momentum (30 pts)
+  const smtFNet5d = entries.slice(-5).reduce((s: number, e: OhlcvEntry) => s + e.foreignBuy - e.foreignSell, 0)
+  const smtFNet20d = entries.length >= 20 ? entries.slice(-20).reduce((s: number, e: OhlcvEntry) => s + e.foreignBuy - e.foreignSell, 0) : null
+  const smtFAvg5 = smtFNet5d / 5
+  const smtFAvg20 = smtFNet20d != null ? smtFNet20d / 20 : 0
+  const smtFAccel = smtFAvg5 - smtFAvg20
+  const smtAvgVol20 = entries.length >= 20 ? entries.slice(-20).reduce((s: number, e: OhlcvEntry) => s + e.volume, 0) / 20 : 1
+  const smtAccelNorm = smtAvgVol20 > 0 ? smtFAccel / smtAvgVol20 : 0
+  const smtForeignFlowScore = Math.round(Math.max(0, Math.min(1, (smtAccelNorm + 0.1) / 0.2)) * 30)
+
+  // 2. Foreign Flow Streak (10 pts)
+  let smtStreak = 0
+  for (let si = entries.length - 1; si >= 0; si--) {
+    if (entries[si]!.foreignBuy > entries[si]!.foreignSell) smtStreak++
+    else break
+  }
+  const smtForeignStreakScore = smtStreak >= 5 ? 10 : smtStreak >= 3 ? 6 : smtStreak >= 1 ? 3 : 0
+  if (smtForeignFlowScore >= 18) { smtBullishCount++; smtReasons.push('Foreign flow accelerating') }
+  if (smtStreak >= 5) { smtBullishCount++; smtReasons.push(`Asing beli ${smtStreak}h berturut`) }
+
+  // 3. Volume-Price Divergence (15 pts) — reuse obvTrend
+  let smtVolPriceScore = 0
+  const smtPriceTrend = entries.length >= 10
+    ? (() => { const f = entries[entries.length - 10]!.close; const l = entries[entries.length - 1]!.close; const p = f > 0 ? (l - f) / f : 0; return p > 0.03 ? 'up' : p < -0.03 ? 'down' : 'flat' })()
+    : 'flat'
+  if (obvTrend === 'up' && smtPriceTrend === 'down') { smtVolPriceScore = 12; smtBullishCount++; smtReasons.push('Divergence bullish: OBV naik, harga turun') }
+  else if (obvTrend === 'up') { smtVolPriceScore = 15; smtBullishCount++; smtReasons.push('OBV naik (akumulasi volume)') }
+  else if (obvTrend === 'flat') smtVolPriceScore = 5
+
+  // 4. Trade Size Profile (20 pts)
+  let smtTradeSizeScore = 0
+  let smtTradeSizeChange: number | null = null
+  if (entries.length >= 20) {
+    const smtTs5Freq = entries.slice(-5).reduce((s: number, e: OhlcvEntry) => s + e.frequency, 0)
+    const smtTs5Val = entries.slice(-5).reduce((s: number, e: OhlcvEntry) => s + e.value, 0)
+    const smtTs20Freq = entries.slice(-20).reduce((s: number, e: OhlcvEntry) => s + e.frequency, 0)
+    const smtTs20Val = entries.slice(-20).reduce((s: number, e: OhlcvEntry) => s + e.value, 0)
+    const smtTs5 = smtTs5Freq > 0 ? smtTs5Val / smtTs5Freq : null
+    const smtTs20 = smtTs20Freq > 0 ? smtTs20Val / smtTs20Freq : null
+    if (smtTs5 != null && smtTs20 != null && smtTs20 > 0) {
+      smtTradeSizeChange = Math.round(((smtTs5 - smtTs20) / smtTs20) * 1000) / 10
+      smtTradeSizeScore = Math.round(Math.max(0, Math.min(1, (smtTradeSizeChange + 30) / 80)) * 20)
+      if (smtTradeSizeScore >= 14) { smtBullishCount++; smtReasons.push(`Ukuran tx naik ${smtTradeSizeChange.toFixed(1)}% (institusional)`) }
+    }
+  }
+
+  // 5. Bid/Offer Pressure (10 pts)
+  let smtBidOfferScore = 0
+  const smtBidOfferRatio = lastEntry.bidVolume > 0 && lastEntry.offerVolume > 0
+    ? Math.round((lastEntry.bidVolume / lastEntry.offerVolume) * 1000) / 1000
+    : null
+  if (smtBidOfferRatio != null) {
+    if (smtBidOfferRatio >= 1.5) { smtBidOfferScore = 10; smtBullishCount++; smtReasons.push(`Bid/Offer ${smtBidOfferRatio.toFixed(2)} (tekanan beli)`) }
+    else if (smtBidOfferRatio >= 1.2) smtBidOfferScore = 6
+    else if (smtBidOfferRatio >= 1.0) smtBidOfferScore = 3
+  }
+
+  // 6. Cross-Signal Alignment (15 pts)
+  const smtCrossScore = smtBullishCount >= 4 ? 15 : smtBullishCount === 3 ? 10 : smtBullishCount === 2 ? 5 : 0
+
+  const smtScore = Math.min(100, smtForeignFlowScore + smtForeignStreakScore + smtVolPriceScore + smtTradeSizeScore + smtBidOfferScore + smtCrossScore)
+  const smtSignal: ScreenRow['smtSignal'] = smtScore >= 75 ? 'strong-buy' : smtScore >= 55 ? 'buy' : smtScore >= 35 ? 'neutral' : smtScore >= 20 ? 'sell' : 'strong-sell'
+
   results.push({
     code, name: sc?.name ?? null, sector: sc?.sector ?? null, price, stage, rsRank, sepaScore, techScore,
     fundScore: finalFundScore, combinedScore, gorenganScore, epsGrowthPct: epsInfo.latestGrowthPct,
@@ -1092,7 +1170,14 @@ for (const [code, entries] of ohlcByCode) {
     volSurgePct, volCriteriaCount, vcpIsVcp: vcpResult.isVcp, vcpContractions: vcpResult.contractions,
     vcpVolumeDrying: vcpResult.volumeDrying, reasons,
     breakoutSignal, pivotPoint, breakoutVolRatio, shakeoutDetected, sellSignal,
-    atr, atrPct, bbSqueeze, bbWidth, momentumFactor, sharpeRatio, pullbackSignal, ema21
+    atr, atrPct, bbSqueeze, bbWidth, momentumFactor, sharpeRatio, pullbackSignal, ema21,
+    smtScore, smtSignal, smtReasons,
+    foreignNet5d: smtFNet5d,
+    foreignAcceleration: smtFAccel,
+    consecutiveForeignBuyDays: smtStreak,
+    avgTradeSize5d: null,
+    avgTradeSizeChange: smtTradeSizeChange,
+    bidOfferRatio: smtBidOfferRatio
   })
 }
 
@@ -1105,6 +1190,8 @@ if (argMode === 'breakout') {
   filteredResults = results.filter((r) => r.vcpIsVcp)
 } else if (argMode === 'pullback') {
   filteredResults = results.filter((r) => r.pullbackSignal)
+} else if (argMode === 'smt') {
+  filteredResults = results.filter((r) => r.smtSignal === 'strong-buy' || r.smtSignal === 'buy')
 }
 
 // Sort
@@ -1115,9 +1202,10 @@ filteredResults.sort((a, b) => {
   if (sortBy === 'foreign') return (b.foreignNetPct ?? -999) - (a.foreignNetPct ?? -999)
   if (sortBy === 'momentum') return b.momentumFactor - a.momentumFactor
   if (sortBy === 'atr') return (b.atrPct ?? 0) - (a.atrPct ?? 0)
+  if (sortBy === 'smt') return b.smtScore - a.smtScore
   // default sort by score
-  const sa = argMode === 'technical' ? a.techScore : argMode === 'fundamental' ? a.fundScore : argMode === 'momentum' ? a.momentumFactor : a.combinedScore
-  const sb = argMode === 'technical' ? b.techScore : argMode === 'fundamental' ? b.fundScore : argMode === 'momentum' ? b.momentumFactor : b.combinedScore
+  const sa = argMode === 'technical' ? a.techScore : argMode === 'fundamental' ? a.fundScore : argMode === 'momentum' ? a.momentumFactor : argMode === 'smt' ? a.smtScore : a.combinedScore
+  const sb = argMode === 'technical' ? b.techScore : argMode === 'fundamental' ? b.fundScore : argMode === 'momentum' ? b.momentumFactor : argMode === 'smt' ? b.smtScore : b.combinedScore
   return sb - sa
 })
 
@@ -1239,6 +1327,23 @@ if (detailCode) {
   console.log(`  ─ ATR(14): ${row.atr != null ? row.atr.toFixed(0) : '—'} (${fNum(row.atrPct, 1)}%) | BB Squeeze: ${row.bbSqueeze ? 'Ya' : 'Tidak'} | BB Width: ${fNum(row.bbWidth, 1)}%`)
   console.log(`  ─ Sharpe Ratio: ${fNum(row.sharpeRatio, 2)} | Momentum Factor: ${row.momentumFactor}`)
   console.log(`  ─ EMA(21): ${row.ema21 != null ? row.ema21.toFixed(0) : '—'} | Pullback Setup: ${row.pullbackSignal ? 'Ya' : 'Tidak'}`)
+  console.log(line)
+  // Smart Money section
+  const smtBar = '█'.repeat(Math.round(row.smtScore / 10)) + '░'.repeat(10 - Math.round(row.smtScore / 10))
+  const smtColor = row.smtScore >= 75 ? '\x1b[32m' : row.smtScore >= 55 ? '\x1b[33m' : '\x1b[31m'
+  const smtSignalLabel = row.smtSignal === 'strong-buy' ? '\x1b[32mSTRONG BUY\x1b[0m' : row.smtSignal === 'buy' ? '\x1b[32mBUY\x1b[0m' : row.smtSignal === 'neutral' ? '\x1b[33mNETRAL\x1b[0m' : row.smtSignal === 'sell' ? '\x1b[31mSELL\x1b[0m' : '\x1b[31mSTRONG SELL\x1b[0m'
+  console.log(`  ═══ Smart Money ═══`)
+  console.log(`  SMT Score       : ${smtColor}${row.smtScore}/100 [${smtBar}]\x1b[0m`)
+  const smtFn5dStr = row.foreignNet5d != null ? `${row.foreignNet5d >= 0 ? '+' : ''}${(row.foreignNet5d / 1_000_000_000).toFixed(1)}B (5d)` : '—'
+  const smtAccelStr = row.foreignAcceleration != null && row.foreignAcceleration > 0 ? ' ▲ accelerating' : row.foreignAcceleration != null && row.foreignAcceleration < 0 ? ' ▼ decelerating' : ''
+  console.log(`  Foreign Flow    : ${smtFn5dStr}${smtAccelStr}`)
+  console.log(`  Consecutive Buy : ${row.consecutiveForeignBuyDays > 0 ? `${row.consecutiveForeignBuyDays} hari berturut-turut` : '—'}`)
+  const smtTscStr = row.avgTradeSizeChange != null ? `${row.avgTradeSizeChange >= 0 ? '+' : ''}${row.avgTradeSizeChange.toFixed(1)}% vs 20d${Math.abs(row.avgTradeSizeChange) >= 20 ? ' (institusional)' : ''}` : '—'
+  console.log(`  Avg Trade Size  : ${smtTscStr}`)
+  const smtBoStr = row.bidOfferRatio != null ? `${row.bidOfferRatio.toFixed(2)}${row.bidOfferRatio >= 1.5 ? ' (buyer dominated)' : row.bidOfferRatio >= 1.0 ? ' (balanced)' : ' (seller dominated)'}` : '—'
+  console.log(`  Bid/Offer Ratio : ${smtBoStr}`)
+  console.log(`  Signal          : ${smtSignalLabel}`)
+  if (row.smtReasons.length > 0) console.log(`  Reasons         : ${row.smtReasons.join(', ')}`)
   // Position sizing (Phase 3E)
   if (portfolioSize > 0) {
     const riskPerTrade = portfolioSize * riskPct / 100
@@ -1278,6 +1383,30 @@ console.log(`  Data: ${dateFmt} | Mode: ${argMode.toUpperCase()} | Top ${topN} d
 if (sectorFilter) console.log(`  Sektor: ${sectorFilter}`)
 console.log(`  Pasar: ${marketFollowThrough ? '\x1b[32mFollow-Through Day AKTIF\x1b[0m' : 'Normal'}`)
 console.log(dline)
+
+// ─── SMT mode table ───────────────────────────────────────────────────────────
+
+if (argMode === 'smt') {
+  console.log(`  ${pad('#', 3)} ${pad('Kode', 6)} ${pad('Nama', 22)} ${'SMT'.padStart(5)} ${'For5d'.padStart(8)} ${'Streak'.padStart(7)} ${'TxChg'.padStart(7)} ${'B/O'.padStart(5)} ${pad('Sinyal', 12)}`)
+  console.log(`  ${'─'.repeat(90)}`)
+  for (let i = 0; i < top.length; i++) {
+    const r = top[i]!
+    const smtFn5d = r.foreignNet5d != null ? `${r.foreignNet5d >= 0 ? '+' : ''}${(r.foreignNet5d / 1_000_000_000).toFixed(1)}B` : '—'
+    const smtStreak = r.consecutiveForeignBuyDays > 0 ? `${r.consecutiveForeignBuyDays}h` : '—'
+    const smtTxChg = r.avgTradeSizeChange != null ? `${r.avgTradeSizeChange >= 0 ? '+' : ''}${r.avgTradeSizeChange.toFixed(1)}%` : '—'
+    const smtBo = r.bidOfferRatio != null ? r.bidOfferRatio.toFixed(2) : '—'
+    const smtSigLabel = r.smtSignal === 'strong-buy' ? '\x1b[32mSTRONG BUY\x1b[0m' : '\x1b[32mBUY\x1b[0m'
+    console.log(
+      `  ${pad(String(i + 1), 3)} ${pad(r.code, 6)} ${pad(r.name?.slice(0, 22) ?? '-', 22)} ${colorScore(r.smtScore).padStart(12)} ${smtFn5d.padStart(8)} ${smtStreak.padStart(7)} ${smtTxChg.padStart(7)} ${smtBo.padStart(5)} ${smtSigLabel}`
+    )
+  }
+  console.log(dline)
+  console.log(`  Untuk detail: deno run -A screen.ts --detail KODE`)
+  console.log(`  Sort: --sort smt|foreign|momentum | Filter: --top N --sector "nama"`)
+  console.log(dline + '\n')
+  client.close()
+  Deno.exit(0)
+}
 
 if (compactMode) {
   console.log(`  ${pad('#', 3)} ${pad('Kode', 6)} ${'Score'.padStart(6)} ${'RS'.padStart(3)} ${pad('Pola', 7)} ${pad('Signals', 30)}`)

@@ -820,6 +820,70 @@ export interface TechnicalAnalysisApiResponse {
   divergences: DivergenceSignal[]
 }
 
+// ─── Smart Money Tracker ─────────────────────────────────────────────────────
+
+export interface SmartMoneyRow {
+  code: string
+  name: string | null
+  sector: string | null
+  price: number | null
+  smtScore: number
+  foreignFlowScore: number
+  foreignStreakScore: number
+  volumePriceScore: number
+  tradeSizeScore: number
+  bidOfferScore: number
+  crossSignalScore: number
+  brokerScore: number | null
+  foreignNet5d: number | null
+  foreignNet20d: number | null
+  foreignAcceleration: number | null
+  consecutiveForeignBuyDays: number
+  avgTradeSize: number | null
+  avgTradeSizeChange: number | null
+  bidOfferRatio: number | null
+  signal: 'strong-buy' | 'buy' | 'neutral' | 'sell' | 'strong-sell'
+  reasons: string[]
+  topBrokerConcentration: number | null
+  dominantBrokerName: string | null
+}
+
+export interface SmartMoneyResponse {
+  date: number
+  totalCount: number
+  hasBrokerData: boolean
+  data: SmartMoneyRow[]
+}
+
+export interface SmartMoneyViewProps {
+  data: SmartMoneyResponse | null
+  loading: boolean
+  error: string | null
+  onRefetch: () => void
+  onRowClick?: (code: string) => void
+}
+
+export interface BrokerFlowTopBroker {
+  brokerCode: string
+  brokerName: string
+  volume: number
+  value: number
+  frequency: number
+  volumePct: number
+}
+
+export interface BrokerFlowResponse {
+  code: string
+  date: number
+  brokerCount: number | null
+  top3VolumePct: number | null
+  top5VolumePct: number | null
+  dominantBrokerCode: string | null
+  dominantBrokerName: string | null
+  dominantBrokerVolumePct: number | null
+  topBrokers: BrokerFlowTopBroker[]
+}
+
 export interface StockListItem {
   code: string
   name: string | null
