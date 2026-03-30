@@ -395,6 +395,112 @@ export default function TabHowTo() {
         di-cache selama 1 jam.
       </p>
 
+      <h3 className='idx-home-h3'>18. Alur Screening Saham (Panduan Lengkap)</h3>
+      <p className='idx-home-p idx-home-p-mb8'>
+        Berikut tahapan yang direkomendasikan untuk menemukan saham yang siap di-entry menggunakan
+        semua fitur screener secara sistematis:
+      </p>
+
+      <p className='idx-home-p idx-home-p-mb8'>
+        <strong>Tahap 1 — Shortlist via AI Rekomendasi</strong>
+      </p>
+      <ul className='idx-home-ul'>
+        <li className='idx-home-li'>
+          Buka tab{' '}
+          <strong>AI Rekomendasi → mode Kombinasi</strong>. Sistem sudah menggabungkan semua sinyal
+          teknikal + fundamental menjadi satu skor.
+        </li>
+        <li className='idx-home-li'>
+          Catat 10–20 saham teratas. Saham gorengan dan Stage 3/4 sudah otomatis dieksklusi.
+        </li>
+        <li className='idx-home-li'>
+          Klik baris saham untuk melihat breakdown alasan (SEPA, Stage, RS, EPS, pattern).
+        </li>
+      </ul>
+
+      <p className='idx-home-p idx-home-p-mb8'>
+        <strong>Tahap 2 — Validasi Stage &amp; Trend</strong>
+      </p>
+      <ul className='idx-home-ul'>
+        <li className='idx-home-li'>
+          <strong>Momentum Masters → Stage Analysis</strong>: Pastikan saham di{' '}
+          <strong>Stage 2</strong> (uptrend). Stage 1 boleh di-watchlist untuk dipantau.
+        </li>
+        <li className='idx-home-li'>
+          <strong>Trend Template</strong>: Idealnya <strong>6–8 kriteria</strong> terpenuhi dari 8.
+        </li>
+        <li className='idx-home-li'>
+          <strong>RS Ranking</strong>: Minimal RS Rank <strong>≥ 70</strong>, idealnya{' '}
+          <strong>≥ 80</strong>. Buang saham dengan RS lemah.
+        </li>
+      </ul>
+
+      <p className='idx-home-p idx-home-p-mb8'>
+        <strong>Tahap 3 — Cari Timing Entry</strong>
+      </p>
+      <ul className='idx-home-ul'>
+        <li className='idx-home-li'>
+          <strong>Base Patterns</strong>: Cek apakah saham membentuk base. Base 1 = risiko terendah,
+          Base 3+ = risiko tinggi.
+        </li>
+        <li className='idx-home-li'>
+          <strong>Pocket Pivot</strong>: Ada sinyal volume beli institusi dalam 5 hari terakhir? Ini
+          sinyal entry kuat.
+        </li>
+        <li className='idx-home-li'>
+          <strong>RS Line New High</strong>: RS Line mencetak new high sebelum harga = leading
+          signal terkuat.
+        </li>
+        <li className='idx-home-li'>
+          <strong>Power Play / Low Cheat</strong>: Konsolidasi sangat ketat + volume kering =
+          breakout imminent.
+        </li>
+        <li className='idx-home-li'>
+          <strong>Volume A/D</strong>: Cek kolom <strong>Pola</strong> (VCP?) dan{' '}
+          <strong>Sinyal</strong> (Akumulasi?). Kriteria 4–5 = sangat kuat.
+        </li>
+      </ul>
+
+      <p className='idx-home-p idx-home-p-mb8'>
+        <strong>Tahap 4 — Deep Dive Detail Saham</strong>
+      </p>
+      <ul className='idx-home-ul'>
+        <li className='idx-home-li'>
+          Klik saham untuk buka detail. Periksa semua tab: <strong>Fundamental</strong>{' '}
+          (PER, ROE, DER), <strong>EPS Historis</strong> (growth ≥ 25% YoY?),{' '}
+          <strong>Teknikal</strong> (chart + MA), <strong>Volume A/D</strong>{' '}
+          (A/D Line + OBV naik = akumulasi valid).
+        </li>
+        <li className='idx-home-li'>
+          <strong>Teknikal Lanjutan</strong>: Pastikan RSI tidak overbought (&lt;70), MACD crossover
+          bullish, tidak ada divergensi bearish.
+        </li>
+      </ul>
+
+      <p className='idx-home-p idx-home-p-mb8'>
+        <strong>Tahap 5 — Checklist Entry</strong>
+      </p>
+      <p className='idx-home-p idx-home-p-mb8'>
+        Saham ideal untuk entry memenuhi sebanyak mungkin kriteria berikut:
+      </p>
+      <ol className='idx-home-list idx-home-ol'>
+        <li className='idx-home-li'>Stage 2 (uptrend aktif)</li>
+        <li className='idx-home-li'>Trend Template ≥ 6/8 kriteria</li>
+        <li className='idx-home-li'>RS Rank ≥ 70</li>
+        <li className='idx-home-li'>Base 1 atau 2 (bukan late-stage base)</li>
+        <li className='idx-home-li'>
+          Ada entry signal aktif (Pocket Pivot / VCP / Power Play / RS Line New High)
+        </li>
+        <li className='idx-home-li'>Volume akumulasi (CMF positif, OBV naik)</li>
+        <li className='idx-home-li'>EPS growth ≥ 25% YoY</li>
+        <li className='idx-home-li'>RSI &lt; 70 (belum overbought)</li>
+        <li className='idx-home-li'>Tidak ada divergensi bearish pada A/D Line / OBV</li>
+      </ol>
+      <p className='idx-home-note'>
+        Semakin banyak kriteria terpenuhi, semakin kuat setup-nya. Tidak ada saham yang sempurna —
+        gunakan checklist ini sebagai panduan prioritas, bukan syarat mutlak.
+      </p>
+
       <p className='idx-home-note'>
         Gunakan informasi di <strong>screener</strong> dan <strong>detail saham</strong>{' '}
         sebagai awal riset, bukan satu-satunya dasar keputusan. Selalu lakukan riset mandiri dan
