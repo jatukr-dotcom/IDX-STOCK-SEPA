@@ -13,12 +13,14 @@ import type * as Types from '@app/pages/Types.ts'
 
 type SignalFilter = 'all' | 'accumulation' | 'distribution' | 'vcp'
 
-function SignalBadge(
-  { signal, isVcp }: { signal: Types.VolumeScreenerRow['signal']; isVcp: boolean }
-) {
+function PatternBadge({ isVcp }: { isVcp: boolean }) {
   if (isVcp) {
     return <span className='idx-vol-badge idx-vol-badge-vcp'>VCP</span>
   }
+  return <span className='idx-text-muted'>—</span>
+}
+
+function SignalBadge({ signal }: { signal: Types.VolumeScreenerRow['signal'] }) {
   if (signal === 'accumulation') {
     return <span className='idx-vol-badge idx-vol-badge-accum'>AKUMULASI</span>
   }
@@ -121,7 +123,10 @@ function VolumeRow(
         <CriteriaPips count={row.criteriaCount} />
       </td>
       <td className='idx-text-center'>
-        <SignalBadge signal={row.signal} isVcp={row.vcp.isVcp} />
+        <PatternBadge isVcp={row.vcp.isVcp} />
+      </td>
+      <td className='idx-text-center'>
+        <SignalBadge signal={row.signal} />
       </td>
     </tr>
   )
@@ -284,6 +289,7 @@ export default function VolumeAnalysisView(
               <th className='idx-text-center'>OBV</th>
               <th className='idx-text-right'>Foreign%</th>
               <th className='idx-text-center'>Kriteria</th>
+              <th className='idx-text-center'>Pola</th>
               <th className='idx-text-center'>Sinyal</th>
             </tr>
           </thead>
@@ -292,7 +298,7 @@ export default function VolumeAnalysisView(
               ? (
                 <tr>
                   <td
-                    colSpan={8}
+                    colSpan={9}
                     className='idx-text-center idx-text-muted'
                     style={{ padding: '24px 0' }}
                   >
