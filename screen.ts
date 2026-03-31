@@ -88,6 +88,9 @@ type ScreenRow = {
   accumulatingBrokers: string[]
   brokerConcentrationPct: number | null
   autoScore: number
+  // Parabolic / overextension fields
+  extensionRatio: number | null
+  ret3mPct: number | null
 }
 
 type WatchlistEntry = { code: string; name: string | null; score: number; rsRank: number; stage: StageNumber }
@@ -844,6 +847,15 @@ for (const [code, entries] of ohlcByCode) {
   const lastEntry = entries[entries.length - 1]!
   const price = lastEntry.close
 
+  // ── Hoist MA200 (reused by gorenganScore + autoScore) ────────────────────
+  const ma200Early = closes.length >= 200
+    ? closes.slice(-200).reduce((a: number, b: number) => a + b, 0) / 200
+    : null
+  const extensionRatio = (ma200Early != null && ma200Early > 0) ? price / ma200Early : null
+  const ret3mPct = closes.length >= 63 && closes[closes.length - 63]! > 0
+    ? ((price - closes[closes.length - 63]!) / closes[closes.length - 63]!) * 100
+    : null
+
   // Gorengan filter
   let gorenganScore = 0
   if (sc?.notation === 'X') gorenganScore += 40
@@ -863,6 +875,17 @@ for (const [code, entries] of ohlcByCode) {
   const avgVol20 = volumes.slice(-20).reduce((a, b) => a + b, 0) / 20
   if (volumes[volumes.length - 1]! > avgVol20 * 10) gorenganScore += 10
   if ((historyByCode.get(code) ?? []).length === 0) gorenganScore += 5
+  // Layer 1: Parabolic extension penalty
+  if (extensionRatio != null) {
+    if (extensionRatio > 5.0) gorenganScore += 30
+    else if (extensionRatio > 3.0) gorenganScore += 20
+    else if (extensionRatio > 2.5) gorenganScore += 10
+  }
+  // Layer 1: 3-month climax run penalty
+  if (ret3mPct != null) {
+    if (ret3mPct > 300) gorenganScore += 25
+    else if (ret3mPct > 200) gorenganScore += 15
+  }
   if (gorenganScore >= 60) continue
 
   // Stage
@@ -1297,6 +1320,15 @@ for (const [code, entries] of ohlcByCode) {
   else if (gorenganScore >= 30) autoScore -= 5
   // Sell signal — multiplicative (severe): hard to rank high with a sell flag
   if (sellSignal) autoScore *= 0.5
+  // Layer 2: Fundamental floor — fund < 25 disqualifies from top picks
+  if (finalFundScore < 25) autoScore *= 0.4
+  else if (finalFundScore < 35) autoScore *= 0.7
+  // Layer 2: Parabolic extension — multiplicative penalty
+  if (extensionRatio != null) {
+    if (extensionRatio > 5.0) autoScore *= 0.2
+    else if (extensionRatio > 3.0) autoScore *= 0.4
+    else if (extensionRatio > 2.5) autoScore *= 0.7
+  }
   autoScore = Math.max(0, Math.min(100, autoScore))
 
   results.push({
@@ -1317,7 +1349,9 @@ for (const [code, entries] of ohlcByCode) {
     bidOfferRatio: smtBidOfferRatio,
     accumulatingBrokers: smtAccumBrokers,
     brokerConcentrationPct: brokerConcentrationMapScreen.get(code) ?? null,
-    autoScore
+    autoScore,
+    extensionRatio,
+    ret3mPct
   })
 }
 
@@ -1596,6 +1630,12 @@ if (argMode === 'auto') {
     const warn: string[] = []
     if (r.sellSignal) warn.push(`\x1b[31m${r.sellSignal}\x1b[0m`)
     if (r.gorenganScore >= 30) warn.push('\x1b[31mGorengan\x1b[0m')
+    // Layer 3: Parabolic warning
+    if (r.extensionRatio != null && r.extensionRatio > 2.5) {
+      warn.push(`\x1b[31mPARABOLIC ${r.extensionRatio.toFixed(1)}×\x1b[0m`)
+    }
+    // Layer 3: Fundamental weakness warning
+    if (r.fundScore < 25) warn.push('\x1b[33mFundLemah\x1b[0m')
     
     console.log(`  ${pad(String(i + 1), 3)} ${pad(r.code, 6)} ${pad(r.name?.slice(0, 20) ?? '-', 20)} ${autoStr} ${setupStr} ${smtStr} ${r.combinedScore.toFixed(0).padStart(5)} ${String(r.momentumFactor).padStart(4)} ${warn.join(', ')}`)
   }

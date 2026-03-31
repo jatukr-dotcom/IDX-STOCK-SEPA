@@ -408,21 +408,62 @@ export async function GET(ctx: Context) {
     name: Schemas.screener.name,
     sector: Schemas.screener.sector,
     notation: Schemas.screener.notation,
-    marketCapital: Schemas.screener.marketCapital
+    marketCapital: Schemas.screener.marketCapital,
+    roe: Schemas.screener.roe,
+    npm: Schemas.screener.npm,
+    eps: Schemas.screener.eps
   }).from(Schemas.screener)
   const screenerMap = new Map<string, {
     name: string | null
     sector: string | null
     notation: string | null
     mc: number | null
+    roe: number | null
+    npm: number | null
+    eps: number | null
   }>()
   for (const r of screenerRows) {
     screenerMap.set(r.code, {
       name: r.name ?? null,
       sector: r.sector ?? null,
       notation: r.notation ?? null,
-      mc: r.marketCapital != null ? Number(r.marketCapital) : null
+      mc: r.marketCapital != null ? Number(r.marketCapital) : null,
+      roe: r.roe != null ? Number(r.roe) : null,
+      npm: r.npm != null ? Number(r.npm) : null,
+      eps: r.eps != null ? Number(r.eps) : null
     })
+  }
+
+  // Fetch 200-day close prices for parabolic extension detection
+  const dateStart200 = Utils.addDaysToDateInt(dateRef, -280) // buffer for weekends
+  const priceRows200 = await Database.select({
+    stockCode: Schemas.summary.stockCode,
+    priceClose: Schemas.summary.priceClose
+  })
+    .from(Schemas.summary)
+    .where(and(gte(Schemas.summary.date, dateStart200), lte(Schemas.summary.date, dateRef)))
+    .orderBy(asc(Schemas.summary.stockCode), asc(Schemas.summary.date))
+  const ma200ByCode = new Map<string, number>()
+  const ret3mByCode = new Map<string, number>()
+  // Group closes per code
+  const closesTemp = new Map<string, number[]>()
+  for (const r of priceRows200) {
+    const c = r.priceClose != null ? Number(r.priceClose) : null
+    if (c == null || c <= 0) continue
+    const arr = closesTemp.get(r.stockCode) ?? []
+    arr.push(c)
+    closesTemp.set(r.stockCode, arr)
+  }
+  for (const [sc, arr] of closesTemp.entries()) {
+    if (arr.length >= 200) {
+      const ma200 = arr.slice(-200).reduce((a, b) => a + b, 0) / 200
+      ma200ByCode.set(sc, ma200)
+    }
+    if (arr.length >= 63) {
+      const price3mAgo = arr[arr.length - 63]!
+      const priceNow = arr[arr.length - 1]!
+      if (price3mAgo > 0) ret3mByCode.set(sc, ((priceNow - price3mAgo) / price3mAgo) * 100)
+    }
   }
 
   // Fetch broker concentration data for latest date (optional — degrades gracefully if table empty)
@@ -532,11 +573,29 @@ export async function GET(ctx: Context) {
     }
 
     const fund = screenerMap.get(code)
-    // Skip gorengan
+    // Skip notation X (cross-exchange / suspended)
     if (fund?.notation === 'X') {
       continue
     }
     if (fund?.mc != null && fund.mc < 100_000_000_000) {
+      continue
+    }
+    // Skip parabolic extension: price > 3× MA200 is likely a pump — suppress from SMT results
+    const ma200 = ma200ByCode.get(code)
+    const price = rows[rows.length - 1]!.close
+    if (ma200 != null && ma200 > 0 && price / ma200 > 3.0) {
+      continue
+    }
+    // Skip climax run: return > 200% in 3 months
+    const ret3m = ret3mByCode.get(code)
+    if (ret3m != null && ret3m > 200) {
+      continue
+    }
+    // Fundamental floor proxy: roe < 5 AND npm < 3 → likely no real earnings
+    // (server doesn't have full fundScore, use quick proxy from screener data)
+    const roe = fund?.roe ?? 0
+    const npm = fund?.npm ?? 0
+    if (roe < 5 && npm < 3) {
       continue
     }
 
@@ -556,13 +615,13 @@ export async function GET(ctx: Context) {
     }
     const enrichedTotal = Math.min(100, scores.total + brokerAccumBonus)
 
-    const price = rows[rows.length - 1]!.close
+    const priceForResult = rows[rows.length - 1]!.close
 
     results.push({
       code,
       name: fund?.name ?? null,
       sector: fund?.sector ?? null,
-      price: Utils.round3(price),
+      price: Utils.round3(priceForResult),
       smtScore: enrichedTotal,
       foreignFlowScore: scores.foreignFlowScore,
       foreignStreakScore: scores.foreignStreakScore,
