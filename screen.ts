@@ -1287,7 +1287,7 @@ if (argMode === 'breakout') {
 } else if (argMode === 'pullback') {
   filteredResults = results.filter((r) => r.pullbackSignal)
 } else if (argMode === 'smt') {
-  filteredResults = results.filter((r) => r.smtSignal === 'strong-buy' || r.smtSignal === 'buy')
+  filteredResults = results.filter((r) => r.smtScore >= 20)
 }
 
 // Sort
