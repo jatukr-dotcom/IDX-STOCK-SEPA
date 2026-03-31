@@ -449,6 +449,71 @@ export async function GET(ctx: Context) {
     hasBrokerData = false
   }
 
+  // Fetch broker top-daily history for accumulation analysis (last 28 calendar days ≈ 20 trading days)
+  // Groups by stockCode → list of accumulating broker names
+  const brokerAccumMap = new Map<string, string[]>()
+  try {
+    const histStart = Utils.addDaysToDateInt(dateRef, -28)
+    const histRows = await Database.select({
+      stockCode: Schemas.brokerTopDaily.stockCode,
+      brokerCode: Schemas.brokerTopDaily.brokerCode,
+      brokerName: Schemas.brokerTopDaily.brokerName,
+      rank: Schemas.brokerTopDaily.rank,
+      date: Schemas.brokerTopDaily.date
+    })
+      .from(Schemas.brokerTopDaily)
+      .where(gte(Schemas.brokerTopDaily.date, histStart))
+      .orderBy(asc(Schemas.brokerTopDaily.stockCode), asc(Schemas.brokerTopDaily.date))
+
+    // Group by stockCode → brokerCode → {ranks[], dates[]}
+    type BrokerStat = { name: string; ranks: number[]; dates: Set<number> }
+    const perStock = new Map<string, Map<string, BrokerStat>>()
+    for (const r of histRows) {
+      const sc = r.stockCode
+      const bc = r.brokerCode
+      if (!sc || !bc) continue
+      const stockBrokers = perStock.get(sc) ?? new Map<string, BrokerStat>()
+      const stat = stockBrokers.get(bc) ?? { name: r.brokerName, ranks: [], dates: new Set() }
+      stat.ranks.push(Number(r.rank))
+      stat.dates.add(Number(r.date))
+      stockBrokers.set(bc, stat)
+      perStock.set(sc, stockBrokers)
+    }
+
+    // For each stock, compute which brokers are accumulating
+    for (const [sc, stockBrokers] of perStock.entries()) {
+      const allDates = new Set<number>()
+      for (const stat of stockBrokers.values()) {
+        for (const d of stat.dates) allDates.add(d)
+      }
+      const totalDays = allDates.size
+      if (totalDays === 0) continue
+
+      const accumNames: string[] = []
+      for (const [, stat] of stockBrokers.entries()) {
+        const daysPresent = stat.dates.size
+        const avgRank = stat.ranks.reduce((s, r) => s + r, 0) / stat.ranks.length
+        const presencePct = daysPresent / totalDays
+        // Rank trend: compare newest half vs oldest half (ranks are appended in order)
+        const half = Math.floor(stat.ranks.length / 2)
+        let declining = false
+        if (half >= 2) {
+          const avgOld = stat.ranks.slice(0, half).reduce((s, r) => s + r, 0) / half
+          const avgNew = stat.ranks.slice(-half).reduce((s, r) => s + r, 0) / half
+          declining = avgNew - avgOld > 1.5
+        }
+        if (presencePct >= 0.5 && avgRank <= 5 && !declining) {
+          accumNames.push(stat.name)
+        }
+      }
+      if (accumNames.length > 0) {
+        brokerAccumMap.set(sc, accumNames)
+      }
+    }
+  } catch {
+    // broker_top_daily not available — gracefully skip
+  }
+
   const results: Types.SmartMoneyRow[] = []
 
   for (const [code, rows] of byCode.entries()) {
@@ -467,6 +532,17 @@ export async function GET(ctx: Context) {
 
     const brokerData = brokerMap.get(code) ?? null
     const scores = computeSmtScore(rows, brokerData)
+    const accumBrokers = brokerAccumMap.get(code) ?? []
+    // Broker accumulation bonus: +3 pts if ≥2 brokers accumulating, +2 if 1 (cap total at 100)
+    let brokerAccumBonus = 0
+    if (accumBrokers.length >= 2) {
+      brokerAccumBonus = 3
+      scores.reasons.push(`${accumBrokers.slice(0, 2).join(', ')} akumulasi konsisten (${accumBrokers.length} broker)`)
+    } else if (accumBrokers.length === 1) {
+      brokerAccumBonus = 2
+      scores.reasons.push(`${accumBrokers[0]} akumulasi konsisten 20h`)
+    }
+    const enrichedTotal = Math.min(100, scores.total + brokerAccumBonus)
 
     const price = rows[rows.length - 1]!.close
 
@@ -475,7 +551,7 @@ export async function GET(ctx: Context) {
       name: fund?.name ?? null,
       sector: fund?.sector ?? null,
       price: Utils.round3(price),
-      smtScore: scores.total,
+      smtScore: enrichedTotal,
       foreignFlowScore: scores.foreignFlowScore,
       foreignStreakScore: scores.foreignStreakScore,
       volumePriceScore: scores.volumePriceScore,
@@ -490,10 +566,11 @@ export async function GET(ctx: Context) {
       avgTradeSize: scores.avgTradeSize,
       avgTradeSizeChange: scores.avgTradeSizeChange,
       bidOfferRatio: scores.bidOfferRatio,
-      signal: classifySignal(scores.total),
+      signal: classifySignal(enrichedTotal),
       reasons: scores.reasons,
       topBrokerConcentration: brokerData?.top3VolumePct ?? null,
-      dominantBrokerName: brokerData?.dominantBrokerName ?? null
+      dominantBrokerName: brokerData?.dominantBrokerName ?? null,
+      accumulatingBrokers: accumBrokers.length > 0 ? accumBrokers : null
     })
   }
 

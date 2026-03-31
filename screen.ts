@@ -83,6 +83,9 @@ type ScreenRow = {
   avgTradeSize5d: number | null
   avgTradeSizeChange: number | null
   bidOfferRatio: number | null
+  // Broker history fields
+  accumulatingBrokers: string[]
+  brokerConcentrationPct: number | null
 }
 
 type WatchlistEntry = { code: string; name: string | null; score: number; rsRank: number; stage: StageNumber }
@@ -702,7 +705,74 @@ for (const r of summaryRows) {
   if (r.listed_shares != null && r.tradable_shares != null) floatByCode.set(r.stock_code, { listed: Number(r.listed_shares), tradable: Number(r.tradable_shares) })
 }
 
-// ─── Phase 4D: Backtest mode ──────────────────────────────────────────────────
+// ─── Phase 4C: Broker accumulation history ───────────────────────────────────
+
+// Query broker_top_daily for last 28 calendar days ≈ 20 trading days
+// Degrades gracefully if table not yet populated (run deno task db:fetch-broker)
+type BrokerHistRow = { stock_code: string; broker_code: string; broker_name: string; rank: number; date: number }
+const brokerAccumMapScreen = new Map<string, string[]>() // stockCode → [accumulating broker names]
+const brokerConcentrationMapScreen = new Map<string, number>() // stockCode → top3VolumePct from broker_stock_metrics
+try {
+  const brokerHistStart = (() => {
+    const s = String(dateRef)
+    const d = new Date(`${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`)
+    d.setDate(d.getDate() - 28)
+    return Number(`${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`)
+  })()
+  const brokerHistRows = await query<BrokerHistRow>(
+    'SELECT stock_code, broker_code, broker_name, rank, date FROM broker_top_daily WHERE date >= ? AND date <= ? ORDER BY stock_code, date ASC',
+    [brokerHistStart, dateRef]
+  )
+  // Group by stockCode → brokerCode → stats
+  type BStat = { name: string; ranks: number[]; dates: Set<number> }
+  const perStock = new Map<string, Map<string, BStat>>()
+  for (const r of brokerHistRows) {
+    const sc = String(r.stock_code)
+    const bc = String(r.broker_code)
+    if (!sc || !bc) continue
+    const bmap = perStock.get(sc) ?? new Map<string, BStat>()
+    const stat = bmap.get(bc) ?? { name: String(r.broker_name), ranks: [], dates: new Set<number>() }
+    stat.ranks.push(Number(r.rank))
+    stat.dates.add(Number(r.date))
+    bmap.set(bc, stat)
+    perStock.set(sc, bmap)
+  }
+  for (const [sc, bmap] of perStock.entries()) {
+    const allDates = new Set<number>()
+    for (const stat of bmap.values()) {
+      for (const d of stat.dates) allDates.add(d)
+    }
+    const totalDays = allDates.size
+    if (totalDays === 0) continue
+    const accumNames: string[] = []
+    for (const [, stat] of bmap.entries()) {
+      const daysPresent = stat.dates.size
+      const avgRank = stat.ranks.reduce((s, r) => s + r, 0) / stat.ranks.length
+      const presencePct = daysPresent / totalDays
+      const half = Math.floor(stat.ranks.length / 2)
+      let declining = false
+      if (half >= 2) {
+        const avgOld = stat.ranks.slice(0, half).reduce((s, r) => s + r, 0) / half
+        const avgNew = stat.ranks.slice(-half).reduce((s, r) => s + r, 0) / half
+        declining = avgNew - avgOld > 1.5
+      }
+      if (presencePct >= 0.5 && avgRank <= 5 && !declining) accumNames.push(stat.name)
+    }
+    if (accumNames.length > 0) brokerAccumMapScreen.set(sc, accumNames)
+  }
+  // Also load top3 concentration from broker_stock_metrics
+  const concRows = await query<{ stock_code: string; top3_volume_pct: number | null }>(
+    'SELECT stock_code, top3_volume_pct FROM broker_stock_metrics WHERE date = ?',
+    [dateRef]
+  )
+  for (const r of concRows) {
+    if (r.top3_volume_pct != null) brokerConcentrationMapScreen.set(r.stock_code, Number(r.top3_volume_pct))
+  }
+} catch {
+  // broker_top_daily not available — degrade gracefully (run deno task db:fetch-broker)
+}
+
+
 
 if (backtestCode) {
   const entries = ohlcByCode.get(backtestCode)
@@ -1166,7 +1236,19 @@ for (const [code, entries] of ohlcByCode) {
   // 6. Cross-Signal Alignment (15 pts)
   const smtCrossScore = smtBullishCount >= 4 ? 15 : smtBullishCount === 3 ? 10 : smtBullishCount === 2 ? 5 : 0
 
-  const smtScore = Math.min(100, smtForeignFlowScore + smtForeignStreakScore + smtVolPriceScore + smtTradeSizeScore + smtBidOfferScore + smtCrossScore)
+  // 7. Broker accumulation bonus (from broker_top_daily — +2/+3 pts, cap total at 100)
+  const smtAccumBrokers = brokerAccumMapScreen.get(code) ?? []
+  let smtBrokerBonus = 0
+  if (smtAccumBrokers.length >= 2) {
+    smtBrokerBonus = 3
+    smtReasons.push(`${smtAccumBrokers.slice(0, 2).join(', ')} akumulasi konsisten`)
+  } else if (smtAccumBrokers.length === 1) {
+    smtBrokerBonus = 2
+    smtReasons.push(`${smtAccumBrokers[0]} akumulasi konsisten 20h`)
+  }
+
+  const smtBaseScore = smtForeignFlowScore + smtForeignStreakScore + smtVolPriceScore + smtTradeSizeScore + smtBidOfferScore + smtCrossScore
+  const smtScore = Math.min(100, smtBaseScore + smtBrokerBonus)
   const smtSignal: ScreenRow['smtSignal'] = smtScore >= 75 ? 'strong-buy' : smtScore >= 55 ? 'buy' : smtScore >= 35 ? 'neutral' : smtScore >= 20 ? 'sell' : 'strong-sell'
 
   results.push({
@@ -1184,7 +1266,9 @@ for (const [code, entries] of ohlcByCode) {
     consecutiveForeignBuyDays: smtStreak,
     avgTradeSize5d: smtAvgTradeSize5d,
     avgTradeSizeChange: smtTradeSizeChange,
-    bidOfferRatio: smtBidOfferRatio
+    bidOfferRatio: smtBidOfferRatio,
+    accumulatingBrokers: smtAccumBrokers,
+    brokerConcentrationPct: brokerConcentrationMapScreen.get(code) ?? null
   })
 }
 
@@ -1351,6 +1435,23 @@ if (detailCode) {
   console.log(`  Bid/Offer Ratio : ${smtBoStr}`)
   console.log(`  Signal          : ${smtSignalLabel}`)
   if (row.smtReasons.length > 0) console.log(`  Reasons         : ${row.smtReasons.join(', ')}`)
+  // Broker Activity section
+  console.log(line)
+  console.log(`  ═══ Broker Activity ═══`)
+  if (row.brokerConcentrationPct != null) {
+    const concStr = row.brokerConcentrationPct >= 60 ? `\x1b[33m${row.brokerConcentrationPct.toFixed(1)}%\x1b[0m (konsentrasi tinggi)` : `${row.brokerConcentrationPct.toFixed(1)}%`
+    console.log(`  Konsentrasi Top3: ${concStr}`)
+  } else {
+    console.log(`  Konsentrasi Top3: — (jalankan deno task db:fetch-broker)`)
+  }
+  if (row.accumulatingBrokers.length > 0) {
+    console.log(`  ▶ Broker Akumulasi (hadir konsisten ≥50% hari, avg rank ≤5):`)
+    for (const bname of row.accumulatingBrokers) {
+      console.log(`    \x1b[32m🏦 ${bname}\x1b[0m`)
+    }
+  } else {
+    console.log(`  Broker Akumulasi: — (belum ada data histori broker / belum memenuhi kriteria)`)
+  }
   // Position sizing (Phase 3E)
   if (portfolioSize > 0) {
     const riskPerTrade = portfolioSize * riskPct / 100
@@ -1394,8 +1495,9 @@ console.log(dline)
 // ─── SMT mode table ───────────────────────────────────────────────────────────
 
 if (argMode === 'smt') {
-  console.log(`  ${pad('#', 3)} ${pad('Kode', 6)} ${pad('Nama', 22)} ${'SMT'.padStart(5)} ${'For5d'.padStart(8)} ${'Streak'.padStart(7)} ${'TxChg'.padStart(7)} ${'B/O'.padStart(5)} ${pad('Sinyal', 12)}`)
-  console.log(`  ${'─'.repeat(90)}`)
+  const smtHeader = `  ${pad('#', 3)} ${pad('Kode', 6)} ${pad('Nama', 20)} ${'SMT'.padStart(5)} ${'For5d'.padStart(8)} ${'Streak'.padStart(7)} ${'TxChg'.padStart(7)} ${'B/O'.padStart(5)} ${pad('Akum.Broker', 18)} ${pad('Sinyal', 12)}`
+  console.log(smtHeader)
+  console.log(`  ${'─'.repeat(100)}`)
   for (let i = 0; i < top.length; i++) {
     const r = top[i]!
     const smtFn5d = r.foreignNet5d != null ? `${r.foreignNet5d >= 0 ? '+' : ''}${(r.foreignNet5d / 1_000_000_000).toFixed(1)}B` : '—'
@@ -1405,13 +1507,18 @@ if (argMode === 'smt') {
     const smtSigLabel = r.smtSignal === 'strong-buy' ? '\x1b[32mSTRONG BUY\x1b[0m' : '\x1b[32mBUY\x1b[0m'
     const smtScoreStr = String(r.smtScore).padStart(5)
     const smtScoreColored = r.smtScore >= 75 ? `\x1b[32m${smtScoreStr}\x1b[0m` : r.smtScore >= 55 ? `\x1b[33m${smtScoreStr}\x1b[0m` : `\x1b[90m${smtScoreStr}\x1b[0m`
+    // Accumulating brokers: show first 2 (truncated), green if present
+    const accumBrokerStr = r.accumulatingBrokers.length > 0
+      ? `\x1b[32m${r.accumulatingBrokers.slice(0, 2).join(', ').slice(0, 17)}\x1b[0m`
+      : '\x1b[90m—\x1b[0m'
     console.log(
-      `  ${pad(String(i + 1), 3)} ${pad(r.code, 6)} ${pad(r.name?.slice(0, 22) ?? '-', 22)} ${smtScoreColored} ${smtFn5d.padStart(8)} ${smtStreak.padStart(7)} ${smtTxChg.padStart(7)} ${smtBo.padStart(5)} ${smtSigLabel}`
+      `  ${pad(String(i + 1), 3)} ${pad(r.code, 6)} ${pad(r.name?.slice(0, 20) ?? '-', 20)} ${smtScoreColored} ${smtFn5d.padStart(8)} ${smtStreak.padStart(7)} ${smtTxChg.padStart(7)} ${smtBo.padStart(5)} ${accumBrokerStr.padEnd(18 + 10)} ${smtSigLabel}`
     )
   }
   console.log(dline)
   console.log(`  Untuk detail: deno run -A screen.ts --detail KODE`)
   console.log(`  Sort: --sort smt|foreign|momentum | Filter: --top N --sector "nama"`)
+  console.log(`  [Akum.Broker] = broker hadir ≥50% hari & avg rank ≤5 (20 hari terakhir)`)
   console.log(dline + '\n')
   client.close()
   Deno.exit(0)

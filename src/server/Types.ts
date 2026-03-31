@@ -846,6 +846,7 @@ export interface SmartMoneyRow {
   reasons: string[]
   topBrokerConcentration: number | null
   dominantBrokerName: string | null
+  accumulatingBrokers: string[] | null // broker names consistently present in top 10
 }
 
 export interface SmartMoneyResponse {
@@ -882,6 +883,7 @@ export interface BrokerFlowResponse {
   dominantBrokerName: string | null
   dominantBrokerVolumePct: number | null
   topBrokers: BrokerFlowTopBroker[]
+  accumulatingBrokers: { code: string; name: string; days: number; avgRank: number }[]
 }
 
 export interface StockListItem {
@@ -901,4 +903,38 @@ export interface StockListResponse {
   limit: number
   offset: number
   data: StockListItem[]
+}
+
+// ─── Broker History Tracker ──────────────────────────────────────────────────
+
+export interface BrokerTrendItem {
+  brokerCode: string
+  brokerName: string
+  daysPresent: number    // how many days present in top 10
+  totalDays: number      // total trading days in the window
+  avgRank: number        // average rank position (lower = better)
+  bestRank: number       // best rank achieved
+  rankTrend: 'improving' | 'declining' | 'stable'
+  totalVolume: number    // cumulative volume across all days
+  isAccumulating: boolean // heuristic: present ≥50% days, avgRank ≤5, not declining
+}
+
+export interface BrokerHistoryDay {
+  date: number
+  brokers: {
+    brokerCode: string
+    brokerName: string
+    rank: number
+    volume: number
+    volumePct: number
+  }[]
+}
+
+export interface BrokerHistoryResponse {
+  code: string
+  startDate: number
+  endDate: number
+  totalDays: number
+  history: BrokerHistoryDay[]
+  trend: BrokerTrendItem[]
 }

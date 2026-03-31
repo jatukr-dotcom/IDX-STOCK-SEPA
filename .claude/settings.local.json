@@ -4,7 +4,8 @@
       "Bash(deno task:*)",
       "Bash(curl -s \"https://registry.npmjs.org/jspdf-autotable\")",
       "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); vers=list\\(d[''''versions''''].keys\\(\\)\\); print\\(vers[-5:]\\)\")",
-      "Bash(find 'd:/PYTHON PROGRAMMING/IDX-UI/src' -name pdf*.ts -o -name *pdf*.ts)"
+      "Bash(find 'd:/PYTHON PROGRAMMING/IDX-UI/src' -name pdf*.ts -o -name *pdf*.ts)",
+      "Bash(rtk git:*)"
     ]
   }
 }

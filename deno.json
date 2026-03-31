@@ -72,6 +72,7 @@
     "db:init": "deno run -A src/server/Bootstrap.ts",
     "db:update": "deno run -A src/server/Update.ts",
     "db:fetch-eps": "deno run -A src/server/FetchFinancialHistory.ts",
+    "db:fetch-broker": "deno run -A src/server/FetchBrokerHistory.ts",
     "db:generate": "deno run -A npm:drizzle-kit generate",
     "db:push": "deno run -A npm:drizzle-kit push",
     "ui:build": "deno run -A --node-modules-dir npm:vite build --mode production",

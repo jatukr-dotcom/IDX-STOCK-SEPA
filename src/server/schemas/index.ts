@@ -7,6 +7,7 @@
  */
 
 export * from '@app/server/schemas/BrokerStockMetrics.ts'
+export * from '@app/server/schemas/BrokerTopDaily.ts'
 export * from '@app/server/schemas/Dividend.ts'
 export * from '@app/server/schemas/FinancialHistory.ts'
 export * from '@app/server/schemas/SectoralMovement.ts'

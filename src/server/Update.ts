@@ -67,10 +67,12 @@ if (import.meta.main) {
       const dateInt = dateIntFromDate(current)
       console.log(`[update] summary date=${dateInt}`)
       await Services.Summary.run(client, dateInt)
+      await Services.BrokerStockMetrics.run(client, dateInt)
       count++
       current = addDays(current, 1)
       await sleepMs(150)
     }
     console.log(`[update] Done — ${count} hari diperbarui`)
+
   }
 }

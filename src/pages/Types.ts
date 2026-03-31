@@ -210,6 +210,7 @@ export interface SmartMoneyRow {
   reasons: string[]
   topBrokerConcentration: number | null
   dominantBrokerName: string | null
+  accumulatingBrokers: string[] | null // broker names consistently accumulating
 }
 
 export interface SmartMoneyResponse {

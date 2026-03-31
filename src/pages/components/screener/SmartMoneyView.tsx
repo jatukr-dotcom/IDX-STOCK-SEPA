@@ -158,6 +158,7 @@ function BidOfferCell({ ratio }: { ratio: number | null }) {
 function SmartMoneyRow(
   { row, onRowClick, hasBroker }: { row: Types.SmartMoneyRow; onRowClick: (code: string) => void; hasBroker: boolean }
 ) {
+  const hasAccumBrokers = row.accumulatingBrokers != null && row.accumulatingBrokers.length > 0
   return (
     <tr
       className='idx-vol-row'
@@ -189,6 +190,36 @@ function SmartMoneyRow(
       </td>
       <td className='idx-text-center'>
         <BidOfferCell ratio={row.bidOfferRatio} />
+      </td>
+      {/* Accumulating Brokers column */}
+      <td style={{ maxWidth: 120 }}>
+        {hasAccumBrokers
+          ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {row.accumulatingBrokers!.slice(0, 2).map((name) => (
+                <span
+                  key={name}
+                  style={{
+                    fontSize: 10,
+                    padding: '2px 6px',
+                    background: 'rgba(34,197,94,0.12)',
+                    color: 'var(--idx-up)',
+                    borderRadius: 4,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    display: 'block',
+                    maxWidth: 116,
+                    fontWeight: 600
+                  }}
+                  title={name}
+                >
+                  🏦 {name.split(' ')[0]}
+                </span>
+              ))}
+            </div>
+          )
+          : <span className='idx-text-muted' style={{ fontSize: 11 }}>—</span>}
       </td>
       {hasBroker && (
         <td className='idx-text-center'>
@@ -359,10 +390,9 @@ export default function SmartMoneyView(
       <div className='idx-vol-legend'>
         <span className='idx-text-muted' style={{ fontSize: 11 }}>
           Skor 0-100: Foreign Flow (30) + Streak (10) + OBV Divergence (15) + Ukuran Transaksi (20)
-          + Bid/Offer (10) + Alignment (15)
+          + Bid/Offer (10) + Alignment (15) + Broker Histori (+3 bonus)
           {hasBroker && ' + Broker Konsentrasi (bonus)'}
-          &nbsp;|&nbsp; Streak: hari berturut-turut asing beli &nbsp;|&nbsp; Bid/Offer: ratio
-          terkini
+          &nbsp;|&nbsp; Streak: hari berturut-turut asing beli &nbsp;|&nbsp; Akum.Broker: hadir ≥50% hari, avg rank ≤5 (20h)
         </span>
       </div>
 
@@ -377,6 +407,7 @@ export default function SmartMoneyView(
               <th className='idx-text-center'>Streak</th>
               <th>Ukuran Tx</th>
               <th className='idx-text-center'>Bid/Offer</th>
+              <th>Akum. Broker</th>
               {hasBroker && <th className='idx-text-center'>Top3 Broker</th>}
               <th className='idx-text-center'>Sinyal</th>
             </tr>
@@ -386,7 +417,7 @@ export default function SmartMoneyView(
               ? (
                 <tr>
                   <td
-                    colSpan={hasBroker ? 9 : 8}
+                    colSpan={hasBroker ? 10 : 9}
                     className='idx-text-center idx-text-muted'
                     style={{ padding: '24px 0' }}
                   >
