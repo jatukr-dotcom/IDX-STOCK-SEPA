@@ -22,6 +22,7 @@ Screener saham Indonesia dengan metode **Momentum Masters** (Minervini, Ryan, Za
 - **Base Pattern Detection** — Identifikasi Flat Base, Cup-and-Handle, dan High Tight Flag beserta base count.
 - **Power Play / Low Cheat** — Setup entry Minervini: konsolidasi ketat + volume kering sebelum breakout.
 - **🆕 Breakout Screener** — Deteksi saham yang breakout dari pivot base (volume ≥1.5× avg50d) atau mendekati pivot (dalam 3%), dengan ATR(14) dan Bollinger Band Squeeze.
+- **🆕 Smart Money Tracker** — Deteksi jejak institusi & asing: 6 sinyal kuantitatif (skor 0–100) + broker accumulation dari histori top-10 broker harian. Tampilkan kolom Foreign Flow, Streak, Trade Size, Bid/Offer, dan nama broker yang konsisten akumulasi.
 - **AI Rekomendasi** — Skor terpadu teknikal + fundamental, narasi Claude AI (opsional), export PDF.
 - **Export PDF** — Semua tab utama bisa diekspor ke PDF (per saham, SEPA bulk, VCP bulk, Momentum Masters).
 - **Watchlist** — Simpan saham favorit dengan bintang.
@@ -34,7 +35,7 @@ Screener saham Indonesia dengan metode **Momentum Masters** (Minervini, Ryan, Za
 - **Sinyal entry presisi** — Breakout detection (BKT), Approaching pivot (APR), Pullback EMA21 (PB), Shakeout
 - **Sinyal exit** — Climax Top, Upper BB 3d+, 7% Stop Breach
 - **Quant signals** — ATR(14), Bollinger Band Squeeze, Multi-Factor Momentum (0–100), Sharpe Ratio
-- **Sinyal institusional** — `smt` mode: 6 sinyal jejak asing/institusional (total 100 pts), sinyal hingga STRONG BUY
+- **Sinyal institusional** — `smt` mode: 6 sinyal jejak asing/institusional (total 100 pts) + broker accumulation bonus, sinyal hingga STRONG BUY
 - **Position sizing** — hitung lot berdasarkan ATR stop + portfolio size
 - **Workflow tools** — Watchlist (save/load/compare), CSV export, Alert system, Backtest sederhana
 - **Mode & filter** — `breakout`, `vcp`, `pullback`, `momentum`, `technical`, `fundamental`, `combined`, `smt`
@@ -417,6 +418,82 @@ MENDEKATI   = Harga dalam 3% di bawah pivot (belum breakout)
 
 ---
 
+### Smart Money Tracker (SMT)
+
+Mendeteksi jejak **institusi dan investor asing** secara kuantitatif — sebelum pergerakan harga terlihat jelas. SMT menggabungkan 6 sinyal dari data yang sudah tersedia (foreign flow, OBV, trade size, bid/offer) ditambah bonus dari histori konsentrasi broker.
+
+#### SMT Score (0–100 pts)
+
+| # | Sinyal | Pts | Sumber Data | Cara Hitung |
+|---|--------|-----|------------|-------------|
+| 1 | **Foreign Flow Momentum** | 30 | `foreign_buy`, `foreign_sell` | Akselerasi net-buy asing 5d vs rata-rata 20d, dinormalisasi terhadap avg volume 20d. Range `[-5%, +25%]` → `[0, 30]` |
+| 2 | **Foreign Flow Streak** | 10 | `foreign_buy`, `foreign_sell` | Hari berturut-turut asing net-buy: ≥5h=10, ≥3h=6, ≥1h=3 |
+| 3 | **OBV Divergence** | 15 | OHLCV | OBV naik + harga turun (divergensi bullish) = 15 pts; OBV naik + harga naik/flat = 12 pts |
+| 4 | **Trade Size Profile** | 20 | `value`, `frequency` | Avg trade size 5d vs 20d: `(value/freq)`. Naik = blok institusional. +20% → mulai score, +80% → maks |
+| 5 | **Bid/Offer Pressure** | 10 | `bid_volume`, `offer_volume` | Rasio 3-day aggregate: ≥1.5=10, ≥1.2=6, ≥1.0=3 pts |
+| 6 | **Cross-Signal Alignment** | 15 | — | Berapa sinyal di atas aktif serentak: ≥4=15, 3=10, 2=5 pts |
+| + | **Broker Accumulation Bonus** | +3 | `broker_top_daily` | Broker hadir ≥50% hari & avg rank ≤5 selama 20 hari: 2 broker=+3, 1 broker=+2 |
+
+**Total maks: 103 pts, di-cap di 100.**
+
+#### Klasifikasi Sinyal
+
+| Skor SMT | Sinyal | Interpretasi |
+|---|---|---|
+| ≥ 75 | **STRONG BUY** | Jejak institusional sangat kuat, multiple signals konfirmasi |
+| ≥ 55 | **BUY** | Akumulasi terdeteksi, setup menarik |
+| ≥ 35 | **NETRAL** | Beberapa sinyal ada tapi belum konklusif |
+| ≥ 20 | **SELL** | Distribusi lemah terdeteksi |
+| < 20 | **STRONG SELL** | Distribusi aktif, distribusi terindikasi |
+
+#### Cara Baca Output SMT (Terminal)
+
+```
+#   Kode   Nama                  SMT  For5d   Streak  TxChg  B/O  Akum.Broker         Sinyal
+1   BBRI   Bank Rakyat Indonesia  78  +5.2B    7h     +32%   1.48 BRI DANAREKSA,...  STRONG BUY
+```
+
+| Kolom | Arti |
+|---|---|
+| SMT | Skor 0–100 (hijau ≥75, kuning ≥55) |
+| For5d | Net foreign buy/sell 5 hari terakhir (+ = asing beli net) |
+| Streak | Hari berturut-turut asing net-buy |
+| TxChg | Perubahan avg ukuran transaksi 5d vs 20d (+ = institusional masuk) |
+| B/O | Bid/Offer ratio 3-day aggregate (>1.0 = buyer dominan) |
+| Akum.Broker | Broker yang konsisten di top-10 selama ≥50% dari 20 hari terakhir |
+
+#### Cara Baca Output Detail Saham (`--detail KODE`)
+
+```
+═══ Smart Money ═══
+SMT Score       : 78/100 [████████░░]
+Foreign Flow    : +5.2B (5d) ▲ accelerating
+Consecutive Buy : 7 hari berturut-turut
+Avg Trade Size  : +32.0% vs 20d (institusional)
+Bid/Offer Ratio : 1.48 (buyer dominated)
+Signal          : STRONG BUY
+Reasons         : Foreign flow accelerating, Asing beli 7h berturut, OBV naik ...
+
+═══ Broker Activity ═══
+Konsentrasi Top3: 67.5% (konsentrasi tinggi)
+▶ Broker Akumulasi (hadir konsisten ≥50% hari, avg rank ≤5):
+  🏦 BRI DANAREKSA SEKURITAS
+  🏦 MANDIRI SEKURITAS
+```
+
+#### Sumber Data Broker
+
+Data broker berasal dari IDX API endpoint `GetBrokerSummary?stockCode=X&date=YYYYMMDD`. Data ini hanya tersedia setelah menjalankan:
+
+```bash
+deno task db:fetch-broker          # default: 60 hari terakhir
+deno task db:fetch-broker --days 90  # mundur lebih jauh
+```
+
+Data disimpan di tabel `broker_top_daily` (top-10 broker per saham per hari). Jika tabel belum ada, fitur broker di web dan terminal akan **degrade gracefully** — SMT tetap jalan tanpa bonus broker.
+
+---
+
 ### Quant Signals (Terminal Screener)
 
 #### Multi-Factor Momentum Score (0–100)
@@ -676,6 +753,21 @@ deno run -A screen.ts
 
 # Backtest sederhana
 deno run -A screen.ts --backtest BBRI --days 30
+
+# Smart Money Tracker — semua saham berdasarkan SMT score (≥20)
+deno run -A screen.ts --mode smt --top 20
+
+# SMT hanya yang BUY atau STRONG BUY
+deno run -A screen.ts --mode smt --min-score 55 --top 15
+
+# SMT diurutkan berdasarkan SMT score
+deno run -A screen.ts --mode smt --sort smt --top 20
+
+# SMT diurutkan berdasarkan foreign flow
+deno run -A screen.ts --mode smt --sort foreign --top 20
+
+# SMT detail saham dengan section Smart Money + Broker Activity
+deno run -A screen.ts --detail BBRI
 ```
 
 ### Interpretasi Output
@@ -698,6 +790,10 @@ deno run -A screen.ts --backtest BBRI --days 30
 | PB | Pullback ke EMA21 |
 | Akum | Volume Akumulasi (CMF + OBV + MFI) |
 | Shakeout | Undercut MA50 dan recover |
+| SMT | Smart Money Tracker score 0–100 (mode smt) |
+| For5d | Net foreign 5 hari terakhir (mode smt) |
+| Streak | Hari berturut-turut asing net-buy (mode smt) |
+| TxChg | Perubahan avg ukuran transaksi 5d vs 20d (mode smt) |
 
 ### Alur Screening Harian
 
@@ -711,8 +807,10 @@ deno run -A screen.ts --mode breakout
 # 3. Lihat VCP setup yang terbentuk
 deno run -A screen.ts --mode vcp
 
-# 4. Cari jejak institusional / asing (Smart Money Tracker)
+# 4. Cari jejak institusional / asing (Smart Money Tracker, skor ≥20)
 deno run -A screen.ts --mode smt --top 20
+# Hanya STRONG BUY + BUY (skor ≥55): tambah --min-score 55
+deno run -A screen.ts --mode smt --min-score 55 --top 20
 
 # 5. Urutkan momentum terkuat
 deno run -A screen.ts --mode momentum --top 20
@@ -756,6 +854,15 @@ deno task db:fetch-eps
 ```
 
 Mengambil data EPS Q1–Q4 untuk semua saham dari IDX API. Jalankan ulang setiap kuartal baru tersedia (biasanya ~3 bulan setelah akhir periode).
+
+**4. Fetch histori broker (untuk Smart Money Tracker)**
+
+```bash
+deno task db:fetch-broker          # 60 hari terakhir (default)
+deno task db:fetch-broker --days 90  # mundur lebih jauh
+```
+
+Mengambil histori top-10 broker per saham per hari dari IDX API. Data ini digunakan untuk mendeteksi broker yang konsisten mengakumulasi di kolom **Akum. Broker** (web + terminal). Jalankan ulang setiap minggu untuk update data terbaru. Langkah ini **opsional** — SMT tetap berfungsi tanpa data broker, hanya skor akan lebih rendah (tanpa bonus +2/+3 pts).
 
 ## Cara Menjalankan
 
