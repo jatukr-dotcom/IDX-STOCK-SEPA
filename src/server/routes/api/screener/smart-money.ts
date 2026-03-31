@@ -475,7 +475,9 @@ export async function GET(ctx: Context) {
     for (const r of histRows) {
       const sc = r.stockCode
       const bc = r.brokerCode
-      if (!sc || !bc) continue
+      if (!sc || !bc) {
+        continue
+      }
       const stockBrokers = perStock.get(sc) ?? new Map<string, BrokerStat>()
       const stat = stockBrokers.get(bc) ?? { name: r.brokerName, ranks: [], dates: new Set() }
       stat.ranks.push(Number(r.rank))
@@ -488,10 +490,14 @@ export async function GET(ctx: Context) {
     for (const [sc, stockBrokers] of perStock.entries()) {
       const allDates = new Set<number>()
       for (const stat of stockBrokers.values()) {
-        for (const d of stat.dates) allDates.add(d)
+        for (const d of stat.dates) {
+          allDates.add(d)
+        }
       }
       const totalDays = allDates.size
-      if (totalDays === 0) continue
+      if (totalDays === 0) {
+        continue
+      }
 
       const accumNames: string[] = []
       for (const [, stat] of stockBrokers.entries()) {
@@ -541,7 +547,9 @@ export async function GET(ctx: Context) {
     let brokerAccumBonus = 0
     if (accumBrokers.length >= 2) {
       brokerAccumBonus = 3
-      scores.reasons.push(`${accumBrokers.slice(0, 2).join(', ')} akumulasi konsisten (${accumBrokers.length} broker)`)
+      scores.reasons.push(
+        `${accumBrokers.slice(0, 2).join(', ')} akumulasi konsisten (${accumBrokers.length} broker)`
+      )
     } else if (accumBrokers.length === 1) {
       brokerAccumBonus = 2
       scores.reasons.push(`${accumBrokers[0]} akumulasi konsisten 20h`)

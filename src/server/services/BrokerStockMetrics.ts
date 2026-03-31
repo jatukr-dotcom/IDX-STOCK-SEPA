@@ -64,8 +64,9 @@ export class BrokerStockMetrics {
       }
 
       try {
-        const url =
-          `${BrokerStockMetrics.brokerSummaryUrl}?date=${dateInt}&stockCode=${encodeURIComponent(stockCode)}&length=500&start=0`
+        const url = `${BrokerStockMetrics.brokerSummaryUrl}?date=${dateInt}&stockCode=${
+          encodeURIComponent(stockCode)
+        }&length=500&start=0`
         const response = await client.get(url)
         if (!response.ok) {
           await response.text().catch(() => {})
@@ -128,7 +129,9 @@ export class BrokerStockMetrics {
           // 2. Insert top 10 individual broker rows into broker_top_daily
           for (let rankIdx = 0; rankIdx < top10.length; rankIdx++) {
             const b = top10[rankIdx]!
-            if (!b.IDFirm) continue
+            if (!b.IDFirm) {
+              continue
+            }
             await tx.insert(Schemas.brokerTopDaily)
               .values({
                 id: `${dateInt}-${stockCode}-${b.IDFirm}`,

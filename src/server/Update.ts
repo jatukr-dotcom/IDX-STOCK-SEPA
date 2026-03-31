@@ -73,6 +73,5 @@ if (import.meta.main) {
       await sleepMs(150)
     }
     console.log(`[update] Done — ${count} hari diperbarui`)
-
   }
 }

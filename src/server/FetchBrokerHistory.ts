@@ -26,7 +26,9 @@ function parseDaysArg(): number {
   const idx = Deno.args.indexOf('--days')
   if (idx !== -1 && Deno.args[idx + 1]) {
     const n = parseInt(Deno.args[idx + 1]!, 10)
-    if (!isNaN(n) && n > 0) return n
+    if (!isNaN(n) && n > 0) {
+      return n
+    }
   }
   return 60
 }
@@ -85,7 +87,9 @@ if (import.meta.main) {
   let processedDays = 0
   let current = new Date(startDate)
   while (current <= endDate) {
-    if (!isWeekend(current)) totalDays++
+    if (!isWeekend(current)) {
+      totalDays++
+    }
     current = addDays(current, 1)
   }
 

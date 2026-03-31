@@ -32,5 +32,5 @@ export const brokerTopDaily = sqliteTable('broker_top_daily', {
   volume: integer('volume'), // total volume (buy + sell combined) in lots
   value: integer('value'), // total value in IDR
   frequency: integer('frequency'), // total transaction count
-  volumePct: real('volume_pct'), // % of total stock volume that day
+  volumePct: real('volume_pct') // % of total stock volume that day
 })

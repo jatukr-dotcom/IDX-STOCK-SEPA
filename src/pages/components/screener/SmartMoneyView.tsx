@@ -156,7 +156,11 @@ function BidOfferCell({ ratio }: { ratio: number | null }) {
 }
 
 function SmartMoneyRow(
-  { row, onRowClick, hasBroker }: { row: Types.SmartMoneyRow; onRowClick: (code: string) => void; hasBroker: boolean }
+  { row, onRowClick, hasBroker }: {
+    row: Types.SmartMoneyRow
+    onRowClick: (code: string) => void
+    hasBroker: boolean
+  }
 ) {
   const hasAccumBrokers = row.accumulatingBrokers != null && row.accumulatingBrokers.length > 0
   return (
@@ -392,7 +396,8 @@ export default function SmartMoneyView(
           Skor 0-100: Foreign Flow (30) + Streak (10) + OBV Divergence (15) + Ukuran Transaksi (20)
           + Bid/Offer (10) + Alignment (15) + Broker Histori (+3 bonus)
           {hasBroker && ' + Broker Konsentrasi (bonus)'}
-          &nbsp;|&nbsp; Streak: hari berturut-turut asing beli &nbsp;|&nbsp; Akum.Broker: hadir ≥50% hari, avg rank ≤5 (20h)
+          &nbsp;|&nbsp; Streak: hari berturut-turut asing beli &nbsp;|&nbsp; Akum.Broker: hadir ≥50%
+          hari, avg rank ≤5 (20h)
         </span>
       </div>
 

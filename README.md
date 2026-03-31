@@ -38,7 +38,8 @@ Screener saham Indonesia dengan metode **Momentum Masters** (Minervini, Ryan, Za
 - **Sinyal institusional** — `smt` mode: 6 sinyal jejak asing/institusional (total 100 pts) + broker accumulation bonus, sinyal hingga STRONG BUY
 - **Position sizing** — hitung lot berdasarkan ATR stop + portfolio size
 - **Workflow tools** — Watchlist (save/load/compare), CSV export, Alert system, Backtest sederhana
-- **Mode & filter** — `breakout`, `vcp`, `pullback`, `momentum`, `technical`, `fundamental`, `combined`, `smt`
+- **Mode & filter** — `breakout`, `vcp`, `pullback`, `momentum`, `technical`, `fundamental`, `combined`, `smt`, `auto`
+- **Auto Mode** — `auto` mode: skor komposit otomatis (AutoScore 0–100) menggabungkan fundamental, momentum, SMT, dan sinyal entry setup. Output otomatis menyimpan watchlist harian dan menampilkan detail top-N saham.
 
 ---
 
@@ -418,6 +419,38 @@ MENDEKATI   = Harga dalam 3% di bawah pivot (belum breakout)
 
 ---
 
+### Auto Screener (`--mode auto`)
+
+Mode paling praktis untuk screening harian — menggabungkan **semua sinyal** menjadi satu skor AutoScore (0–100) dan secara otomatis:
+- Menampilkan tabel ringkas dengan kolom AutoScore, Setup, SMT, Combined Score, Momentum, dan Warnings
+- Mencetak detail checklist untuk top-N saham (`--auto-detail N`, default 3)
+- Menyimpan watchlist otomatis ke `data/watchlists/auto_YYYYMMDD.json`
+
+#### AutoScore Formula (0–100)
+
+| Komponen | Bobot/Poin | Keterangan |
+|---|---|---|
+| Combined Score | × 0.30 | (TechScore 60% + FundScore 40%) × 0.30 |
+| Momentum Factor | × 0.15 | Multi-factor momentum (RS + EPS + Trend + Vol + Foreign) × 0.15 |
+| SMT Score | × 0.25 | Institutional footprint score × 0.25 |
+| Stage 2 bonus | +5 | Saham dalam Stage 2 (Advancing) |
+| Setup bonus (stackable, cap 20) | +8–20 | Breakout=+15, Approaching=+8, VCP=+6, Pullback=+4 |
+| Pocket Pivot | +7 | Pocket Pivot terdeteksi dalam 5 hari |
+| RS Line New High | +6 | RS Line mencetak 52w high |
+| Broker Accumulation | +3–5 | ≥2 broker akumulasi=+5, 1 broker=+3 |
+| Gorengan penalty | −5 atau −10 | Score 30–44=−5, Score 45+=−10 |
+| Sell signal | × 0.5 | Multiplicative: Climax Top / BB 3d+ / 7% Stop Breach |
+
+**Filter:** Hanya saham dengan AutoScore ≥ 25 yang tampil. Setup bonus bersifat **stackable** — saham dengan VCP sekaligus mendekati pivot mendapat keduanya.
+
+```bash
+deno run -A screen.ts --mode auto              # Default: top 15, cetak detail 3 teratas
+deno run -A screen.ts --mode auto --top 20 --auto-detail 5
+deno run -A screen.ts --mode auto --min-score 40
+```
+
+---
+
 ### Smart Money Tracker (SMT)
 
 Mendeteksi jejak **institusi dan investor asing** secara kuantitatif — sebelum pergerakan harga terlihat jelas. SMT menggabungkan 6 sinyal dari data yang sudah tersedia (foreign flow, OBV, trade size, bid/offer) ditambah bonus dari histori konsentrasi broker.
@@ -431,10 +464,11 @@ Mendeteksi jejak **institusi dan investor asing** secara kuantitatif — sebelum
 | 3 | **OBV Divergence** | 15 | OHLCV | OBV naik + harga turun (divergensi bullish) = 15 pts; OBV naik + harga naik/flat = 12 pts |
 | 4 | **Trade Size Profile** | 20 | `value`, `frequency` | Avg trade size 5d vs 20d: `(value/freq)`. Naik = blok institusional. +20% → mulai score, +80% → maks |
 | 5 | **Bid/Offer Pressure** | 10 | `bid_volume`, `offer_volume` | Rasio 3-day aggregate: ≥1.5=10, ≥1.2=6, ≥1.0=3 pts |
-| 6 | **Cross-Signal Alignment** | 15 | — | Berapa sinyal di atas aktif serentak: ≥4=15, 3=10, 2=5 pts |
-| + | **Broker Accumulation Bonus** | +3 | `broker_top_daily` | Broker hadir ≥50% hari & avg rank ≤5 selama 20 hari: 2 broker=+3, 1 broker=+2 |
+| 6 | **Cross-Signal Alignment** | 15 | — | Berapa sinyal di atas aktif serentak: ≥4=15, 3=10, 2=5 pts. Re-calculated lebih tinggi jika Broker Concentration kuat (≥7 pts). |
+| + | **Broker Concentration** | +10 | `broker_stock_metrics` | Top-3 broker volume ≥70%=10pts, ≥60%=7pts, ≥50%=4pts. Sinyal konsentrasi institusional. |
+| + | **Broker Accumulation Bonus** | +3 | `broker_top_daily` | Broker hadir ≥50% hari & avg rank ≤5 selama 20 hari: ≥2 broker=+3, 1 broker=+2 |
 
-**Total maks: 103 pts, di-cap di 100.**
+**Total maks: 113 pts, di-cap di 100.**
 
 #### Klasifikasi Sinyal
 
@@ -691,13 +725,14 @@ deno run -A screen.ts
 ### Opsi Lengkap
 
 ```
---mode technical|fundamental|combined|momentum|breakout|vcp|pullback|smt
+--mode technical|fundamental|combined|momentum|breakout|vcp|pullback|smt|auto
 --top N              (default: 15)
 --min-score N        (default: 0)
 --sector "nama"      (filter sektor)
---sort rs|eps|volume|foreign|momentum|atr|smt
+--sort rs|eps|volume|foreign|momentum|atr|smt|auto
 --compact            (tabel minimal)
 --detail KODE        (checklist lengkap 1 saham)
+--auto-detail N      (jumlah saham teratas yang dicetak detail otomatis, default: 3)
 --portfolio N        (ukuran portofolio IDR, untuk position sizing)
 --risk-pct N         (risiko per trade %, default 1)
 --export csv         (output CSV)
@@ -768,6 +803,15 @@ deno run -A screen.ts --mode smt --sort foreign --top 20
 
 # SMT detail saham dengan section Smart Money + Broker Activity
 deno run -A screen.ts --detail BBRI
+
+# Auto Mode — screening terpadu otomatis (AutoScore komposit)
+deno run -A screen.ts --mode auto
+
+# Auto Mode top 20, cetak detail 5 saham teratas
+deno run -A screen.ts --mode auto --top 20 --auto-detail 5
+
+# Auto Mode dengan minimum AutoScore 50
+deno run -A screen.ts --mode auto --min-score 50
 ```
 
 ### Interpretasi Output
@@ -1099,6 +1143,37 @@ deno task ui:dev
 ---
 
 ## Changelog
+
+### 2026-03-31 — Auto Mode, SMT Parity Fix & Berbagai Koreksi
+
+#### Fitur Baru: `--mode auto` (AutoScore)
+
+Mode screening terpadu baru yang menggabungkan semua sinyal (Combined, Momentum, SMT, Setup) menjadi satu AutoScore (0–100). Output otomatis: tabel ringkas, cetak detail top-N, simpan watchlist harian.
+
+Highlights:
+- Setup bonus **stackable**: saham dengan VCP + approaching pivot mendapat kedua bonus (bukan salah satu)
+- Sell signal penalty **multiplicative (×0.5)**: saham dengan sell flag tidak bisa ranking tinggi
+- Filter minimum **AutoScore ≥ 25**: lebih selektif dari `autoScore > 0` sebelumnya
+- Gorengan gradual penalty: −5 (score 30–44) atau −10 (score 45+)
+- `--auto-detail N`: kontrol jumlah detail saham yang dicetak otomatis (default 3)
+
+#### Perbaikan Paritas SMT: screen.ts ↔ Server API
+
+- **Broker Concentration Scoring** ditambahkan ke `screen.ts` (sesuai `smart-money.ts` server): top-3 broker volume ≥70%=10pts, ≥60%=7pts, ≥50%=4pts, dengan re-calc `crossSignalScore` saat broker kuat terdeteksi
+- **"Foreign distributing" reason** ditambahkan ke terminal (saat `foreignFlowScore ≤ 8`) — sesuai server
+- Skor SMT terminal kini **identik** dengan skor SMT web UI
+
+#### Perbaikan Bug `screen.ts`
+
+| # | Bug | Perbaikan |
+|---|-----|-----------|
+| 1 | `--min-score` untuk `--mode smt` filter pakai `combinedScore` (salah) | Filter berdasarkan `smtScore` |
+| 2 | `--min-score` untuk `--mode auto` filter pakai `combinedScore` (salah) | Filter berdasarkan `autoScore` |
+| 3 | SMT table: signal label hanya handle `strong-buy`/fallback hijau `BUY` | Handle semua 5 signal dengan warna tepat |
+| 4 | ANSI padding offset kolom Akum.Broker: `18+10` seharusnya `18+9` | Diperbaiki — kolom tidak bergeser |
+| 5 | Duplikat `/**` di baris pertama file | Dihapus |
+
+---
 
 ### 2026-03-31 — Historical Broker Tracking & SMT Scoring Refinement
 

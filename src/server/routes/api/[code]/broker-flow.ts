@@ -43,7 +43,9 @@ export async function GET(ctx: Context) {
   if (dateInt != null) {
     try {
       const client = new Client()
-      const url = `${IDX_BROKER_URL}?date=${dateInt}&stockCode=${encodeURIComponent(stockCode)}&length=10&start=0`
+      const url = `${IDX_BROKER_URL}?date=${dateInt}&stockCode=${
+        encodeURIComponent(stockCode)
+      }&length=10&start=0`
       const res = await client.get(url)
       if (res.ok) {
         const json = await res.json() as {
@@ -119,11 +121,19 @@ export async function GET(ctx: Context) {
         if (half >= 2) {
           const avgFirst = stats.ranks.slice(0, half).reduce((s, r) => s + r, 0) / half
           const avgLast = stats.ranks.slice(-half).reduce((s, r) => s + r, 0) / half
-          if (avgFirst - avgLast > 1.5) rankTrend = 'improving'
-          else if (avgFirst - avgLast < -1.5) rankTrend = 'declining'
+          if (avgFirst - avgLast > 1.5) {
+            rankTrend = 'improving'
+          } else if (avgFirst - avgLast < -1.5) {
+            rankTrend = 'declining'
+          }
         }
         if (presencePct >= 0.5 && avgRank <= 5 && rankTrend !== 'declining') {
-          accumulatingBrokers.push({ code: brokerCode, name: stats.name, days: daysPresent, avgRank })
+          accumulatingBrokers.push({
+            code: brokerCode,
+            name: stats.name,
+            days: daysPresent,
+            avgRank
+          })
         }
       }
 

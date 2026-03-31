@@ -910,12 +910,12 @@ export interface StockListResponse {
 export interface BrokerTrendItem {
   brokerCode: string
   brokerName: string
-  daysPresent: number    // how many days present in top 10
-  totalDays: number      // total trading days in the window
-  avgRank: number        // average rank position (lower = better)
-  bestRank: number       // best rank achieved
+  daysPresent: number // how many days present in top 10
+  totalDays: number // total trading days in the window
+  avgRank: number // average rank position (lower = better)
+  bestRank: number // best rank achieved
   rankTrend: 'improving' | 'declining' | 'stable'
-  totalVolume: number    // cumulative volume across all days
+  totalVolume: number // cumulative volume across all days
   isAccumulating: boolean // heuristic: present ≥50% days, avgRank ≤5, not declining
 }
 

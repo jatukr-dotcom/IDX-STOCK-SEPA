@@ -26,15 +26,21 @@ import type * as Types from '@app/server/Types.ts'
 function computeRankTrend(
   ranks: number[]
 ): 'improving' | 'declining' | 'stable' {
-  if (ranks.length < 4) return 'stable'
+  if (ranks.length < 4) {
+    return 'stable'
+  }
   const half = Math.floor(ranks.length / 2)
   const firstHalf = ranks.slice(0, half)
   const secondHalf = ranks.slice(-half)
   const avgFirst = firstHalf.reduce((s, r) => s + r, 0) / firstHalf.length
   const avgLast = secondHalf.reduce((s, r) => s + r, 0) / secondHalf.length
   const diff = avgFirst - avgLast // positive = rank improved (lower number = better)
-  if (diff > 1.5) return 'improving'
-  if (diff < -1.5) return 'declining'
+  if (diff > 1.5) {
+    return 'improving'
+  }
+  if (diff < -1.5) {
+    return 'declining'
+  }
   return 'stable'
 }
 
@@ -114,7 +120,7 @@ export async function GET(ctx: Context) {
   // Build per-broker trend stats
   const brokerStats = new Map<string, {
     name: string
-    ranks: number[]        // one per day present (in chronological order)
+    ranks: number[] // one per day present (in chronological order)
     totalVolume: number
     dates: number[]
   }>()
@@ -158,8 +164,12 @@ export async function GET(ctx: Context) {
 
   // Sort: accumulating first, then by daysPresent desc, then avgRank asc
   trend.sort((a, b) => {
-    if (a.isAccumulating !== b.isAccumulating) return a.isAccumulating ? -1 : 1
-    if (b.daysPresent !== a.daysPresent) return b.daysPresent - a.daysPresent
+    if (a.isAccumulating !== b.isAccumulating) {
+      return a.isAccumulating ? -1 : 1
+    }
+    if (b.daysPresent !== a.daysPresent) {
+      return b.daysPresent - a.daysPresent
+    }
     return a.avgRank - b.avgRank
   })
 

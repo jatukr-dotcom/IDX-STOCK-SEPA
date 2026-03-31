@@ -3,13 +3,14 @@
  * Jalankan: deno run -A screen.ts [options]
  *
  * Options:
- *   --mode technical|fundamental|combined|momentum|breakout|vcp|pullback|smt
+ *   --mode technical|fundamental|combined|momentum|breakout|vcp|pullback|smt|auto
  *   --top N                                (default: 15)
  *   --min-score N                          (default: 0)
  *   --sector "nama sektor"                 (default: semua)
  *   --detail KODE
- *   --sort rs|eps|volume|foreign|momentum|atr
+ *   --sort rs|eps|volume|foreign|momentum|atr|smt|auto
  *   --compact
+ *   --auto-detail N                        (default: 3, for auto mode)
  *   --portfolio N                          (default: 0 = disabled)
  *   --risk-pct N                           (default: 1)
  *   --export csv [--output filename.csv]
@@ -86,6 +87,7 @@ type ScreenRow = {
   // Broker history fields
   accumulatingBrokers: string[]
   brokerConcentrationPct: number | null
+  autoScore: number
 }
 
 type WatchlistEntry = { code: string; name: string | null; score: number; rsRank: number; stage: StageNumber }
@@ -516,6 +518,7 @@ const exportCsv = args.includes('--export') && args[args.indexOf('--export') + 1
 const outputFile = args.includes('--output') ? args[args.indexOf('--output') + 1] : null
 const backtestCode = args.includes('--backtest') ? (args[args.indexOf('--backtest') + 1] ?? '').toUpperCase() : null
 const backtestDays = args.includes('--days') ? Number(args[args.indexOf('--days') + 1]) : 30
+const autoDetailN = args.includes('--auto-detail') ? Number(args[args.indexOf('--auto-detail') + 1]) : 3
 
 // Watchlist & alert CLI
 const watchlistIdx = args.indexOf('--watchlist')
@@ -1138,7 +1141,7 @@ for (const [code, entries] of ohlcByCode) {
   const momentumFactor = Math.round(rsComponent + epsComponent + trendComponent + volComponent + foreignComponent)
 
   const sortScore = argMode === 'technical' ? techScore : argMode === 'fundamental' ? finalFundScore : argMode === 'momentum' ? momentumFactor : combinedScore
-  if (sortScore < minScore) continue
+  if (argMode !== 'auto' && argMode !== 'smt' && sortScore < minScore) continue
 
   // Reasons
   const reasons: string[] = []
@@ -1194,6 +1197,7 @@ for (const [code, entries] of ohlcByCode) {
   }
   const smtForeignStreakScore = smtStreak >= 5 ? 10 : smtStreak >= 3 ? 6 : smtStreak >= 1 ? 3 : 0
   if (smtForeignFlowScore >= 18) { smtBullishCount++; smtReasons.push('Foreign flow accelerating') }
+  else if (smtForeignFlowScore <= 8 && smtHasEnoughData) { smtReasons.push('Foreign distributing') }
   if (smtStreak >= 5) { smtBullishCount++; smtReasons.push(`Asing beli ${smtStreak}h berturut`) }
 
   // 3. Volume-Price Divergence (15 pts) — reuse obvTrend
@@ -1239,22 +1243,61 @@ for (const [code, entries] of ohlcByCode) {
   }
 
   // 6. Cross-Signal Alignment (15 pts)
-  const smtCrossScore = smtBullishCount >= 4 ? 15 : smtBullishCount === 3 ? 10 : smtBullishCount === 2 ? 5 : 0
+  let smtCrossScore = smtBullishCount >= 4 ? 15 : smtBullishCount === 3 ? 10 : smtBullishCount === 2 ? 5 : 0
 
-  // 7. Broker accumulation bonus (from broker_top_daily — +2/+3 pts, cap total at 100)
+  // 7. Broker concentration scoring (0-10 pts) — matches server smart-money.ts logic
+  const smtBrokerConc = brokerConcentrationMapScreen.get(code) ?? null
+  let smtBrokerConcScore = 0
+  if (smtBrokerConc != null) {
+    if (smtBrokerConc >= 70) { smtBrokerConcScore = 10; smtBullishCount++; smtReasons.push(`Broker terkonsentrasi (top3: ${smtBrokerConc.toFixed(0)}%)`) }
+    else if (smtBrokerConc >= 60) smtBrokerConcScore = 7
+    else if (smtBrokerConc >= 50) smtBrokerConcScore = 4
+  }
+  // Re-calc cross-signal with broker info (same as server)
+  if (smtBrokerConcScore >= 7) {
+    if (smtBullishCount >= 5) smtCrossScore = 15
+    else if (smtBullishCount === 4) smtCrossScore = 12
+    else if (smtBullishCount === 3) smtCrossScore = 8
+  }
+
+  // 8. Broker accumulation bonus (from broker_top_daily — +2/+3 pts, cap total at 100)
   const smtAccumBrokers = brokerAccumMapScreen.get(code) ?? []
-  let smtBrokerBonus = 0
+  let smtBrokerAccumBonus = 0
   if (smtAccumBrokers.length >= 2) {
-    smtBrokerBonus = 3
+    smtBrokerAccumBonus = 3
     smtReasons.push(`${smtAccumBrokers.slice(0, 2).join(', ')} akumulasi konsisten`)
   } else if (smtAccumBrokers.length === 1) {
-    smtBrokerBonus = 2
+    smtBrokerAccumBonus = 2
     smtReasons.push(`${smtAccumBrokers[0]} akumulasi konsisten 20h`)
   }
 
-  const smtBaseScore = smtForeignFlowScore + smtForeignStreakScore + smtVolPriceScore + smtTradeSizeScore + smtBidOfferScore + smtCrossScore
-  const smtScore = Math.min(100, smtBaseScore + smtBrokerBonus)
+  const smtBaseScore = smtForeignFlowScore + smtForeignStreakScore + smtVolPriceScore + smtTradeSizeScore + smtBidOfferScore + smtCrossScore + smtBrokerConcScore
+  const smtScore = Math.min(100, smtBaseScore + smtBrokerAccumBonus)
   const smtSignal: ScreenRow['smtSignal'] = smtScore >= 75 ? 'strong-buy' : smtScore >= 55 ? 'buy' : smtScore >= 35 ? 'neutral' : smtScore >= 20 ? 'sell' : 'strong-sell'
+
+  // AutoScore: normalized ~100, stacked bonuses, sell=multiplicative penalty
+  // Base (max 70): combined 0-30, momentum 0-15, smt 0-25
+  let autoScore = (combinedScore * 0.30) + (momentumFactor * 0.15) + (smtScore * 0.25)
+  // Stage 2 quality boost
+  if (stage === 2) autoScore += 5
+  // Setup bonuses — stackable, capped at 20
+  let autoSetupBonus = 0
+  if (breakoutSignal === 'breakout') autoSetupBonus += 15
+  else if (breakoutSignal === 'approaching') autoSetupBonus += 8
+  if (vcpResult.isVcp) autoSetupBonus += 6
+  if (pullbackSignal) autoSetupBonus += 4
+  autoScore += Math.min(autoSetupBonus, 20)
+  // Signal quality bonuses (max 18)
+  if (hasPocketPivot) autoScore += 7
+  if (rsLineNewHigh) autoScore += 6
+  if (smtAccumBrokers.length >= 2) autoScore += 5
+  else if (smtAccumBrokers.length === 1) autoScore += 3
+  // Gorengan gradual penalty
+  if (gorenganScore >= 45) autoScore -= 10
+  else if (gorenganScore >= 30) autoScore -= 5
+  // Sell signal — multiplicative (severe): hard to rank high with a sell flag
+  if (sellSignal) autoScore *= 0.5
+  autoScore = Math.max(0, Math.min(100, autoScore))
 
   results.push({
     code, name: sc?.name ?? null, sector: sc?.sector ?? null, price, stage, rsRank, sepaScore, techScore,
@@ -1273,7 +1316,8 @@ for (const [code, entries] of ohlcByCode) {
     avgTradeSizeChange: smtTradeSizeChange,
     bidOfferRatio: smtBidOfferRatio,
     accumulatingBrokers: smtAccumBrokers,
-    brokerConcentrationPct: brokerConcentrationMapScreen.get(code) ?? null
+    brokerConcentrationPct: brokerConcentrationMapScreen.get(code) ?? null,
+    autoScore
   })
 }
 
@@ -1287,7 +1331,9 @@ if (argMode === 'breakout') {
 } else if (argMode === 'pullback') {
   filteredResults = results.filter((r) => r.pullbackSignal)
 } else if (argMode === 'smt') {
-  filteredResults = results.filter((r) => r.smtScore >= 20)
+  filteredResults = results.filter((r) => r.smtScore >= Math.max(20, minScore))
+} else if (argMode === 'auto') {
+  filteredResults = results.filter((r) => r.autoScore >= Math.max(25, minScore))
 }
 
 // Sort
@@ -1299,9 +1345,10 @@ filteredResults.sort((a, b) => {
   if (sortBy === 'momentum') return b.momentumFactor - a.momentumFactor
   if (sortBy === 'atr') return (b.atrPct ?? 0) - (a.atrPct ?? 0)
   if (sortBy === 'smt') return b.smtScore - a.smtScore
+  if (sortBy === 'auto') return b.autoScore - a.autoScore
   // default sort by score
-  const sa = argMode === 'technical' ? a.techScore : argMode === 'fundamental' ? a.fundScore : argMode === 'momentum' ? a.momentumFactor : argMode === 'smt' ? a.smtScore : a.combinedScore
-  const sb = argMode === 'technical' ? b.techScore : argMode === 'fundamental' ? b.fundScore : argMode === 'momentum' ? b.momentumFactor : argMode === 'smt' ? b.smtScore : b.combinedScore
+  const sa = argMode === 'technical' ? a.techScore : argMode === 'fundamental' ? a.fundScore : argMode === 'momentum' ? a.momentumFactor : argMode === 'smt' ? a.smtScore : argMode === 'auto' ? a.autoScore : a.combinedScore
+  const sb = argMode === 'technical' ? b.techScore : argMode === 'fundamental' ? b.fundScore : argMode === 'momentum' ? b.momentumFactor : argMode === 'smt' ? b.smtScore : argMode === 'auto' ? b.autoScore : b.combinedScore
   return sb - sa
 })
 
@@ -1374,19 +1421,7 @@ if (exportCsv) {
 
 // ─── Detail view ──────────────────────────────────────────────────────────────
 
-if (detailCode) {
-  const row = results.find((r) => r.code === detailCode)
-
-  if (!row) {
-    const existsInDb = ohlcByCode.has(detailCode)
-    if (existsInDb) {
-      console.log(`\nSaham ${detailCode} ditemukan di database tapi tidak lolos filter screening (gorengan / Stage 3-4).`)
-    } else {
-      console.log(`\nSaham ${detailCode} tidak ditemukan di database.`)
-    }
-    Deno.exit(0)
-  }
-
+function printStockDetail(row: ScreenRow) {
   const line = '─'.repeat(60)
   const dline = '═'.repeat(60)
   console.log(`\n${dline}`)
@@ -1474,6 +1509,20 @@ if (detailCode) {
   console.log(`\n  Alasan:`)
   for (const r of row.reasons) console.log(`    * ${r}`)
   console.log(dline + '\n')
+}
+
+if (detailCode) {
+  const row = results.find((r) => r.code === detailCode)
+  if (!row) {
+    const existsInDb = ohlcByCode.has(detailCode)
+    if (existsInDb) {
+      console.log(`\nSaham ${detailCode} ditemukan di database tapi tidak lolos filter screening (gorengan / Stage 3-4).`)
+    } else {
+      console.log(`\nSaham ${detailCode} tidak ditemukan di database.`)
+    }
+    Deno.exit(0)
+  }
+  printStockDetail(row)
   client.close()
   Deno.exit(0)
 }
@@ -1509,7 +1558,7 @@ if (argMode === 'smt') {
     const smtStreak = r.consecutiveForeignBuyDays > 0 ? `${r.consecutiveForeignBuyDays}h` : '—'
     const smtTxChg = r.avgTradeSizeChange != null ? `${r.avgTradeSizeChange >= 0 ? '+' : ''}${r.avgTradeSizeChange.toFixed(1)}%` : '—'
     const smtBo = r.bidOfferRatio != null ? r.bidOfferRatio.toFixed(2) : '—'
-    const smtSigLabel = r.smtSignal === 'strong-buy' ? '\x1b[32mSTRONG BUY\x1b[0m' : '\x1b[32mBUY\x1b[0m'
+    const smtSigLabel = r.smtSignal === 'strong-buy' ? '\x1b[32mSTRONG BUY\x1b[0m' : r.smtSignal === 'buy' ? '\x1b[32mBUY\x1b[0m' : r.smtSignal === 'neutral' ? '\x1b[33mNETRAL\x1b[0m' : r.smtSignal === 'sell' ? '\x1b[31mSELL\x1b[0m' : '\x1b[31mSTRONG SELL\x1b[0m'
     const smtScoreStr = String(r.smtScore).padStart(5)
     const smtScoreColored = r.smtScore >= 75 ? `\x1b[32m${smtScoreStr}\x1b[0m` : r.smtScore >= 55 ? `\x1b[33m${smtScoreStr}\x1b[0m` : `\x1b[90m${smtScoreStr}\x1b[0m`
     // Accumulating brokers: show first 2 (truncated), green if present
@@ -1517,13 +1566,57 @@ if (argMode === 'smt') {
       ? `\x1b[32m${r.accumulatingBrokers.slice(0, 2).join(', ').slice(0, 17)}\x1b[0m`
       : '\x1b[90m—\x1b[0m'
     console.log(
-      `  ${pad(String(i + 1), 3)} ${pad(r.code, 6)} ${pad(r.name?.slice(0, 20) ?? '-', 20)} ${smtScoreColored} ${smtFn5d.padStart(8)} ${smtStreak.padStart(7)} ${smtTxChg.padStart(7)} ${smtBo.padStart(5)} ${accumBrokerStr.padEnd(18 + 10)} ${smtSigLabel}`
+      `  ${pad(String(i + 1), 3)} ${pad(r.code, 6)} ${pad(r.name?.slice(0, 20) ?? '-', 20)} ${smtScoreColored} ${smtFn5d.padStart(8)} ${smtStreak.padStart(7)} ${smtTxChg.padStart(7)} ${smtBo.padStart(5)} ${accumBrokerStr.padEnd(18 + 9)} ${smtSigLabel}`
     )
   }
   console.log(dline)
   console.log(`  Untuk detail: deno run -A screen.ts --detail KODE`)
   console.log(`  Sort: --sort smt|foreign|momentum | Filter: --top N --sector "nama"`)
   console.log(`  [Akum.Broker] = broker hadir ≥50% hari & avg rank ≤5 (20 hari terakhir)`)
+  console.log(dline + '\n')
+  client.close()
+  Deno.exit(0)
+}
+
+if (argMode === 'auto') {
+  console.log(`  ${pad('#', 3)} ${pad('Kode', 6)} ${pad('Nama', 20)} ${'AutoScore'.padStart(9)} ${'Setup'.padStart(10)} ${'SMT'.padStart(10)} ${'Cmbnd'.padStart(5)} ${'Mmt'.padStart(4)} ${pad('Warnings', 20)}`)
+  console.log(`  ${'─'.repeat(100)}`)
+  for (let i = 0; i < top.length; i++) {
+    const r = top[i]!
+    const autoStr = `\x1b[32m${r.autoScore.toFixed(0).padStart(9)}\x1b[0m`
+    
+    const setupRaw = r.breakoutSignal === 'breakout' ? 'Breakout' : r.breakoutSignal === 'approaching' ? 'Pendekatan' : r.vcpIsVcp ? 'VCP' : r.pullbackSignal ? 'Pullback' : '—'
+    const setupColor = r.breakoutSignal === 'breakout' ? '\x1b[32m' : r.breakoutSignal === 'approaching' ? '\x1b[33m' : r.vcpIsVcp ? '\x1b[35m' : r.pullbackSignal ? '\x1b[36m' : '\x1b[90m'
+    const setupStr = `${setupColor}${setupRaw.padStart(10)}\x1b[0m`
+
+    const smtRaw = r.smtScore >= 75 ? 'StrongBuy' : r.smtScore >= 55 ? 'Buy' : r.smtScore >= 35 ? 'Netral' : 'Sell'
+    const smtColor = r.smtScore >= 75 ? '\x1b[32m' : r.smtScore >= 55 ? '\x1b[33m' : r.smtScore >= 35 ? '\x1b[90m' : '\x1b[31m'
+    const smtStr = `${smtColor}${smtRaw.padStart(10)}\x1b[0m`
+    
+    const warn: string[] = []
+    if (r.sellSignal) warn.push(`\x1b[31m${r.sellSignal}\x1b[0m`)
+    if (r.gorenganScore >= 30) warn.push('\x1b[31mGorengan\x1b[0m')
+    
+    console.log(`  ${pad(String(i + 1), 3)} ${pad(r.code, 6)} ${pad(r.name?.slice(0, 20) ?? '-', 20)} ${autoStr} ${setupStr} ${smtStr} ${r.combinedScore.toFixed(0).padStart(5)} ${String(r.momentumFactor).padStart(4)} ${warn.join(', ')}`)
+  }
+  console.log(dline)
+
+  const autoN = Math.min(autoDetailN, top.length)
+  if (autoN > 0) {
+    console.log(`\n  \x1b[36m[AUTO-DETAIL] Menganalisis ${autoN} saham teratas...\x1b[0m`)
+    for (let i = 0; i < autoN; i++) {
+      printStockDetail(top[i]!)
+    }
+  }
+
+  const autoWlName = `auto_${dateStr}`
+  const wlData: WatchlistFile = {
+    date: dateFmt,
+    stocks: top.map((r) => ({ code: r.code, name: r.name, score: r.combinedScore, rsRank: r.rsRank, stage: r.stage }))
+  }
+  await writeJsonFile(`${watchlistsDir}/${autoWlName}.json`, wlData)
+  console.log(`\n  \x1b[32m✓ Watchlist "${autoWlName}" otomatis disimpan (${top.length} saham).\x1b[0m`)
+
   console.log(dline + '\n')
   client.close()
   Deno.exit(0)
@@ -1604,8 +1697,8 @@ if (watchlistAction === 'save' && watchlistName) {
 }
 
 console.log(`  Untuk detail saham: deno run -A screen.ts --detail KODE`)
-console.log(`  Mode: --mode technical|fundamental|combined|momentum|breakout|vcp|pullback|smt`)
-console.log(`  Sort: --sort rs|eps|volume|foreign|momentum|atr|smt`)
+console.log(`  Mode: --mode technical|fundamental|combined|momentum|breakout|vcp|pullback|smt|auto`)
+console.log(`  Sort: --sort rs|eps|volume|foreign|momentum|atr|smt|auto`)
 console.log(`  Lainnya: --top N --min-score N --sector "nama" --compact --portfolio N --risk-pct N`)
 console.log(`  Export: --export csv [--output file.csv]`)
 console.log(`  Watchlist: --watchlist save|load|show|compare <nama>`)
