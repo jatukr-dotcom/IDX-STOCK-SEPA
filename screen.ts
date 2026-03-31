@@ -200,7 +200,8 @@ function calcEpsInfo(histRows: HistRow[]): { score: number; latestGrowthPct: num
   for (const r of histRows) byKey.set(`${r.year}_${r.quarter}`, r)
   let latestYear: number | null = null
   let latestQ: number | null = null
-  outer: for (const y of [2025, 2024, 2023, 2022]) {
+  const currentYear = new Date().getFullYear()
+  outer: for (const y of [currentYear, currentYear - 1, currentYear - 2, currentYear - 3]) {
     for (const q of [4, 3, 2, 1]) {
       if (byKey.get(`${y}_${q}`)?.profitAttrOwner != null) { latestYear = y; latestQ = q; break outer }
     }
@@ -903,7 +904,8 @@ for (const [code, entries] of ohlcByCode) {
   if (histRows.length > 0) {
     const byKey = new Map(histRows.map((r) => [`${r.year}_${r.quarter}`, r]))
     let lY: number | null = null; let lQ: number | null = null
-    salesSearch: for (const y of [2025, 2024, 2023, 2022]) {
+    const fundYear = new Date().getFullYear()
+    salesSearch: for (const y of [fundYear, fundYear - 1, fundYear - 2, fundYear - 3]) {
       for (const q of [4, 3, 2, 1]) {
         if (byKey.get(`${y}_${q}`)?.sales != null) { lY = y; lQ = q; break salesSearch }
       }
