@@ -795,32 +795,204 @@ deno run -A screen.ts --detail BBRI
 | Streak | Hari berturut-turut asing net-buy (mode smt) |
 | TxChg | Perubahan avg ukuran transaksi 5d vs 20d (mode smt) |
 
-### Alur Screening Harian
+### Best Practice: Alur Screening Harian
+
+Panduan step-by-step untuk memaksimalkan terminal screener. Urutan dirancang dari **saringan kasar → presisi → keputusan**, mengikuti prinsip Minervini: *"Cast a wide net, then narrow down aggressively."*
+
+#### Langkah 1 — Cek Alert & Gambaran Umum
 
 ```bash
-# 1. Cek alert dari kemarin
+deno run -A screen.ts
+```
+
+**Tujuan:** Melihat top 15 saham combined score tertinggi + alert yang terpicu sejak kemarin. Output ini memberi gambaran pasar secara keseluruhan — apakah banyak Stage 2 yang muncul (pasar bullish) atau sedikit (pasar lemah).
+
+**Yang diperhatikan:**
+- Alert yang muncul (kuning) di atas tabel — segera cek saham tersebut
+- Follow-Through Day status — apakah pasar dalam kondisi bullish confirmation
+- Berapa total kandidat yang lolos filter (tertulis di header: "X kandidat (Y lolos filter)")
+
+#### Langkah 2 — Saringan Lebar: Top Combined + Momentum
+
+```bash
+deno run -A screen.ts --top 30
+deno run -A screen.ts --mode momentum --top 20
+```
+
+**Tujuan:** Lihat 30 saham terbaik secara keseluruhan (teknikal + fundamental), lalu bandingkan dengan 20 saham momentum terkuat. Saham yang muncul di **kedua daftar** adalah kandidat paling kuat — fundamental solid, momentum sedang naik.
+
+**Tips:** Perhatikan kolom **Entry Signals** — saham dengan sinyal BKT (breakout), PP (pocket pivot), atau RS-NH (RS line new high) prioritas lebih tinggi.
+
+#### Langkah 3 — Cari Setup Entry: Breakout, VCP, Pullback
+
+```bash
+deno run -A screen.ts --mode breakout
+deno run -A screen.ts --mode vcp
+deno run -A screen.ts --mode pullback
+```
+
+**Tujuan:** Cari saham dengan **timing entry yang tepat** — bukan hanya bagus secara umum, tapi sedang berada di titik entry presisi.
+
+| Mode | Kapan Beli | Risiko | Reward |
+|------|-----------|--------|--------|
+| `breakout` | Hari ini/besok — harga sudah melewati pivot + volume confirm | Sedang (bisa failed breakout) | Tinggi |
+| `vcp` | 1–5 hari ke depan — volatilitas sudah menyempit, tinggal trigger | Rendah (stop ketat) | Tinggi |
+| `pullback` | Sekarang — harga kembali ke EMA21 support | Rendah (stop di bawah EMA21) | Sedang |
+
+**Best practice:**
+- Breakout **tanpa volume** (BKT tapi vol ratio < 1.5×) = curiga, jangan buru-buru
+- VCP yang bertepatan dengan pullback = setup paling ideal (supply habis + di area support)
+- Pullback di Stage 2 dengan RS ≥ 80 = high probability buy
+
+#### Langkah 4 — Cek Jejak Smart Money
+
+```bash
+deno run -A screen.ts --mode smt --top 20
+```
+
+**Tujuan:** Cari saham yang sedang diakumulasi oleh asing/institusi. Ini adalah **konfirmasi terkuat** — jika saham dari langkah 2/3 juga muncul di sini dengan SMT score tinggi, probabilitas naik jauh lebih besar.
+
+**Yang diperhatikan:**
+| Kolom | Sinyal Kuat |
+|-------|------------|
+| For5d | Positif (asing net buy) — semakin besar semakin baik |
+| Streak | ≥ 5 hari berturut-turut = akumulasi serius, bukan fluktuasi |
+| TxChg | ≥ +20% = ukuran transaksi membesar (blok institusional) |
+| B/O | ≥ 1.5 = buyer mendominasi order book |
+| Akum.Broker | Nama broker muncul = ada institusi yang konsisten beli 20 hari |
+
+**Filter tambahan:**
+```bash
+# Hanya yang sinyal BUY atau STRONG BUY
+deno run -A screen.ts --mode smt --min-score 55
+
+# Urutkan berdasarkan net foreign terbesar
+deno run -A screen.ts --mode smt --sort foreign --top 20
+
+# Filter sektor tertentu
+deno run -A screen.ts --mode smt --sector "Financials" --top 15
+```
+
+#### Langkah 5 — Deep Dive: Detail Saham Kandidat
+
+```bash
+deno run -A screen.ts --detail BBRI --portfolio 100000000 --risk-pct 1
+```
+
+**Tujuan:** Analisis menyeluruh satu saham yang menarik perhatian dari langkah sebelumnya. Output ini menampilkan **semua checklist Minervini** dalam satu tampilan:
+
+```
+Checklist yang harus ✓ (hijau) untuk entry ideal:
+  ✓ Stage 2 (Advancing)
+  ✓ Trend Template ≥ 6/8
+  ✓ RS Rank ≥ 70
+  ✓ EPS Growth ≥ 25% YoY
+  ✓ RS Line New High
+  ✓ Volume Akumulasi
+  ✓ Foreign Flow positif
+  ✓ SMT Score ≥ 55 (BUY atau lebih)
+```
+
+**Section Smart Money:**
+- SMT Score dengan bar visual — hijau (≥75), kuning (≥55), merah (<55)
+- Foreign Flow detail: net 5d + arah akselerasi (▲/▼)
+- Consecutive Buy days — indikator keseriusan asing
+- Bid/Offer ratio + label (buyer/seller dominated)
+
+**Section Broker Activity:**
+- Konsentrasi Top3 — jika ≥ 60% berarti beberapa broker mendominasi (kuning)
+- Nama broker akumulasi — institusi yang konsisten di top-10 selama 20 hari
+
+**Position Sizing (jika `--portfolio` diset):**
+- Lot yang aman dibeli sesuai risk management ATR-based
+- Stop price berdasarkan ATR × 1.5 atau 7% rule
+- Risk per trade dalam Rupiah
+
+**Red flags di detail view:**
+- Sell Signal muncul (Climax Top / Upper BB 3d+ / 7% Stop) = **jangan beli**
+- Gorengan Score ≥ 30 = waspada manipulasi
+- OBV trend "down" + Foreign negatif = distribusi, hindari
+
+#### Langkah 6 — Simpan & Tracking
+
+```bash
+# Simpan kandidat hari ini ke watchlist
+deno run -A screen.ts --watchlist save harian
+
+# Besok/lusa: bandingkan apakah skor naik atau turun
+deno run -A screen.ts --watchlist compare harian
+
+# Set alert untuk saham yang belum breakout tapi mendekati pivot
+deno run -A screen.ts --alert set BBRI price_above 5000
+deno run -A screen.ts --alert set TLKM rs_above 85
+
+# Cek alert yang aktif
+deno run -A screen.ts --alert list
+```
+
+**Tujuan:** Jangan langsung beli — simpan dulu, track perkembangan skornya. Saham yang skornya **konsisten naik** selama 2–3 hari lebih reliable daripada yang tiba-tiba muncul.
+
+#### Langkah 7 (Opsional) — Export & Backtest
+
+```bash
+# Export hasil screening ke CSV untuk analisis lanjutan
+deno run -A screen.ts --mode smt --export csv --output smt_screening.csv
+
+# Backtest: cek apakah saham yang pernah kamu beli sudah profit/loss
+deno run -A screen.ts --backtest BBRI --days 30
+```
+
+---
+
+#### Ringkasan Alur Harian (Copy-Paste Ready)
+
+```bash
+# ══════════════════════════════════════════════════════════
+# ALUR SCREENING HARIAN — 5 menit sebelum market buka
+# ══════════════════════════════════════════════════════════
+
+# 1. Cek alert + overview pasar
 deno run -A screen.ts
 
-# 2. Lihat saham breakout hari ini
-deno run -A screen.ts --mode breakout
-
-# 3. Lihat VCP setup yang terbentuk
-deno run -A screen.ts --mode vcp
-
-# 4. Cari jejak institusional / asing (Smart Money Tracker, skor ≥20)
-deno run -A screen.ts --mode smt --top 20
-# Hanya STRONG BUY + BUY (skor ≥55): tambah --min-score 55
-deno run -A screen.ts --mode smt --min-score 55 --top 20
-
-# 5. Urutkan momentum terkuat
+# 2. Top saham combined + momentum
+deno run -A screen.ts --top 30
 deno run -A screen.ts --mode momentum --top 20
 
-# 6. Detail saham menarik + position sizing
+# 3. Cari timing entry
+deno run -A screen.ts --mode breakout
+deno run -A screen.ts --mode vcp
+deno run -A screen.ts --mode pullback
+
+# 4. Konfirmasi smart money
+deno run -A screen.ts --mode smt --top 20
+
+# 5. Detail saham terbaik + position sizing
 deno run -A screen.ts --detail KODE --portfolio 100000000
 
-# 7. Simpan kandidat ke watchlist
-deno run -A screen.ts --watchlist save $(date +%Y%m%d)
+# 6. Simpan watchlist
+deno run -A screen.ts --watchlist save harian
 ```
+
+---
+
+#### Tips Lanjutan
+
+**Kombinasi mode paling powerful:**
+
+| Situasi | Perintah | Alasan |
+|---------|---------|--------|
+| Pasar bullish, cari leader | `--mode momentum --sort rs` | RS tinggi + momentum = leader pasar |
+| Cari entry low-risk | `--mode pullback` lalu `--detail KODE` | Pullback EMA21 = stop ketat |
+| Konfirmasi sebelum beli | `--mode smt --min-score 55` | Pastikan asing/institusi juga beli |
+| Evaluasi mingguan | `--watchlist compare minggu_lalu` | Track apakah kandidat membaik/memburuk |
+| Saham sektor tertentu | `--sector "Basic Materials" --mode smt` | Filter sektor + cek smart money |
+
+**Prinsip Minervini yang harus diingat:**
+1. **Hanya beli Stage 2** — tidak ada pengecualian
+2. **RS Rank ≥ 70** — beli saham yang lebih kuat dari pasar, bukan yang "murah"
+3. **Volume konfirmasi breakout** — breakout tanpa volume = trap
+4. **Cut loss 7%** — jika detail menunjukkan "7% Stop Breach", keluar tanpa berpikir
+5. **Saham terbaik muncul di banyak filter** — jika BBRI muncul di top combined, breakout, DAN smt, itu kandidat terkuat
 
 ---
 
