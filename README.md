@@ -800,6 +800,7 @@ deno task ui:dev
 | `deno task db:init` | Isi data awal 2 tahun (jalankan sekali) |
 | `deno task db:update` | Fetch hanya tanggal yang belum ada di DB |
 | `deno task db:fetch-eps` | Fetch data EPS historis Q1–Q4 dari IDX |
+| `deno task db:fetch-broker`| [BARU] Fetch histori Top-10 Broker harian (default: 60 hari) |
 | `deno task check` | Format, lint, dan typecheck |
 
 ---
@@ -819,6 +820,25 @@ deno task ui:dev
 ---
 
 ## Changelog
+
+### 2026-03-31 — Historical Broker Tracking & SMT Scoring Refinement
+
+Fitur baru pelacakan konsentrasi broker historis untuk mendeteksi jejak bandar/institusi dengan presisi lebih tinggi:
+
+#### 1. Historical Broker History (`broker_top_daily`)
+- **Skrip Independen:** `deno task db:fetch-broker --days 60` untuk menarik histori top-10 broker harian mundur sejauh N hari. Skrip ini *idempotent* (melanjutkan otomatis yang belum didownload) dan menghemat call API IDX.
+- **Frontend UI SMT:** Penambahan kolom baru **"Akum. Broker"** dengan badge hijau untuk broker yang konsisten mengakumulasi selama 20 hari terakhir.
+- **API Baru:** Endpoint `/api/[code]/broker-history` untuk menganalisis tren broker spesifik per saham.
+
+#### 2. Upgrade SMT Scoring Engine
+- **Broker Accumulation Bonus:** Saham dengan institusi/broker yang terdeteksi mengakumulasi konsisten (+50% presence, rank tinggi, net volume positif) kini mendapat bonus +2 hingga +3 pts pada skor SMT di web dan terminal.
+- **Bid/Offer Pressure Refinement:** Diubah dari single-day ratio menjadi **3-day aggregate ratio**. Ini menstabilkan skor dan mengurangi false-positive dari noise harian.
+- **Foreign Flow Normalization:** Range normalisasi akselerasi asing diperlebar dari `[-0.1, +0.1]` menjadi `[-0.05, +0.25]`. Full score 30 pts sekarang benar-benar membutuhkan aksi beli asing yang signifikan (bukan hanya 10% volume). Kriteria ini sinkron 100% antara `screen.ts` dan server API.
+
+#### 3. Bug Fix Fundamental Screening (`screen.ts`)
+- **[HIGH] EPS & Sales Year Hardcoded:** Diperbaiki bug pencarian EPS dan Sales yang menggunakan array tahun statis `[2025, 2024, 2023, 2022]`. Ini berpotensi merusak skoring setelah tahun berganti ke 2026. Kini menggunakan kalkulasi dinamis berdasarkan `currentYear`.
+
+---
 
 ### 2026-03-31 — Fitur SMT + Perbaikan 8 Bug
 
