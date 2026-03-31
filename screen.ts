@@ -1183,7 +1183,7 @@ for (const [code, entries] of ohlcByCode) {
     smtFAccel = smtFAvg5 - smtFAvg20
     const smtAvgVol20 = entries.slice(-20).reduce((s: number, e: OhlcvEntry) => s + e.volume, 0) / 20
     const smtAccelNorm = smtAvgVol20 > 0 ? smtFAccel / smtAvgVol20 : 0
-    smtForeignFlowScore = Math.round(Math.max(0, Math.min(1, (smtAccelNorm + 0.1) / 0.2)) * 30)
+    smtForeignFlowScore = Math.round(Math.max(0, Math.min(1, (smtAccelNorm + 0.05) / 0.30)) * 30)
   }
 
   // 2. Foreign Flow Streak (10 pts)
@@ -1224,13 +1224,16 @@ for (const [code, entries] of ohlcByCode) {
     }
   }
 
-  // 5. Bid/Offer Pressure (10 pts)
+  // 5. Bid/Offer Pressure (10 pts) — 3-day aggregate to reduce noise
   let smtBidOfferScore = 0
-  const smtBidOfferRatio = lastEntry.bidVolume > 0 && lastEntry.offerVolume > 0
-    ? Math.round((lastEntry.bidVolume / lastEntry.offerVolume) * 1000) / 1000
+  const smtBoSlice = entries.slice(-3)
+  const smtTotalBid3d = smtBoSlice.reduce((s: number, e: OhlcvEntry) => s + e.bidVolume, 0)
+  const smtTotalOffer3d = smtBoSlice.reduce((s: number, e: OhlcvEntry) => s + e.offerVolume, 0)
+  const smtBidOfferRatio = smtTotalBid3d > 0 && smtTotalOffer3d > 0
+    ? Math.round((smtTotalBid3d / smtTotalOffer3d) * 1000) / 1000
     : null
   if (smtBidOfferRatio != null) {
-    if (smtBidOfferRatio >= 1.5) { smtBidOfferScore = 10; smtBullishCount++; smtReasons.push(`Bid/Offer ${smtBidOfferRatio.toFixed(2)} (tekanan beli)`) }
+    if (smtBidOfferRatio >= 1.5) { smtBidOfferScore = 10; smtBullishCount++; smtReasons.push(`Bid/Offer ${smtBidOfferRatio.toFixed(2)} (tekanan beli 3h)`) }
     else if (smtBidOfferRatio >= 1.2) smtBidOfferScore = 6
     else if (smtBidOfferRatio >= 1.0) smtBidOfferScore = 3
   }

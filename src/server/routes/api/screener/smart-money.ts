@@ -10,7 +10,7 @@
  *   2. Foreign Flow Streak  (10 pts): consecutive net-buy days
  *   3. Volume-Price Divergence (15 pts): OBV trending up while price is flat/down
  *   4. Trade Size Profile (20 pts): avg trade size (value/freq) increasing — institutional blocks
- *   5. Bid/Offer Pressure (10 pts): bid vol > offer vol on latest day
+ *   5. Bid/Offer Pressure (10 pts): 3-day aggregate bid vol vs offer vol
  *   6. Cross-Signal Alignment (15 pts): how many of the above are bullish simultaneously
  * Broker concentration bonus (from broker_stock_metrics table, if data exists):
  *   up to 10 pts added to brokerScore based on top3VolumePct concentration:
@@ -171,8 +171,10 @@ function computeSmtScore(
     // Normalize acceleration relative to avg daily volume
     const avgVol20 = rows.slice(-20).reduce((s, r) => s + r.volume, 0) / 20
     const accelNorm = avgVol20 > 0 ? flow.acceleration / avgVol20 : 0
-    // map accelNorm [-0.1, +0.1] → [0, 30]
-    const rawScore = clamp((accelNorm + 0.1) / 0.2, 0, 1) * 30
+    // map accelNorm [-0.05, +0.25] → [0, 30]
+    // Range widened vs old [-0.1,+0.1] to reduce false positives:
+    //   -5% vol accel → 0 pts, 0% → 5 pts, +10% → 15 pts, +25% → 30 pts
+    const rawScore = clamp((accelNorm + 0.05) / 0.30, 0, 1) * 30
     foreignFlowScore = Math.round(rawScore)
     if (foreignFlowScore >= 18) {
       bullishCount++
@@ -232,16 +234,18 @@ function computeSmtScore(
     }
   }
 
-  // --- 5. Bid/Offer Pressure (10 pts) ---
+  // --- 5. Bid/Offer Pressure (10 pts) — 3-day aggregate to reduce noise ---
   let bidOfferScore = 0
   let bidOfferRatio: number | null = null
-  const lastRow = rows[rows.length - 1]!
-  if (lastRow.bidVolume > 0 && lastRow.offerVolume > 0) {
-    bidOfferRatio = Utils.round3(lastRow.bidVolume / lastRow.offerVolume)
+  const boSlice = rows.slice(-3)
+  const totalBid3d = boSlice.reduce((s, r) => s + r.bidVolume, 0)
+  const totalOffer3d = boSlice.reduce((s, r) => s + r.offerVolume, 0)
+  if (totalBid3d > 0 && totalOffer3d > 0) {
+    bidOfferRatio = Utils.round3(totalBid3d / totalOffer3d)
     if (bidOfferRatio >= 1.5) {
       bidOfferScore = 10
       bullishCount++
-      reasons.push(`Bid/Offer ${bidOfferRatio.toFixed(2)} (tekanan beli)`)
+      reasons.push(`Bid/Offer ${bidOfferRatio.toFixed(2)} (tekanan beli 3h)`)
     } else if (bidOfferRatio >= 1.2) {
       bidOfferScore = 6
     } else if (bidOfferRatio >= 1.0) {
