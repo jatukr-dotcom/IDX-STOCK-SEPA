@@ -33,9 +33,10 @@ Screener saham Indonesia dengan metode **Momentum Masters** (Minervini, Ryan, Za
 - **Semua sinyal Minervini** — Stage, Trend Template, RS Rank, EPS, VCP, Pocket Pivot, Cup-Handle, Flat Base, HTF, Power Play
 - **5-criteria volume model** — CMF, MFI, OBV, Volume Surge, Foreign Flow (net asing IDX)
 - **Sinyal entry presisi** — Breakout detection (BKT), Approaching pivot (APR), Pullback EMA21 (PB), Shakeout
-- **Sinyal exit** — Climax Top, Upper BB 3d+, 7% Stop Breach
+- **Sinyal exit** — Climax Top, Upper BB 3d+, 7% Stop Breach, OBV Divergence, Support Breakdown (6 sinyal)
 - **Quant signals** — ATR(14), Bollinger Band Squeeze, Multi-Factor Momentum (0–100), Sharpe Ratio
 - **Sinyal institusional** — `smt` mode: 6 sinyal jejak asing/institusional (total 100 pts) + broker accumulation bonus, sinyal hingga STRONG BUY
+- **🆕 Entry Plan** — `--detail KODE` kini menampilkan rencana entry Minervini: pivot point, buy zone (0–5% di atas pivot), stop loss, target 1R/2R/3R, R/R ratio, dan position sizing (lot) otomatis
 - **Position sizing** — hitung lot berdasarkan ATR stop + portfolio size
 - **Workflow tools** — Watchlist (save/load/compare), CSV export, Alert system, Backtest sederhana
 - **Mode & filter** — `breakout`, `vcp`, `pullback`, `momentum`, `technical`, `fundamental`, `combined`, `smt`, `auto`
@@ -439,9 +440,9 @@ Mode paling praktis untuk screening harian — menggabungkan **semua sinyal** me
 | RS Line New High | +6 | RS Line mencetak 52w high |
 | Broker Accumulation | +3–5 | ≥2 broker akumulasi=+5, 1 broker=+3 |
 | Gorengan penalty | −5 atau −10 | Score 30–44=−5, Score 45+=−10 |
-| Sell signal | × 0.5 | Multiplicative: Climax Top / BB 3d+ / 7% Stop Breach |
+| Sell signal | × 0.5 atau −pts | Climax Top / BB 3d+ = ×0.5; 7% Stop=−12, Breakdown MA50=−6, OBV Divergence=−8, Support Breakdown=−10 |
 
-**Filter:** Hanya saham dengan AutoScore ≥ 25 yang tampil. Setup bonus bersifat **stackable** — saham dengan VCP sekaligus mendekati pivot mendapat keduanya.
+**Filter:** Hanya saham dengan AutoScore ≥ 30 yang tampil. Setup bonus bersifat **stackable** — saham dengan VCP sekaligus mendekati pivot mendapat keduanya.
 
 ```bash
 deno run -A screen.ts --mode auto              # Default: top 15, cetak detail 3 teratas
@@ -637,8 +638,54 @@ Pivot Point = high tertinggi dari lookback sesuai pola (HTF=15h, VCP=20h, Flat=2
 | **Climax Top** | Hari gain terbesar + volume terbesar setelah run panjang | 🔴 Sangat tinggi | Jual semua segera |
 | **Upper BB 3d+** | Harga di atas BB atas ≥ 3 hari berturut | 🟡 Sedang | Trim 30–50%, perketat stop |
 | **7% Stop Breach** | Harga turun >7% dari pivot entry | 🔴 Tinggi | Cut loss, keluar sepenuhnya |
+| **Breakdown MA50** | Close di bawah MA50 | 🟡 Sedang | Waspadai perubahan trend |
+| **OBV Divergence** | Harga buat new high tapi OBV buat lower high (20 hari vs 20 hari sebelumnya) | 🟡 Sedang | Trim posisi, distribusi tersembunyi |
+| **Support Breakdown** | Harga turun di bawah base low 25 hari (exclude 5 hari terakhir) | 🔴 Tinggi | Setup invalidated, exit |
 
-> **Catatan implementasi:** Di `screen.ts`, sinyal exit muncul di output `--detail KODE` untuk saham Stage 2 yang lolos screening. Kemunculannya berarti saham punya skor bagus tetapi ada **peringatan manajemen posisi** yang perlu diperhatikan.
+> **Catatan implementasi:** Di `screen.ts`, sinyal exit muncul di output `--detail KODE` untuk saham Stage 2 yang lolos screening. Kemunculannya berarti saham punya skor bagus tetapi ada **peringatan manajemen posisi** yang perlu diperhatikan. Sinyal Climax Top & Upper BB 3d+ memberikan penalty multiplicative (×0.5) pada AutoScore; sinyal lainnya memberikan penalty additive (−6 hingga −12 poin).
+
+---
+
+### Entry Plan — Rencana Entry Otomatis (Minervini)
+
+Saat menjalankan `--detail KODE`, screener secara otomatis menghitung **rencana entry Minervini** berdasarkan setup yang terdeteksi.
+
+#### Dua Tipe Entry Plan
+
+| Tipe | Kondisi | Pivot/Entry | Stop Loss |
+|------|---------|-------------|-----------|
+| **BREAKOUT** | Sinyal breakout atau mendekati pivot | Pivot point (high tertinggi sesuai pola) | 7% di bawah pivot |
+| **PULLBACK** | Pullback ke EMA21 terdeteksi | EMA21 saat ini | MA50 atau EMA21 × 93% |
+| **—** | Tidak ada setup valid | — | — |
+
+#### Contoh Output (Breakout)
+
+```
+═══ Entry Plan ═══
+Entry Type     : BREAKOUT
+Pivot Point    : Rp 2,150 (Resistance high)
+Buy Zone       : Rp 2,150 - 2,258 (+0% to +5%)
+Stop Loss      : Rp 2,000 (7% below pivot)
+Risk per Share : Rp 150 (7.0%)
+Target (1R)    : Rp 2,300 (+7.0%)
+Target (2R)    : Rp 2,450 (+14.0%)
+Target (3R)    : Rp 2,600 (+20.9%)
+R/R Ratio      : 1:3 (jika target 3R)
+Position Size  : 333 lot @ Rp 2,150 (risk 2% of Rp 100jt)
+```
+
+#### Cara Baca
+
+| Field | Penjelasan |
+|-------|-----------|
+| **Buy Zone** | Beli di rentang pivot hingga pivot+5% — Minervini: jangan beli lebih dari 5% di atas pivot |
+| **Stop Loss** | Titik cut loss wajib. Breakout: 7% di bawah pivot. Pullback: di bawah MA50/EMA21 |
+| **Risk per Share** | Selisih entry − stop = risiko per lembar saham |
+| **Target 1R/2R/3R** | Target profit sebesar 1×/2×/3× risiko per saham (R-multiple) |
+| **R/R Ratio** | Risk-Reward Ratio ideal minimal 1:3 (profit 3× lebih besar dari risiko) |
+| **Position Size** | Jumlah lot berdasarkan `Portfolio × RiskPct% / RiskPerShare / Harga / 100` |
+
+Entry Plan section hanya tampil jika setup breakout atau pullback terdeteksi. Gunakan `--portfolio` dan `--risk-pct` untuk kustomisasi position sizing.
 
 ---
 
@@ -901,6 +948,7 @@ deno run -A screen.ts --mode smt --top 20
 |-------|------------|
 | For5d | Positif (asing net buy) — semakin besar semakin baik |
 | Streak | ≥ 5 hari berturut-turut = akumulasi serius, bukan fluktuasi |
+| **Akum Window** | ≥ 11/20h beli = akumulasi sustained (lebih andal dari streak) |
 | TxChg | ≥ +20% = ukuran transaksi membesar (blok institusional) |
 | B/O | ≥ 1.5 = buyer mendominasi order book |
 | Akum.Broker | Nama broker muncul = ada institusi yang konsisten beli 20 hari |
@@ -952,8 +1000,13 @@ Checklist yang harus ✓ (hijau) untuk entry ideal:
 - Stop price berdasarkan ATR × 1.5 atau 7% rule
 - Risk per trade dalam Rupiah
 
+**Entry Plan di detail view:**
+- Muncul otomatis jika ada setup breakout atau pullback
+- Tunjukkan pivot, buy zone (0–5% di atas pivot), stop loss, target 1R/2R/3R, dan lot sizing
+- Gunakan `--portfolio 100000000 --risk-pct 2` untuk position sizing 2% risk dari Rp100jt
+
 **Red flags di detail view:**
-- Sell Signal muncul (Climax Top / Upper BB 3d+ / 7% Stop) = **jangan beli**
+- Sell Signal muncul (Climax Top / Upper BB 3d+ / 7% Stop / OBV Divergence / Support Breakdown) = **jangan beli**
 - Gorengan Score ≥ 30 = waspada manipulasi
 - OBV trend "down" + Foreign negatif = distribusi, hindari
 
@@ -1143,6 +1196,72 @@ deno task ui:dev
 ---
 
 ## Changelog
+
+### 2026-04-04 — Robustness Overhaul + Entry Plan Feature
+
+Audit menyeluruh `screen.ts` menemukan kelemahan struktural. Semua diperbaiki dalam 5 fase:
+
+#### Phase 1 — Centralized Config (`SCREEN_CONFIG`)
+
+Seluruh ~40+ magic number dipindahkan ke satu objek `SCREEN_CONFIG` di awal file. Setiap threshold kini memiliki nama deskriptif dan mudah disesuaikan untuk backtesting:
+
+```typescript
+SCREEN_CONFIG.breakout.stopPct          // 0.07 → stop loss 7%
+SCREEN_CONFIG.auto.filterThreshold      // 30 → AutoScore minimum (naik dari 25)
+SCREEN_CONFIG.entryPlan.buyZoneMaxPct   // 0.05 → buy zone maks 5% di atas pivot
+SCREEN_CONFIG.mjp.largeCap              // 0.01 → slope threshold large-cap MJP
+```
+
+AutoScore filter threshold **naik dari 25 → 30** (lebih selektif).
+
+#### Phase 2 — Dokumentasi Format EPS
+
+Tambah JSDoc di `calcQEps` menjelaskan bahwa `profitAttrOwner` adalah **YTD kumulatif** (Q2 = Jan–Jun, bukan Q2 saja). Formula subtraksi yang ada sudah benar tapi tidak terdokumentasi — kini ada penjelasan lengkap beserta referensi ke TTM formula di `DataEnrichment.ts`.
+
+#### Phase 3 — Date Gap Detection (OHLCV)
+
+Deteksi otomatis gap data abnormal di OHLCV (misalnya data broker hilang untuk saham tertentu). Fitur **smart holiday filtering**: sistem membandingkan gap yang dialami ≥80% saham (libur pasar seperti Lebaran) dan hanya memperingatkan gap yang **per-saham** (data benar-benar missing).
+
+Output: `[INFO] 7 market-wide gap (libur) terdeteksi, diabaikan` + `[WARN]` hanya untuk gap anomali.
+
+#### Phase 4 — 2 Sinyal Exit Baru
+
+| Sinyal | Cara Deteksi | AutoScore Penalty |
+|--------|-------------|-------------------|
+| **OBV Divergence** | Harga buat new high 20d tapi OBV buat lower high 20d | −8 pts |
+| **Support Breakdown** | Harga di bawah base low 25 hari (exclude 5 hari terakhir) | −10 pts |
+
+Total sinyal exit kini **6** (dari 3 sebelumnya). Lihat bagian Selling Rules.
+
+#### Phase 5 — Entry Plan Feature (🆕)
+
+`--detail KODE` kini menampilkan **rencana entry Minervini** lengkap:
+
+```
+═══ Entry Plan ═══
+Entry Type     : PULLBACK ke EMA21
+Entry Level    : Rp 2460 (EMA21)
+Stop Loss      : Rp 2332 (MA50)
+Risk per Share : Rp 128 (5.2%)
+Target (1R)    : Rp 2588 (+5.2%)
+Target (2R)    : Rp 2717 (+10.4%)
+Target (3R)    : Rp 2845 (+15.6%)
+R/R Ratio      : 1:3 (jika target 3R)
+Position Size  : 155 lot @ Rp 2460 (risk 2% of Rp 100.0jt)
+```
+
+- **Breakout**: pivot = high tertinggi sesuai pola, buy zone = pivot hingga pivot+5%, stop = pivot−7%
+- **Pullback**: entry = EMA21, stop = max(MA50, EMA21×93%)
+- **Position sizing**: `Portfolio × RiskPct% / RiskPerShare / Harga / 100` lot
+
+#### Perbaikan Tambahan (dari sesi sebelumnya)
+
+- **Sustained Accumulation SMT**: Kolom "Akum Window" (X/20h beli) lebih andal untuk ADRO-style gradual accumulation vs hanya mengukur akselerasi
+- **Adaptive MJP threshold**: Large-cap (vol > median) pakai slope 0.01, small-cap 0.02
+- **Gradual fund floor**: AutoScore dikalikan `0.5 + 0.5×((fundScore−20)/15)` untuk fund score 20–35 (tidak lagi cliff)
+- **Cross-validation convergence bonus**: +7 pts AutoScore jika volume=akumulasi + foreignNet>5% + broker≥2 semua sejajar
+
+---
 
 ### 2026-03-31 — Auto Mode, SMT Parity Fix & Berbagai Koreksi
 

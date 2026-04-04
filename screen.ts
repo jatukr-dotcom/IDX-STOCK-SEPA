@@ -23,6 +23,159 @@
 
 import { createClient } from 'npm:@libsql/client'
 
+// ─── Configuration ──────────────────────────────────────────────────────────
+// All tunable thresholds in one place for easy backtesting and optimization.
+
+const SCREEN_CONFIG = {
+  // Stage & Trend
+  stage: { proximityFactor: 0.99, confirmDays: 5, confirmMajority: 3 },
+  rs: {
+    weights: { r3m: 0.4, r6m: 0.2, r9m: 0.2, r12m: 0.2 },
+    minRank: 70,
+    minDataDays: 252,
+  },
+  // Trend Template criteria
+  trend: {
+    low52wMultiplier: 1.3,   // price >= 52w low × 1.3
+    high52wMultiplier: 0.75, // price >= 52w high × 0.75
+    trendWeight: 40,         // (criteriaCount/8) × 40
+    rsWeight: 30,            // (rsRank/99) × 30
+  },
+  // Fundamental scoring
+  fundamental: {
+    roeCap: 35, roeMaxPts: 12,
+    npmCap: 35, npmMaxPts: 9,
+    synergyThreshold: 15, synergyBonus: 3,
+    derLow: 0.5, derLowPts: 10,
+    derMid: 1.0, derMidPts: 7,
+    derHigh: 2.0, derHighPts: 4,
+    salesGrowthHigh: 15, salesGrowthHighPts: 10,
+    salesGrowthMid: 5, salesGrowthMidPts: 6,
+    salesGrowthLow: 0, salesGrowthLowPts: 2,
+    perRanges: [
+      { min: 5, max: 20, pts: 5 },
+      { min: 20, max: 30, pts: 3 },
+      { min: 30, max: 50, pts: 1 },
+    ],
+  },
+  // EPS scoring
+  eps: {
+    growthHigh: 25, growthHighPts: 8,
+    growthMid: 10, growthMidPts: 5,
+    growthLow: 0, growthLowPts: 2,
+    accelerationPts: 4,
+    recoveryPts: 2,
+    consecutiveQPts: 3,
+    consecutiveQMin: 2,
+  },
+  // Pattern detection
+  patterns: {
+    htfPoleGain: 0.80, htfFlagRange: 0.25, htfPoleDays: 40, htfFlagDays: 15,
+    cupMinDays: 45, cupMaxDays: 90, cupDepthMin: 12, cupDepthMax: 35,
+    cupRightRecovery: 0.92, cupHandleMaxRange: 12,
+    flatRangeMax: 0.15, flatDays: 25,
+    baseRangeMaxPct: 15,
+    powerPlayRange: 0.03, powerPlayDry: 30,
+    lowCheatRange: 0.05, lowCheatDry: 20,
+  },
+  // VCP detection
+  vcp: {
+    windowSize: 20, windows: 3,
+    contractionRatio: 0.85,
+    volumeDryRatio: 0.75,
+    nearHighPct: -20,
+  },
+  // Breakout & Pivot
+  breakout: {
+    lookback: { 'cup-handle': 5, vcp: 20, htf: 15, default: 25 } as Record<string, number>,
+    volRatioMin: 1.5,
+    approachPct: 0.97,
+    stopPct: 0.07,
+  },
+  // Sell signals
+  sell: {
+    bbConsecutiveDays: 3,
+    stopBreachMultiplier: 0.93,
+  },
+  // Volume criteria
+  volume: {
+    cmfThreshold: 0, cmfDistThreshold: -0.05,
+    mfiLow: 40, mfiHigh: 80, mfiDistThreshold: 35,
+    obvTrendThreshold: 0.05,
+    volSurgeThreshold: 20,
+    foreignNetThreshold: 0,
+    accumMinCriteria: 2, distMinCriteria: 2,
+  },
+  // Tech score weights
+  techScore: {
+    sepaBase: 50,
+    stage2: 20, stage1: 10,
+    rsNewHigh: 10, pocketPivot: 10,
+    htf: 6, cupHandle: 4, flat: 2,
+    powerPlay: 4, lowCheat: 2,
+    vcp: 5,
+  },
+  // Combined score
+  combined: { techWeight: 0.6, fundWeight: 0.4 },
+  // Momentum factor weights (sum = 100)
+  momentum: { rs: 30, eps: 20, trend: 20, vol: 15, foreign: 15, foreignClamp: 10 },
+  // SMT thresholds
+  smt: {
+    strongBuy: 75, buy: 55, neutral: 35, sell: 20,
+    filterThreshold: 20,
+    foreignFlowOffset: 0.05, foreignFlowRange: 0.30,
+    sustainedBuyDaysStrong: 15, sustainedNetPctStrong: 5,
+    sustainedBuyDaysMid: 12, sustainedNetPctMid: 3,
+    sustainedBuyDaysLow: 10,
+    tradeSizeOffset: 30, tradeSizeRange: 80,
+    bidOfferHigh: 1.5, bidOfferMid: 1.2, bidOfferLow: 1.0,
+    brokerConcHigh: 70, brokerConcMid: 60, brokerConcLow: 50,
+  },
+  // AutoScore
+  auto: {
+    baseWeights: { combined: 0.35, momentum: 0.15, smt: 0.20 },
+    stage2Bonus: 5,
+    setupBonusCap: 20,
+    breakoutBonus: 15, approachingBonus: 8, vcpBonus: 6, pullbackBonus: 4,
+    pocketPivotBonus: 7, rsNewHighBonus: 6,
+    brokerAccum2Bonus: 5, brokerAccum1Bonus: 3,
+    fvgInZoneBonus: 4, fvgNearBonus: 2, fvgNearThreshold: 3,
+    mjpBullishBonus: 2, mjpBearishPenalty: -2,
+    cvBonus3: 5, cvBonus2: 2, cvForeignThreshold: 5,
+    gorenganPenalty45: -10, gorenganPenalty30: -5,
+    sellPenalty: { climax: 0.5, stop: -12, ma50: -6, obvDiv: -8, supportBreak: -10 },
+    fundFloor: { min: 20, rampEnd: 35, minMult: 0.5 },
+    parabolic: { extreme: { ratio: 5.0, mult: 0.2 }, high: { ratio: 3.0, mult: 0.4 }, mid: { ratio: 2.5, mult: 0.7 } },
+    filterThreshold: 30,
+  },
+  // Gorengan filter
+  gorengan: {
+    xNotation: 40, umaRecent: 25, umaDays: 30,
+    mcSmall: 100_000_000_000, mcSmallPts: 25,
+    mcMid: 500_000_000_000, mcMidPts: 15,
+    lowFloat: 0.20, lowFloatPts: 15,
+    volSpike: 10, volSpikePts: 10,
+    noEarnings: 5,
+    parabolicExtreme: { ratio: 5.0, pts: 30 },
+    parabolicHigh: { ratio: 3.0, pts: 20 },
+    parabolicMid: { ratio: 2.5, pts: 10 },
+    climax3m: { high: 300, highPts: 25, mid: 200, midPts: 15 },
+    filterMax: 60,
+  },
+  // MJP
+  mjp: { largeCap: 0.01, smallCap: 0.02 },
+  // Date gap detection
+  dateGap: { maxTradingDayGap: 3 },
+  // Entry Plan
+  entryPlan: {
+    buyZoneMaxPct: 0.05,
+    stopLossPct: 0.07,
+    defaultPortfolio: 100_000_000,
+    defaultRiskPct: 2,
+    targetMultipliers: [1, 2, 3] as readonly number[],
+  },
+} as const
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 type StageNumber = 1 | 2 | 3 | 4
@@ -81,6 +234,7 @@ type ScreenRow = {
   foreignNet5d: number | null
   foreignAcceleration: number | null
   consecutiveForeignBuyDays: number
+  foreignBuyDays20d: number
   avgTradeSize5d: number | null
   avgTradeSizeChange: number | null
   bidOfferRatio: number | null
@@ -100,6 +254,12 @@ type ScreenRow = {
   obvMjp: 'bullish' | 'bearish' | 'neutral'
   obvAboveSma10: boolean
   obvSma10Slope: number | null
+  // Entry Plan
+  entryType: 'breakout' | 'pullback' | 'none'
+  buyZoneHigh: number | null
+  entryStopLoss: number | null
+  riskPerShare: number | null
+  riskPct: number | null
 }
 
 type WatchlistEntry = { code: string; name: string | null; score: number; rsRank: number; stage: StageNumber }
@@ -150,7 +310,7 @@ function determineStage(
   ma200: number | null,
   slopePct: number | null
 ): StageNumber {
-  const PROX = 0.99
+  const PROX = SCREEN_CONFIG.stage.proximityFactor
   if (ma200 == null) {
     if (ma50 != null && price > ma50 * PROX && (ma150 == null || ma50 > ma150 * PROX)) return 2
     return 1
@@ -164,8 +324,8 @@ function determineStage(
 
 function determineStageConfirmed(closes: number[]): StageNumber {
   if (closes.length < 50) return 1
-  const confirmDays = 5
-  const majority = 3
+  const confirmDays = SCREEN_CONFIG.stage.confirmDays
+  const majority = SCREEN_CONFIG.stage.confirmMajority
   const maxOffset = Math.min(confirmDays, closes.length - 222)
   if (maxOffset < 1) {
     const p = closes[closes.length - 1]!
@@ -194,6 +354,18 @@ function returnPct(current: number, past: number): number | null {
 
 type HistRow = { year: number; quarter: number; eps: number | null; profitAttrOwner: number | null; sales: number | null }
 
+/**
+ * Calculate single-quarter EPS from YTD-cumulative profitAttrOwner data.
+ *
+ * IMPORTANT: profitAttrOwner in financial_ratio is YTD cumulative:
+ *   Q1 = Jan-Mar profit, Q2 = Jan-Jun (cumulative), Q3 = Jan-Sep (cumulative), Q4 = full year
+ *
+ * To extract single-quarter profit: current_YTD - previous_quarter_YTD
+ *   Q1: Q1_YTD - 0, Q2: Q2_YTD - Q1_YTD, Q3: Q3_YTD - Q2_YTD, Q4: Q4_YTD - Q3_YTD
+ *
+ * The `?? 0` handles Q1 correctly (no previous quarter → full Q1 YTD = Q1 period profit).
+ * See also: DataEnrichment.ts TTM calculation: currentYtd + (prevFY - prevSameQ)
+ */
 function calcQEps(byKey: Map<string, HistRow>, year: number, quarter: number): number | null {
   const row = byKey.get(`${year}_${quarter}`)
   if (!row || row.profitAttrOwner == null || row.eps == null) return null
@@ -244,13 +416,13 @@ function calcEpsInfo(histRows: HistRow[]): { score: number; latestGrowthPct: num
   }
   let score = 0
   if (latestGrowthPct != null) {
-    if (latestGrowthPct >= 25) score += 8
-    else if (latestGrowthPct >= 10) score += 5
-    else if (latestGrowthPct >= 0) score += 2
+    if (latestGrowthPct >= SCREEN_CONFIG.eps.growthHigh) score += SCREEN_CONFIG.eps.growthHighPts
+    else if (latestGrowthPct >= SCREEN_CONFIG.eps.growthMid) score += SCREEN_CONFIG.eps.growthMidPts
+    else if (latestGrowthPct >= SCREEN_CONFIG.eps.growthLow) score += SCREEN_CONFIG.eps.growthLowPts
   }
-  if (acceleration) score += 4
-  else if (recovery) score += 2
-  if (consecutiveGrowthQ >= 2) score += 3
+  if (acceleration) score += SCREEN_CONFIG.eps.accelerationPts
+  else if (recovery) score += SCREEN_CONFIG.eps.recoveryPts
+  if (consecutiveGrowthQ >= SCREEN_CONFIG.eps.consecutiveQMin) score += SCREEN_CONFIG.eps.consecutiveQPts
   return { score, latestGrowthPct, acceleration, recovery, consecutiveGrowthQ }
 }
 
@@ -394,7 +566,7 @@ function detectFVG(
 
 // ─── OBV Short-Term Momentum (MJP / SMA10) ─────────────────────────────────
 
-function calcOBVMomentum(rows: { close: number; volume: number }[]): {
+function calcOBVMomentum(rows: { close: number; volume: number }[], slopeThreshold = 0.02): {
   trend20d: 'up' | 'down' | 'flat'
   mjp: 'bullish' | 'bearish' | 'neutral'
   obvAboveSma10: boolean
@@ -432,9 +604,10 @@ function calcOBVMomentum(rows: { close: number; volume: number }[]): {
   const obvSma10Slope = (sma10Now - sma10Prev) / slopeScale
 
   // MJP determination: OBV above SMA10 AND slope positive = bullish momentum
+  // Threshold is adaptive: lower for large-cap stocks (smoother OBV movement)
   let mjp: 'bullish' | 'bearish' | 'neutral' = 'neutral'
-  if (obvAboveSma10 && obvSma10Slope > 0.02) mjp = 'bullish'
-  else if (!obvAboveSma10 && obvSma10Slope < -0.02) mjp = 'bearish'
+  if (obvAboveSma10 && obvSma10Slope > slopeThreshold) mjp = 'bullish'
+  else if (!obvAboveSma10 && obvSma10Slope < -slopeThreshold) mjp = 'bearish'
 
   return { trend20d, mjp, obvAboveSma10, obvSma10Slope }
 }
@@ -451,13 +624,13 @@ function detectCupHandle(rows: OhlcEntry[]): { detected: boolean; depthPct: numb
     const bottom = Math.min(...cup.map((r) => r.low))
     if (leftHigh <= 0 || bottom <= 0) continue
     const depthPct = ((leftHigh - bottom) / leftHigh) * 100
-    if (depthPct < 12 || depthPct > 35) continue
-    if (rightHigh / leftHigh < 0.92) continue
+    if (depthPct < SCREEN_CONFIG.patterns.cupDepthMin || depthPct > SCREEN_CONFIG.patterns.cupDepthMax) continue
+    if (rightHigh / leftHigh < SCREEN_CONFIG.patterns.cupRightRecovery) continue
     const handle = rows.slice(-5)
     const handleHigh = Math.max(...handle.map((r) => r.high))
     const handleLow = Math.min(...handle.map((r) => r.low))
     const handleRange = handleHigh > 0 ? ((handleHigh - handleLow) / handleHigh) * 100 : Infinity
-    if (handleRange > 12) continue
+    if (handleRange > SCREEN_CONFIG.patterns.cupHandleMaxRange) continue
     return { detected: true, depthPct, lengthDays: cupLen }
   }
   return { detected: false, depthPct: null, lengthDays: null }
@@ -496,10 +669,7 @@ function countBases(rows: OhlcEntry[]): number {
 function calcPivotPoint(entries: OhlcvEntry[], patternType: string): number | null {
   if (entries.length === 0) return null
   let lookback: number
-  if (patternType === 'cup-handle') lookback = 5
-  else if (patternType === 'vcp') lookback = 20
-  else if (patternType === 'htf') lookback = 15
-  else lookback = 25 // flat or default
+  lookback = SCREEN_CONFIG.breakout.lookback[patternType] ?? SCREEN_CONFIG.breakout.lookback['default']!
   const slice = entries.slice(-Math.min(lookback, entries.length))
   return Math.max(...slice.map((e) => e.high))
 }
@@ -899,7 +1069,56 @@ try {
   // broker_top_daily not available — degrade gracefully (run deno task db:fetch-broker)
 }
 
-
+// ─── Date Gap Detection ──────────────────────────────────────────────────────
+// Detect per-stock gaps (not market-wide closures like Lebaran/holiday)
+{
+  // First, find market-wide gap dates by checking a sample of stocks
+  const gapCounts = new Map<string, number>() // "prevDate-currDate" → count of stocks with this gap
+  const sampleCodes = Array.from(ohlcByCode.keys()).slice(0, 50)
+  for (const sc of sampleCodes) {
+    const ents = ohlcByCode.get(sc)!
+    for (let i = 1; i < ents.length; i++) {
+      const pStr = String(ents[i - 1]!.date)
+      const cStr = String(ents[i]!.date)
+      const pD = new Date(`${pStr.slice(0, 4)}-${pStr.slice(4, 6)}-${pStr.slice(6, 8)}`)
+      const cD = new Date(`${cStr.slice(0, 4)}-${cStr.slice(4, 6)}-${cStr.slice(6, 8)}`)
+      const calDays = (cD.getTime() - pD.getTime()) / (24 * 60 * 60 * 1000)
+      const tradDays = Math.round(calDays * 5 / 7)
+      if (tradDays > SCREEN_CONFIG.dateGap.maxTradingDayGap) {
+        const key = `${pStr}-${cStr}`
+        gapCounts.set(key, (gapCounts.get(key) ?? 0) + 1)
+      }
+    }
+  }
+  // Market-wide gaps: present in 80%+ of sample stocks → holiday, ignore
+  const marketGaps = new Set<string>()
+  for (const [key, count] of gapCounts) {
+    if (count >= sampleCodes.length * 0.8) marketGaps.add(key)
+  }
+  // Now warn only per-stock gaps (not holidays)
+  let stockGapCount = 0
+  for (const [code, entries] of ohlcByCode) {
+    if (entries.length < 2) continue
+    for (let i = 1; i < entries.length; i++) {
+      const pStr = String(entries[i - 1]!.date)
+      const cStr = String(entries[i]!.date)
+      const key = `${pStr}-${cStr}`
+      if (marketGaps.has(key)) continue // skip market-wide holidays
+      const pD = new Date(`${pStr.slice(0, 4)}-${pStr.slice(4, 6)}-${pStr.slice(6, 8)}`)
+      const cD = new Date(`${cStr.slice(0, 4)}-${cStr.slice(4, 6)}-${cStr.slice(6, 8)}`)
+      const calDays = (cD.getTime() - pD.getTime()) / (24 * 60 * 60 * 1000)
+      const tradDays = Math.round(calDays * 5 / 7)
+      if (tradDays > SCREEN_CONFIG.dateGap.maxTradingDayGap) {
+        console.warn(`[WARN] ${code}: gap ${tradDays}d antara ${pStr} dan ${cStr} (per-stock)`)
+        stockGapCount++
+        break // warn once per stock
+      }
+    }
+  }
+  if (marketGaps.size > 0) {
+    console.warn(`[INFO] ${marketGaps.size} market-wide gap (libur) terdeteksi, diabaikan`)
+  }
+}
 
 if (backtestCode) {
   const entries = ohlcByCode.get(backtestCode)
@@ -937,13 +1156,13 @@ if (backtestCode) {
 // RS Ranks (ascending sort = rank 1 weakest, 99 strongest)
 const rsScores = new Map<string, { score: number; rank: number }>()
 for (const [code, entries] of ohlcByCode) {
-  if (entries.length < 252) continue
+  if (entries.length < SCREEN_CONFIG.rs.minDataDays) continue
   const closes = entries.map((e) => e.close)
   const r3m = returnPct(closes[closes.length - 1]!, closes[closes.length - 63]!)
   const r6m = closes.length >= 126 ? returnPct(closes[closes.length - 1]!, closes[closes.length - 126]!) : null
   const r9m = closes.length >= 189 ? returnPct(closes[closes.length - 1]!, closes[closes.length - 189]!) : null
   const r12m = returnPct(closes[closes.length - 1]!, closes[closes.length - 252]!)
-  rsScores.set(code, { score: (r3m ?? 0) * 0.4 + (r6m ?? 0) * 0.2 + (r9m ?? 0) * 0.2 + (r12m ?? 0) * 0.2, rank: 0 })
+  rsScores.set(code, { score: (r3m ?? 0) * SCREEN_CONFIG.rs.weights.r3m + (r6m ?? 0) * SCREEN_CONFIG.rs.weights.r6m + (r9m ?? 0) * SCREEN_CONFIG.rs.weights.r9m + (r12m ?? 0) * SCREEN_CONFIG.rs.weights.r12m, rank: 0 })
 }
 const sortedByRs = Array.from(rsScores.entries()).sort((a, b) => a[1].score - b[1].score)
 for (let i = 0; i < sortedByRs.length; i++) {
@@ -954,6 +1173,17 @@ for (let i = 0; i < sortedByRs.length; i++) {
 
 const results: ScreenRow[] = []
 const firstIhsg = ihsgByDate.size > 0 ? (ihsgByDate.values().next().value ?? 1) : 1
+
+// Compute median 20d average volume across all stocks for adaptive MJP threshold
+const allAvgVol20: number[] = []
+for (const [, ents] of ohlcByCode) {
+  if (ents.length >= 20) {
+    const v20 = ents.slice(-20).reduce((s, e) => s + e.volume, 0) / 20
+    if (v20 > 0) allAvgVol20.push(v20)
+  }
+}
+allAvgVol20.sort((a, b) => a - b)
+const medianVol20 = allAvgVol20.length > 0 ? allAvgVol20[Math.floor(allAvgVol20.length / 2)]! : 1
 
 for (const [code, entries] of ohlcByCode) {
   if (entries.length < 50) continue
@@ -978,7 +1208,7 @@ for (const [code, entries] of ohlcByCode) {
 
   // Gorengan filter
   let gorenganScore = 0
-  if (sc?.notation === 'X') gorenganScore += 40
+  if (sc?.notation === 'X') gorenganScore += SCREEN_CONFIG.gorengan.xNotation
   if (sc?.uma_date) {
     try {
       const umaTime = new Date(sc.uma_date).getTime()
@@ -1006,7 +1236,7 @@ for (const [code, entries] of ohlcByCode) {
     if (ret3mPct > 300) gorenganScore += 25
     else if (ret3mPct > 200) gorenganScore += 15
   }
-  if (gorenganScore >= 60) continue
+  if (gorenganScore >= SCREEN_CONFIG.gorengan.filterMax) continue
 
   // Stage
   const stage = determineStageConfirmed(closes)
@@ -1027,12 +1257,12 @@ for (const [code, entries] of ohlcByCode) {
   const c3 = ma200SlopePct != null && ma200SlopePct > 0
   const c4 = ma50 != null && ma150 != null && ma200 != null && ma50 > ma150 && ma50 > ma200
   const c5 = ma50 != null && price > ma50
-  const c6 = low52w > 0 && price >= low52w * 1.3
-  const c7 = high52w > 0 && price >= high52w * 0.75
-  const c8 = rsRank >= 70
+  const c6 = low52w > 0 && price >= low52w * SCREEN_CONFIG.trend.low52wMultiplier
+  const c7 = high52w > 0 && price >= high52w * SCREEN_CONFIG.trend.high52wMultiplier
+  const c8 = rsRank >= SCREEN_CONFIG.rs.minRank
   const trendCriteriaCount = [c1, c2, c3, c4, c5, c6, c7, c8].filter(Boolean).length
-  const trendScore = (trendCriteriaCount / 8) * 40
-  const rsScore30 = (rsRank / 99) * 30
+  const trendScore = (trendCriteriaCount / 8) * SCREEN_CONFIG.trend.trendWeight
+  const rsScore30 = (rsRank / 99) * SCREEN_CONFIG.trend.rsWeight
 
   // EPS & Fundamental
   const histRows = historyByCode.get(code) ?? []
@@ -1043,12 +1273,12 @@ for (const [code, entries] of ohlcByCode) {
   const per = sc?.per ?? 0
 
   let fundScoreFull = epsInfo.score
-  fundScoreFull += Math.min(roe / 35, 1) * 12 + Math.min(npm / 35, 1) * 9
+  fundScoreFull += Math.min(roe / SCREEN_CONFIG.fundamental.roeCap, 1) * SCREEN_CONFIG.fundamental.roeMaxPts + Math.min(npm / SCREEN_CONFIG.fundamental.npmCap, 1) * SCREEN_CONFIG.fundamental.npmMaxPts
   // Synergy bonus: companies with both strong ROE and NPM deserve extra credit
-  if (roe >= 15 && npm >= 15) fundScoreFull += 3
-  if (der <= 0.5) fundScoreFull += 10
-  else if (der <= 1.0) fundScoreFull += 7
-  else if (der <= 2.0) fundScoreFull += 4
+  if (roe >= SCREEN_CONFIG.fundamental.synergyThreshold && npm >= SCREEN_CONFIG.fundamental.synergyThreshold) fundScoreFull += SCREEN_CONFIG.fundamental.synergyBonus
+  if (der <= SCREEN_CONFIG.fundamental.derLow) fundScoreFull += SCREEN_CONFIG.fundamental.derLowPts
+  else if (der <= SCREEN_CONFIG.fundamental.derMid) fundScoreFull += SCREEN_CONFIG.fundamental.derMidPts
+  else if (der <= SCREEN_CONFIG.fundamental.derHigh) fundScoreFull += SCREEN_CONFIG.fundamental.derHighPts
   if (histRows.length > 0) {
     const byKey = new Map(histRows.map((r) => [`${r.year}_${r.quarter}`, r]))
     let lY: number | null = null; let lQ: number | null = null
@@ -1073,7 +1303,7 @@ for (const [code, entries] of ohlcByCode) {
   else if (per > 20 && per <= 30) fundScoreFull += 3
   else if (per > 30 && per <= 50) fundScoreFull += 1
 
-  const sepaScore = Math.min(100, trendScore + rsScore30 + epsInfo.score + Math.min(roe / 35, 1) * 12 + Math.min(npm / 35, 1) * 9)
+  const sepaScore = Math.min(100, trendScore + rsScore30 + epsInfo.score + Math.min(roe / SCREEN_CONFIG.fundamental.roeCap, 1) * SCREEN_CONFIG.fundamental.roeMaxPts + Math.min(npm / SCREEN_CONFIG.fundamental.npmCap, 1) * SCREEN_CONFIG.fundamental.npmMaxPts)
 
   // RS Line New High
   let rsLineNewHigh = false
@@ -1145,7 +1375,10 @@ for (const [code, entries] of ohlcByCode) {
   const ohlcvForVol = entries.map((e) => ({ high: e.high, low: e.low, close: e.close, volume: e.volume }))
   const cmf = calcCMF20(ohlcvForVol)
   const mfi = calcMFI14(ohlcvForVol)
-  const obvMom = calcOBVMomentum(ohlcvForVol)
+  // Adaptive MJP threshold: large-cap (vol > median) uses 0.01, small-cap uses 0.02
+  const avgVol20d = volumes.slice(-20).reduce((a, b) => a + b, 0) / Math.min(20, volumes.length)
+  const mjpThreshold = avgVol20d >= medianVol20 ? SCREEN_CONFIG.mjp.largeCap : SCREEN_CONFIG.mjp.smallCap
+  const obvMom = calcOBVMomentum(ohlcvForVol, mjpThreshold)
   const obvTrend = obvMom.trend20d
 
   // Fair Value Gap detection
@@ -1191,9 +1424,9 @@ for (const [code, entries] of ohlcByCode) {
 
   let breakoutSignal: 'breakout' | 'approaching' | 'none' = 'none'
   if (pivotPoint != null) {
-    if (price > pivotPoint && breakoutVolRatio != null && breakoutVolRatio > 1.5) {
+    if (price > pivotPoint && breakoutVolRatio != null && breakoutVolRatio > SCREEN_CONFIG.breakout.volRatioMin) {
       breakoutSignal = 'breakout'
-    } else if (price >= pivotPoint * 0.97 && price <= pivotPoint) {
+    } else if (price >= pivotPoint * SCREEN_CONFIG.breakout.approachPct && price <= pivotPoint) {
       breakoutSignal = 'approaching'
     }
   }
@@ -1239,12 +1472,36 @@ for (const [code, entries] of ohlcByCode) {
       if (consecutiveDaysAbove >= 3) sellSignal = 'Upper BB 3d+'
     }
     // 3. 7% Stop below pivot — only for actual breakout stocks (Minervini: stop from buy point)
-    if (sellSignal == null && pivotPoint != null && price < pivotPoint * 0.93 && breakoutSignal === 'breakout') {
+    if (sellSignal == null && pivotPoint != null && price < pivotPoint * SCREEN_CONFIG.sell.stopBreachMultiplier && breakoutSignal === 'breakout') {
       sellSignal = '7% Stop Breach'
     }
     // 4. Breakdown MA50 — context signal for non-breakout stocks trading below key MA
     if (sellSignal == null && ma50 != null && price < ma50 && stage === 2) {
       sellSignal = 'Breakdown MA50'
+    }
+    // 5. OBV Divergence: price makes new high but OBV makes lower high (bearish)
+    if (sellSignal == null && entries.length >= 40) {
+      let divObv = 0
+      const divOBV: number[] = [0]
+      for (let di = 1; di < entries.length; di++) {
+        if (entries[di]!.close > entries[di - 1]!.close) divObv += entries[di]!.volume
+        else if (entries[di]!.close < entries[di - 1]!.close) divObv -= entries[di]!.volume
+        divOBV.push(divObv)
+      }
+      const recentCloseHigh = Math.max(...closes.slice(-20))
+      const priorCloseHigh = Math.max(...closes.slice(-40, -20))
+      const recentOBVHigh = Math.max(...divOBV.slice(-20))
+      const priorOBVHigh = Math.max(...divOBV.slice(-40, -20))
+      if (recentCloseHigh > priorCloseHigh && recentOBVHigh < priorOBVHigh) {
+        sellSignal = 'OBV Divergence'
+      }
+    }
+    // 6. Support Breakdown: price below recent base low (25d, excl last 5d)
+    if (sellSignal == null && entries.length >= 25) {
+      const baseLow = Math.min(...lows.slice(-25, -5))
+      if (price < baseLow) {
+        sellSignal = 'Support Breakdown'
+      }
     }
   }
 
@@ -1269,6 +1526,32 @@ for (const [code, entries] of ohlcByCode) {
     price <= ema21 * 1.03 &&
     ma50 != null && price > ma50
   )
+
+  // ─── Entry Plan computation ─────────────────────────────────────────────────
+  const epCfg = SCREEN_CONFIG.entryPlan
+  let entryType: 'breakout' | 'pullback' | 'none' = 'none'
+  let buyZoneHigh: number | null = null
+  let entryStopLoss: number | null = null
+  let riskPerShareCalc: number | null = null
+  let entryRiskPct: number | null = null
+
+  if (breakoutSignal === 'breakout' || breakoutSignal === 'approaching') {
+    entryType = 'breakout'
+    if (pivotPoint != null) {
+      buyZoneHigh = pivotPoint * (1 + epCfg.buyZoneMaxPct)
+      entryStopLoss = pivotPoint * (1 - epCfg.stopLossPct)
+      riskPerShareCalc = pivotPoint - entryStopLoss
+      entryRiskPct = (riskPerShareCalc / pivotPoint) * 100
+    }
+  } else if (pullbackSignal && ema21 != null) {
+    entryType = 'pullback'
+    buyZoneHigh = ema21 * 1.02
+    const stopFromMa50 = ma50 ?? ema21 * (1 - epCfg.stopLossPct)
+    const stopFromPct = ema21 * (1 - epCfg.stopLossPct)
+    entryStopLoss = Math.max(stopFromMa50, stopFromPct)
+    riskPerShareCalc = ema21 - entryStopLoss
+    entryRiskPct = ema21 > 0 ? (riskPerShareCalc / ema21) * 100 : null
+  }
 
   // Tech Score
   let techScore = (sepaScore / 100) * 50
@@ -1362,6 +1645,26 @@ for (const [code, entries] of ohlcByCode) {
   else if (smtForeignFlowScore <= 8 && smtHasEnoughData) { smtReasons.push('Foreign distributing') }
   if (smtStreak >= 5) { smtBullishCount++; smtReasons.push(`Asing beli ${smtStreak}h berturut`) }
 
+  // 2B. Sustained Accumulation (10 pts) — catches steady foreign buying that acceleration misses
+  //     Counts net buy days in 20d window + checks if cumulative foreignNetPct > 5%
+  let smtSustainedScore = 0
+  let foreignBuyDays20d = 0
+  if (smtHasEnoughData) {
+    for (const e of entries.slice(-20)) {
+      if (e.foreignBuy > e.foreignSell) foreignBuyDays20d++
+    }
+    // Strong sustained: 15+ buy days out of 20 AND positive net flow
+    if (foreignBuyDays20d >= 15 && foreignNetPct != null && foreignNetPct > 5) {
+      smtSustainedScore = 10; smtBullishCount++
+      smtReasons.push(`Akumulasi asing stabil (${foreignBuyDays20d}/20h beli, net +${foreignNetPct.toFixed(1)}%)`)
+    } else if (foreignBuyDays20d >= 12 && foreignNetPct != null && foreignNetPct > 3) {
+      smtSustainedScore = 6
+      smtReasons.push(`Asing cenderung beli (${foreignBuyDays20d}/20h beli)`)
+    } else if (foreignBuyDays20d >= 10 && foreignNetPct != null && foreignNetPct > 0) {
+      smtSustainedScore = 3
+    }
+  }
+
   // 3. Volume-Price Divergence (15 pts) — reuse obvTrend
   let smtVolPriceScore = 0
   const smtPriceTrend = entries.length >= 10
@@ -1433,15 +1736,15 @@ for (const [code, entries] of ohlcByCode) {
     smtReasons.push(`${smtAccumBrokers[0]} akumulasi konsisten 20h`)
   }
 
-  const smtBaseScore = smtForeignFlowScore + smtForeignStreakScore + smtVolPriceScore + smtTradeSizeScore + smtBidOfferScore + smtCrossScore + smtBrokerConcScore
+  const smtBaseScore = smtForeignFlowScore + smtForeignStreakScore + smtSustainedScore + smtVolPriceScore + smtTradeSizeScore + smtBidOfferScore + smtCrossScore + smtBrokerConcScore
   const smtScore = Math.min(100, smtBaseScore + smtBrokerAccumBonus)
   const smtSignal: ScreenRow['smtSignal'] = smtScore >= 75 ? 'strong-buy' : smtScore >= 55 ? 'buy' : smtScore >= 35 ? 'neutral' : smtScore >= 20 ? 'sell' : 'strong-sell'
 
   // AutoScore: normalized ~100, stacked bonuses, severity-based penalties
   // Base (max 70): combined 0-35, momentum 0-15, smt 0-20
-  let autoScore = (combinedScore * 0.35) + (momentumFactor * 0.15) + (smtScore * 0.20)
+  let autoScore = (combinedScore * SCREEN_CONFIG.auto.baseWeights.combined) + (momentumFactor * SCREEN_CONFIG.auto.baseWeights.momentum) + (smtScore * SCREEN_CONFIG.auto.baseWeights.smt)
   // Stage 2 quality boost
-  if (stage === 2) autoScore += 5
+  if (stage === 2) autoScore += SCREEN_CONFIG.auto.stage2Bonus
   // Setup bonuses — stackable, capped at 20
   let autoSetupBonus = 0
   if (breakoutSignal === 'breakout') autoSetupBonus += 15
@@ -1459,16 +1762,27 @@ for (const [code, entries] of ohlcByCode) {
   else if (fvgResult.bullishCount > 0 && fvgNearestPct != null && fvgNearestPct < 3) autoScore += 2
   if (obvMom.mjp === 'bullish') autoScore += 2
   else if (obvMom.mjp === 'bearish') autoScore -= 2
+  // Cross-validation convergence bonus: reward when multiple independent signals align
+  // volume=akumulasi AND foreignNet>5% AND brokerAccum≥2 → all 3 independently confirm institutional buying
+  const cvVolAccum = volumeSignal === 'akumulasi'
+  const cvForeignStrong = foreignNetPct != null && foreignNetPct > 5
+  const cvBrokerAccum = smtAccumBrokers.length >= 2
+  const cvCount = [cvVolAccum, cvForeignStrong, cvBrokerAccum].filter(Boolean).length
+  if (cvCount === 3) autoScore += 5
+  else if (cvCount === 2) autoScore += 2
   // Gorengan gradual penalty
   if (gorenganScore >= 45) autoScore -= 10
   else if (gorenganScore >= 30) autoScore -= 5
   // Sell signal — severity-based penalty (not blanket ×0.5)
   if (sellSignal === 'Climax Top' || sellSignal === 'Upper BB 3d+') autoScore *= 0.5
   else if (sellSignal === '7% Stop Breach') autoScore -= 12
-  else if (sellSignal === 'Breakdown MA50') autoScore -= 6
-  // Layer 2: Fundamental floor — relaxed thresholds
+  else if (sellSignal === 'Breakdown MA50') autoScore += SCREEN_CONFIG.auto.sellPenalty.ma50
+  else if (sellSignal === 'OBV Divergence') autoScore += SCREEN_CONFIG.auto.sellPenalty.obvDiv
+  else if (sellSignal === 'Support Breakdown') autoScore += SCREEN_CONFIG.auto.sellPenalty.supportBreak
+  // Layer 2: Fundamental floor — gradual linear ramp (no cliff edge)
+  // fundScore 0→20: multiplier 0.5, fundScore 20→35: ramp 0.5→1.0, fundScore ≥35: no penalty
   if (finalFundScore < 20) autoScore *= 0.5
-  else if (finalFundScore < 30) autoScore *= 0.8
+  else if (finalFundScore < 35) autoScore *= 0.5 + 0.5 * ((finalFundScore - 20) / 15)
   // Layer 2: Parabolic extension — multiplicative penalty
   if (extensionRatio != null) {
     if (extensionRatio > 5.0) autoScore *= 0.2
@@ -1490,6 +1804,7 @@ for (const [code, entries] of ohlcByCode) {
     foreignNet5d: smtFNet5d,
     foreignAcceleration: smtFAccel,
     consecutiveForeignBuyDays: smtStreak,
+    foreignBuyDays20d,
     avgTradeSize5d: smtAvgTradeSize5d,
     avgTradeSizeChange: smtTradeSizeChange,
     bidOfferRatio: smtBidOfferRatio,
@@ -1504,7 +1819,12 @@ for (const [code, entries] of ohlcByCode) {
     fvgNearestPct,
     obvMjp: obvMom.mjp,
     obvAboveSma10: obvMom.obvAboveSma10,
-    obvSma10Slope: obvMom.obvSma10Slope
+    obvSma10Slope: obvMom.obvSma10Slope,
+    entryType,
+    buyZoneHigh,
+    entryStopLoss,
+    riskPerShare: riskPerShareCalc,
+    riskPct: entryRiskPct
   })
 }
 
@@ -1520,7 +1840,7 @@ if (argMode === 'breakout') {
 } else if (argMode === 'smt') {
   filteredResults = results.filter((r) => r.smtScore >= Math.max(20, minScore))
 } else if (argMode === 'auto') {
-  filteredResults = results.filter((r) => r.autoScore >= Math.max(25, minScore))
+  filteredResults = results.filter((r) => r.autoScore >= Math.max(SCREEN_CONFIG.auto.filterThreshold, minScore))
 }
 
 // Sort
@@ -1654,6 +1974,66 @@ function printStockDetail(row: ScreenRow) {
   console.log(`  ─ Sharpe Ratio: ${fNum(row.sharpeRatio, 2)} | Momentum Factor: ${row.momentumFactor}`)
   console.log(`  ─ EMA(21): ${row.ema21 != null ? row.ema21.toFixed(0) : '—'} | Pullback Setup: ${row.pullbackSignal ? 'Ya' : 'Tidak'}`)
   console.log(line)
+  // ─── Entry Plan section ────────────────────────────────────────────────────
+  if (row.entryType !== 'none') {
+    const epCfg = SCREEN_CONFIG.entryPlan
+    const portfolioForCalc = portfolioSize > 0 ? portfolioSize : epCfg.defaultPortfolio
+    const riskPctForCalc = portfolioSize > 0 ? riskPct : epCfg.defaultRiskPct
+    console.log(`  ═══ Entry Plan ═══`)
+
+    if (row.entryType === 'breakout' && row.pivotPoint != null) {
+      const pivot = row.pivotPoint
+      const buyHigh = row.buyZoneHigh ?? pivot * 1.05
+      const stop = row.entryStopLoss ?? pivot * 0.93
+      const risk = pivot - stop
+      const patLabel = row.patternType === 'cup-handle' ? 'Cup & Handle high'
+        : row.patternType === 'htf' ? 'High Tight Flag high'
+        : row.patternType === 'flat' ? 'Flat Base high'
+        : row.vcpIsVcp ? 'VCP resistance' : 'Resistance high'
+
+      console.log(`  Entry Type     : \x1b[32mBREAKOUT\x1b[0m`)
+      console.log(`  Pivot Point    : Rp ${fIDR(pivot)} (${patLabel})`)
+      console.log(`  Buy Zone       : Rp ${fIDR(pivot)} - ${fIDR(buyHigh)} (+0% to +${((buyHigh / pivot - 1) * 100).toFixed(0)}%)`)
+      console.log(`  Stop Loss      : Rp ${fIDR(stop)} (${((1 - stop / pivot) * 100).toFixed(0)}% below pivot)`)
+      console.log(`  Risk per Share : Rp ${risk.toFixed(0)} (${row.riskPct?.toFixed(1) ?? '?'}%)`)
+      for (const mult of epCfg.targetMultipliers) {
+        const target = pivot + risk * mult
+        const targetPct = ((target - pivot) / pivot) * 100
+        console.log(`  Target (${mult}R)    : Rp ${fIDR(target)} (+${targetPct.toFixed(1)}%)`)
+      }
+      const maxMult = epCfg.targetMultipliers[epCfg.targetMultipliers.length - 1] ?? 3
+      console.log(`  R/R Ratio      : 1:${maxMult} (jika target ${maxMult}R)`)
+      if (risk > 0) {
+        const riskPerTrade = portfolioForCalc * riskPctForCalc / 100
+        const lots = Math.floor(riskPerTrade / risk / 100)
+        console.log(`  Position Size  : ${lots} lot @ Rp ${fIDR(pivot)} (risk ${riskPctForCalc}% of Rp ${fIDR(portfolioForCalc)})`)
+      }
+    } else if (row.entryType === 'pullback' && row.ema21 != null) {
+      const entry = row.ema21
+      const stop = row.entryStopLoss ?? entry * 0.93
+      const risk = entry - stop
+      const stopLabel = row.entryStopLoss != null && row.entryStopLoss === Math.max(entry * (1 - SCREEN_CONFIG.entryPlan.stopLossPct), entry * (1 - SCREEN_CONFIG.entryPlan.stopLossPct))
+        ? `${((1 - stop / entry) * 100).toFixed(0)}% below EMA21` : 'MA50'
+
+      console.log(`  Entry Type     : \x1b[36mPULLBACK ke EMA21\x1b[0m`)
+      console.log(`  Entry Level    : Rp ${fIDR(entry)} (EMA21)`)
+      console.log(`  Stop Loss      : Rp ${fIDR(stop)} (${stopLabel})`)
+      console.log(`  Risk per Share : Rp ${risk.toFixed(0)} (${row.riskPct?.toFixed(1) ?? '?'}%)`)
+      for (const mult of epCfg.targetMultipliers) {
+        const target = entry + risk * mult
+        const targetPct = ((target - entry) / entry) * 100
+        console.log(`  Target (${mult}R)    : Rp ${fIDR(target)} (+${targetPct.toFixed(1)}%)`)
+      }
+      const maxMult = epCfg.targetMultipliers[epCfg.targetMultipliers.length - 1] ?? 3
+      console.log(`  R/R Ratio      : 1:${maxMult} (jika target ${maxMult}R)`)
+      if (risk > 0) {
+        const riskPerTrade = portfolioForCalc * riskPctForCalc / 100
+        const lots = Math.floor(riskPerTrade / risk / 100)
+        console.log(`  Position Size  : ${lots} lot @ Rp ${fIDR(entry)} (risk ${riskPctForCalc}% of Rp ${fIDR(portfolioForCalc)})`)
+      }
+    }
+    console.log(line)
+  }
   // Smart Money section
   const smtBar = '█'.repeat(Math.round(row.smtScore / 10)) + '░'.repeat(10 - Math.round(row.smtScore / 10))
   const smtColor = row.smtScore >= 75 ? '\x1b[32m' : row.smtScore >= 55 ? '\x1b[33m' : '\x1b[31m'
@@ -1663,7 +2043,7 @@ function printStockDetail(row: ScreenRow) {
   const smtFn5dStr = row.foreignNet5d != null ? `${row.foreignNet5d >= 0 ? '+' : ''}${(row.foreignNet5d / 1_000_000_000).toFixed(1)}B (5d)` : '—'
   const smtAccelStr = row.foreignAcceleration != null && row.foreignAcceleration > 0 ? ' ▲ accelerating' : row.foreignAcceleration != null && row.foreignAcceleration < 0 ? ' ▼ decelerating' : ''
   console.log(`  Foreign Flow    : ${smtFn5dStr}${smtAccelStr}`)
-  console.log(`  Consecutive Buy : ${row.consecutiveForeignBuyDays > 0 ? `${row.consecutiveForeignBuyDays} hari berturut-turut` : '—'}`)
+  console.log(`  Consecutive Buy : ${row.consecutiveForeignBuyDays > 0 ? `${row.consecutiveForeignBuyDays} hari berturut-turut` : '—'} | Akum Window: ${row.foreignBuyDays20d}/20h beli`)
   const smtTscStr = row.avgTradeSizeChange != null ? `${row.avgTradeSizeChange >= 0 ? '+' : ''}${row.avgTradeSizeChange.toFixed(1)}% vs 20d${Math.abs(row.avgTradeSizeChange) >= 20 ? ' (institusional)' : ''}` : '—'
   console.log(`  Avg Trade Size  : ${smtTscStr}`)
   const smtBoStr = row.bidOfferRatio != null ? `${row.bidOfferRatio.toFixed(2)}${row.bidOfferRatio >= 1.5 ? ' (buyer dominated)' : row.bidOfferRatio >= 1.0 ? ' (balanced)' : ' (seller dominated)'}` : '—'
