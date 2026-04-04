@@ -60,6 +60,7 @@ if (import.meta.main) {
     console.log(`[update] Fetch screener & financial ratio...`)
     await Services.Screener.run(client)
     await Services.FinancialRatio.run(client)
+    await Services.DataEnrichment.run()
 
     let current = startDate
     let count = 0

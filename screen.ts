@@ -91,6 +91,15 @@ type ScreenRow = {
   // Parabolic / overextension fields
   extensionRatio: number | null
   ret3mPct: number | null
+  // FVG fields
+  fvgBullishCount: number
+  fvgBearishCount: number
+  fvgPriceInZone: boolean
+  fvgNearestPct: number | null
+  // OBV Momentum Jangka Pendek (MJP)
+  obvMjp: 'bullish' | 'bearish' | 'neutral'
+  obvAboveSma10: boolean
+  obvSma10Slope: number | null
 }
 
 type WatchlistEntry = { code: string; name: string | null; score: number; rsRank: number; stage: StageNumber }
@@ -200,7 +209,7 @@ function calcQEps(byKey: Map<string, HistRow>, year: number, quarter: number): n
   return (row.profitAttrOwner - (prev?.profitAttrOwner ?? 0)) / shares
 }
 
-function calcEpsInfo(histRows: HistRow[]): { score: number; latestGrowthPct: number | null; acceleration: boolean; consecutiveGrowthQ: number } {
+function calcEpsInfo(histRows: HistRow[]): { score: number; latestGrowthPct: number | null; acceleration: boolean; recovery: boolean; consecutiveGrowthQ: number } {
   const byKey = new Map<string, HistRow>()
   for (const r of histRows) byKey.set(`${r.year}_${r.quarter}`, r)
   let latestYear: number | null = null
@@ -211,7 +220,7 @@ function calcEpsInfo(histRows: HistRow[]): { score: number; latestGrowthPct: num
       if (byKey.get(`${y}_${q}`)?.profitAttrOwner != null) { latestYear = y; latestQ = q; break outer }
     }
   }
-  if (latestYear == null || latestQ == null) return { score: 0, latestGrowthPct: null, acceleration: false, consecutiveGrowthQ: 0 }
+  if (latestYear == null || latestQ == null) return { score: 0, latestGrowthPct: null, acceleration: false, recovery: false, consecutiveGrowthQ: 0 }
   const curEps = calcQEps(byKey, latestYear, latestQ)
   const pyEps = calcQEps(byKey, latestYear - 1, latestQ)
   let latestGrowthPct: number | null = null
@@ -222,7 +231,10 @@ function calcEpsInfo(histRows: HistRow[]): { score: number; latestGrowthPct: num
   const prevPyEps = calcQEps(byKey, prevY - 1, prevQ)
   let prevGrowthPct: number | null = null
   if (prevCurEps != null && prevPyEps != null && prevPyEps !== 0) prevGrowthPct = ((prevCurEps - prevPyEps) / Math.abs(prevPyEps)) * 100
-  const acceleration = latestGrowthPct != null && prevGrowthPct != null && latestGrowthPct > prevGrowthPct
+  // Acceleration: only TRUE when latest growth is positive AND improving (Minervini: accelerating earnings)
+  // Recovery: negative growth but improving (e.g. -57% from -77% = improving but NOT accelerating)
+  const acceleration = latestGrowthPct != null && prevGrowthPct != null && latestGrowthPct > 0 && latestGrowthPct > prevGrowthPct
+  const recovery = !acceleration && latestGrowthPct != null && prevGrowthPct != null && latestGrowthPct > prevGrowthPct && latestGrowthPct < 0
   let consecutiveGrowthQ = 0
   let cy = latestYear; let cq = latestQ
   for (let i = 0; i < 4; i++) {
@@ -237,8 +249,9 @@ function calcEpsInfo(histRows: HistRow[]): { score: number; latestGrowthPct: num
     else if (latestGrowthPct >= 0) score += 2
   }
   if (acceleration) score += 4
+  else if (recovery) score += 2
   if (consecutiveGrowthQ >= 2) score += 3
-  return { score, latestGrowthPct, acceleration, consecutiveGrowthQ }
+  return { score, latestGrowthPct, acceleration, recovery, consecutiveGrowthQ }
 }
 
 // ─── Volume helpers ───────────────────────────────────────────────────────────
@@ -254,23 +267,7 @@ function calcCMF20(rows: { high: number; low: number; close: number; volume: num
   return sumVol === 0 ? null : sumMFV / sumVol
 }
 
-function calcOBVTrend(rows: { close: number; volume: number }[]): 'up' | 'down' | 'flat' {
-  if (rows.length < 20) return 'flat'
-  let obv = 0
-  const obvSeries: number[] = []
-  for (let i = 0; i < rows.length; i++) {
-    if (i === 0) { obvSeries.push(0); continue }
-    if (rows[i]!.close > rows[i - 1]!.close) obv += rows[i]!.volume
-    else if (rows[i]!.close < rows[i - 1]!.close) obv -= rows[i]!.volume
-    obvSeries.push(obv)
-  }
-  const recent = obvSeries.slice(-20)
-  const first = recent[0]!; const last = recent[recent.length - 1]!
-  const scale = Math.abs(first) || 1; const pct = (last - first) / scale
-  if (pct > 0.05) return 'up'
-  if (pct < -0.05) return 'down'
-  return 'flat'
-}
+// OBV trend is now computed via calcOBVMomentum().trend20d
 
 function detectVCP(
   rows: { high: number; low: number; close: number; volume: number }[]
@@ -325,6 +322,121 @@ function calcMFI14(rows: { high: number; low: number; close: number; volume: num
   }
   if (negFlow === 0) return 100
   return 100 - (100 / (1 + posFlow / negFlow))
+}
+
+// ─── Fair Value Gap (FVG) detection ──────────────────────────────────────────
+
+type FvgZone = { type: 'bullish' | 'bearish'; top: number; bottom: number; dayIndex: number }
+
+function detectFVG(
+  rows: { high: number; low: number; close: number; volume: number }[],
+  lookback = 20
+): { bullishCount: number; bearishCount: number; nearestBullish: FvgZone | null; priceinFVG: boolean } {
+  if (rows.length < 3) return { bullishCount: 0, bearishCount: 0, nearestBullish: null, priceinFVG: false }
+
+  const start = Math.max(2, rows.length - lookback)
+  const zones: FvgZone[] = []
+
+  for (let i = start; i < rows.length; i++) {
+    const candle1 = rows[i - 2]!
+    const candle3 = rows[i]!
+
+    // Bullish FVG: candle 3's low > candle 1's high (gap up)
+    if (candle3.low > candle1.high) {
+      zones.push({ type: 'bullish', top: candle3.low, bottom: candle1.high, dayIndex: i })
+    }
+    // Bearish FVG: candle 1's low > candle 3's high (gap down)
+    if (candle1.low > candle3.high) {
+      zones.push({ type: 'bearish', top: candle1.low, bottom: candle3.high, dayIndex: i })
+    }
+  }
+
+  // Filter: only keep unfilled FVGs (price hasn't revisited the zone yet)
+  const currentPrice = rows[rows.length - 1]!.close
+  const unfilledBullish: FvgZone[] = []
+  const unfilledBearish: FvgZone[] = []
+
+  for (const zone of zones) {
+    let filled = false
+    for (let j = zone.dayIndex + 1; j < rows.length; j++) {
+      if (zone.type === 'bullish' && rows[j]!.low <= zone.bottom) { filled = true; break }
+      if (zone.type === 'bearish' && rows[j]!.high >= zone.top) { filled = true; break }
+    }
+    if (!filled) {
+      if (zone.type === 'bullish') unfilledBullish.push(zone)
+      else unfilledBearish.push(zone)
+    }
+  }
+
+  // Find nearest bullish FVG below current price (support)
+  let nearestBullish: FvgZone | null = null
+  let nearestDist = Infinity
+  for (const z of unfilledBullish) {
+    const dist = currentPrice - z.top
+    if (dist >= 0 && dist < nearestDist) {
+      nearestDist = dist
+      nearestBullish = z
+    }
+  }
+
+  // Check if current price is inside any bullish FVG (bounce zone)
+  const priceinFVG = unfilledBullish.some((z) =>
+    currentPrice >= z.bottom && currentPrice <= z.top * 1.02
+  )
+
+  return {
+    bullishCount: unfilledBullish.length,
+    bearishCount: unfilledBearish.length,
+    nearestBullish,
+    priceinFVG
+  }
+}
+
+// ─── OBV Short-Term Momentum (MJP / SMA10) ─────────────────────────────────
+
+function calcOBVMomentum(rows: { close: number; volume: number }[]): {
+  trend20d: 'up' | 'down' | 'flat'
+  mjp: 'bullish' | 'bearish' | 'neutral'
+  obvAboveSma10: boolean
+  obvSma10Slope: number | null
+} {
+  if (rows.length < 20) return { trend20d: 'flat', mjp: 'neutral', obvAboveSma10: false, obvSma10Slope: null }
+
+  // Build full OBV series
+  let obv = 0
+  const obvSeries: number[] = [0]
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i]!.close > rows[i - 1]!.close) obv += rows[i]!.volume
+    else if (rows[i]!.close < rows[i - 1]!.close) obv -= rows[i]!.volume
+    obvSeries.push(obv)
+  }
+
+  // 20-day trend (original logic)
+  const recent20 = obvSeries.slice(-20)
+  const first20 = recent20[0]!
+  const last20 = recent20[recent20.length - 1]!
+  const scale20 = Math.abs(first20) || 1
+  const pct20 = (last20 - first20) / scale20
+  const trend20d: 'up' | 'down' | 'flat' = pct20 > 0.05 ? 'up' : pct20 < -0.05 ? 'down' : 'flat'
+
+  // SMA10 of OBV
+  if (obvSeries.length < 12) return { trend20d, mjp: 'neutral', obvAboveSma10: false, obvSma10Slope: null }
+
+  const sma10Now = obvSeries.slice(-10).reduce((a, b) => a + b, 0) / 10
+  const sma10Prev = obvSeries.slice(-12, -2).reduce((a, b) => a + b, 0) / 10
+  const currentObv = obvSeries[obvSeries.length - 1]!
+  const obvAboveSma10 = currentObv > sma10Now
+
+  // SMA10 slope: positive = upward momentum
+  const slopeScale = Math.abs(sma10Prev) || 1
+  const obvSma10Slope = (sma10Now - sma10Prev) / slopeScale
+
+  // MJP determination: OBV above SMA10 AND slope positive = bullish momentum
+  let mjp: 'bullish' | 'bearish' | 'neutral' = 'neutral'
+  if (obvAboveSma10 && obvSma10Slope > 0.02) mjp = 'bullish'
+  else if (!obvAboveSma10 && obvSma10Slope < -0.02) mjp = 'bearish'
+
+  return { trend20d, mjp, obvAboveSma10, obvSma10Slope }
 }
 
 type OhlcEntry = { date: number; close: number; high: number; low: number; volume: number }
@@ -775,6 +887,14 @@ try {
   for (const r of concRows) {
     if (r.top3_volume_pct != null) brokerConcentrationMapScreen.set(r.stock_code, Number(r.top3_volume_pct))
   }
+  // Detect identical broker data bug: if all values are the same, data is aggregated incorrectly
+  if (brokerConcentrationMapScreen.size > 10) {
+    const vals = new Set(brokerConcentrationMapScreen.values())
+    if (vals.size === 1) {
+      console.warn(`[WARN] Semua ${brokerConcentrationMapScreen.size} saham memiliki top3_volume_pct identik (${[...vals][0]}%) — data broker tidak valid, dinonaktifkan`)
+      brokerConcentrationMapScreen.clear()
+    }
+  }
 } catch {
   // broker_top_daily not available — degrade gracefully (run deno task db:fetch-broker)
 }
@@ -923,7 +1043,9 @@ for (const [code, entries] of ohlcByCode) {
   const per = sc?.per ?? 0
 
   let fundScoreFull = epsInfo.score
-  fundScoreFull += Math.min(roe / 25, 1) * 9 + Math.min(npm / 20, 1) * 6
+  fundScoreFull += Math.min(roe / 35, 1) * 12 + Math.min(npm / 35, 1) * 9
+  // Synergy bonus: companies with both strong ROE and NPM deserve extra credit
+  if (roe >= 15 && npm >= 15) fundScoreFull += 3
   if (der <= 0.5) fundScoreFull += 10
   else if (der <= 1.0) fundScoreFull += 7
   else if (der <= 2.0) fundScoreFull += 4
@@ -951,7 +1073,7 @@ for (const [code, entries] of ohlcByCode) {
   else if (per > 20 && per <= 30) fundScoreFull += 3
   else if (per > 30 && per <= 50) fundScoreFull += 1
 
-  const sepaScore = Math.min(100, trendScore + rsScore30 + epsInfo.score + Math.min(roe / 25, 1) * 9 + Math.min(npm / 20, 1) * 6)
+  const sepaScore = Math.min(100, trendScore + rsScore30 + epsInfo.score + Math.min(roe / 35, 1) * 12 + Math.min(npm / 35, 1) * 9)
 
   // RS Line New High
   let rsLineNewHigh = false
@@ -1023,7 +1145,14 @@ for (const [code, entries] of ohlcByCode) {
   const ohlcvForVol = entries.map((e) => ({ high: e.high, low: e.low, close: e.close, volume: e.volume }))
   const cmf = calcCMF20(ohlcvForVol)
   const mfi = calcMFI14(ohlcvForVol)
-  const obvTrend = calcOBVTrend(ohlcvForVol)
+  const obvMom = calcOBVMomentum(ohlcvForVol)
+  const obvTrend = obvMom.trend20d
+
+  // Fair Value Gap detection
+  const fvgResult = detectFVG(ohlcvForVol)
+  const fvgNearestPct = fvgResult.nearestBullish != null && price > 0
+    ? ((price - fvgResult.nearestBullish.top) / price) * 100
+    : null
 
   // Volume surge: 5d vs 20d
   const vol5d = volumes.slice(-5).reduce((a, b) => a + b, 0) / 5
@@ -1109,9 +1238,13 @@ for (const [code, entries] of ohlcByCode) {
       }
       if (consecutiveDaysAbove >= 3) sellSignal = 'Upper BB 3d+'
     }
-    // 3. 7% Stop below pivot
-    if (sellSignal == null && pivotPoint != null && price < pivotPoint * 0.93) {
+    // 3. 7% Stop below pivot — only for actual breakout stocks (Minervini: stop from buy point)
+    if (sellSignal == null && pivotPoint != null && price < pivotPoint * 0.93 && breakoutSignal === 'breakout') {
       sellSignal = '7% Stop Breach'
+    }
+    // 4. Breakdown MA50 — context signal for non-breakout stocks trading below key MA
+    if (sellSignal == null && ma50 != null && price < ma50 && stage === 2) {
+      sellSignal = 'Breakdown MA50'
     }
   }
 
@@ -1173,6 +1306,7 @@ for (const [code, entries] of ohlcByCode) {
   if (epsInfo.latestGrowthPct != null) {
     let msg = `EPS ${epsInfo.latestGrowthPct >= 0 ? '+' : ''}${epsInfo.latestGrowthPct.toFixed(1)}% YoY`
     if (epsInfo.acceleration) msg += ', akselerasi'
+    else if (epsInfo.recovery) msg += ', perbaikan'
     if (epsInfo.consecutiveGrowthQ >= 2) msg += `, ${epsInfo.consecutiveGrowthQ}Q berturut`
     reasons.push(msg)
   }
@@ -1191,6 +1325,11 @@ for (const [code, entries] of ohlcByCode) {
   if (breakoutSignal === 'approaching') reasons.push(`Mendekati pivot Rp ${(pivotPoint ?? 0).toFixed(0)}`)
   if (pullbackSignal) reasons.push('Pullback ke EMA21')
   if (shakeoutDetected) reasons.push('Shakeout terdeteksi')
+  if (fvgResult.priceinFVG) reasons.push('Harga di zona FVG bullish (support)')
+  else if (fvgResult.bullishCount > 0 && fvgNearestPct != null && fvgNearestPct < 5) reasons.push(`FVG bullish terdekat ${fvgNearestPct.toFixed(1)}% di bawah`)
+  if (fvgResult.bearishCount > 0 && fvgResult.bullishCount === 0) reasons.push(`FVG bearish (${fvgResult.bearishCount} gap)`)
+  if (obvMom.mjp === 'bullish') reasons.push('MJP: OBV > SMA10 ↑ (momentum positif)')
+  else if (obvMom.mjp === 'bearish') reasons.push('MJP: OBV < SMA10 ↓ (momentum negatif)')
   if (sellSignal) reasons.push(`JUAL: ${sellSignal}`)
 
   // ─── SMT computation ───────────────────────────────────────────────────────
@@ -1298,9 +1437,9 @@ for (const [code, entries] of ohlcByCode) {
   const smtScore = Math.min(100, smtBaseScore + smtBrokerAccumBonus)
   const smtSignal: ScreenRow['smtSignal'] = smtScore >= 75 ? 'strong-buy' : smtScore >= 55 ? 'buy' : smtScore >= 35 ? 'neutral' : smtScore >= 20 ? 'sell' : 'strong-sell'
 
-  // AutoScore: normalized ~100, stacked bonuses, sell=multiplicative penalty
-  // Base (max 70): combined 0-30, momentum 0-15, smt 0-25
-  let autoScore = (combinedScore * 0.30) + (momentumFactor * 0.15) + (smtScore * 0.25)
+  // AutoScore: normalized ~100, stacked bonuses, severity-based penalties
+  // Base (max 70): combined 0-35, momentum 0-15, smt 0-20
+  let autoScore = (combinedScore * 0.35) + (momentumFactor * 0.15) + (smtScore * 0.20)
   // Stage 2 quality boost
   if (stage === 2) autoScore += 5
   // Setup bonuses — stackable, capped at 20
@@ -1315,14 +1454,21 @@ for (const [code, entries] of ohlcByCode) {
   if (rsLineNewHigh) autoScore += 6
   if (smtAccumBrokers.length >= 2) autoScore += 5
   else if (smtAccumBrokers.length === 1) autoScore += 3
+  // FVG + MJP bonuses (max 6)
+  if (fvgResult.priceinFVG) autoScore += 4
+  else if (fvgResult.bullishCount > 0 && fvgNearestPct != null && fvgNearestPct < 3) autoScore += 2
+  if (obvMom.mjp === 'bullish') autoScore += 2
+  else if (obvMom.mjp === 'bearish') autoScore -= 2
   // Gorengan gradual penalty
   if (gorenganScore >= 45) autoScore -= 10
   else if (gorenganScore >= 30) autoScore -= 5
-  // Sell signal — multiplicative (severe): hard to rank high with a sell flag
-  if (sellSignal) autoScore *= 0.5
-  // Layer 2: Fundamental floor — fund < 25 disqualifies from top picks
-  if (finalFundScore < 25) autoScore *= 0.4
-  else if (finalFundScore < 35) autoScore *= 0.7
+  // Sell signal — severity-based penalty (not blanket ×0.5)
+  if (sellSignal === 'Climax Top' || sellSignal === 'Upper BB 3d+') autoScore *= 0.5
+  else if (sellSignal === '7% Stop Breach') autoScore -= 12
+  else if (sellSignal === 'Breakdown MA50') autoScore -= 6
+  // Layer 2: Fundamental floor — relaxed thresholds
+  if (finalFundScore < 20) autoScore *= 0.5
+  else if (finalFundScore < 30) autoScore *= 0.8
   // Layer 2: Parabolic extension — multiplicative penalty
   if (extensionRatio != null) {
     if (extensionRatio > 5.0) autoScore *= 0.2
@@ -1351,7 +1497,14 @@ for (const [code, entries] of ohlcByCode) {
     brokerConcentrationPct: brokerConcentrationMapScreen.get(code) ?? null,
     autoScore,
     extensionRatio,
-    ret3mPct
+    ret3mPct,
+    fvgBullishCount: fvgResult.bullishCount,
+    fvgBearishCount: fvgResult.bearishCount,
+    fvgPriceInZone: fvgResult.priceinFVG,
+    fvgNearestPct,
+    obvMjp: obvMom.mjp,
+    obvAboveSma10: obvMom.obvAboveSma10,
+    obvSma10Slope: obvMom.obvSma10Slope
   })
 }
 
@@ -1480,7 +1633,15 @@ function printStockDetail(row: ScreenRow) {
   console.log(`  ${tick(row.setupType !== 'none')} Power Play/Low Cheat: ${row.setupType === 'none' ? 'Tidak' : row.setupType}`)
   console.log(`  ${tick(row.vcpIsVcp)} VCP (Pola): ${row.vcpIsVcp ? `Ya (kontraksi: ${row.vcpContractions}, vol kering: ${row.vcpVolumeDrying ? 'Ya' : 'Tidak'})` : 'Tidak terdeteksi'}`)
   console.log(`  ${tick(row.volumeSignal === 'akumulasi')} Volume: ${row.volumeSignal.toUpperCase()} | Kriteria: ${row.volCriteriaCount}/5 | CMF: ${fNum(row.cmf, 3)} | MFI: ${fNum(row.mfi, 1)} | OBV: ${row.obvTrend}`)
+  const mjpColor = row.obvMjp === 'bullish' ? '\x1b[32m' : row.obvMjp === 'bearish' ? '\x1b[31m' : '\x1b[90m'
+  const mjpLabel = row.obvMjp === 'bullish' ? 'BULLISH ↑' : row.obvMjp === 'bearish' ? 'BEARISH ↓' : 'NETRAL'
+  console.log(`  ${tick(row.obvMjp === 'bullish')} MJP (OBV SMA10): ${mjpColor}${mjpLabel}\x1b[0m | OBV ${row.obvAboveSma10 ? '>' : '<'} SMA10 | Slope: ${row.obvSma10Slope != null ? (row.obvSma10Slope > 0 ? '+' : '') + row.obvSma10Slope.toFixed(3) : '—'}`)
   console.log(`  ${tick((row.foreignNetPct ?? 0) > 0)} Foreign Flow: ${row.foreignNetPct != null ? `${row.foreignNetPct > 0 ? '+' : ''}${row.foreignNetPct.toFixed(1)}%` : '—'}${row.volSurgePct != null ? ` | Vol Surge: ${row.volSurgePct > 0 ? '+' : ''}${row.volSurgePct.toFixed(1)}%` : ''}`)
+  // FVG section
+  const fvgHasBullish = row.fvgBullishCount > 0
+  const fvgInZone = row.fvgPriceInZone
+  const fvgLabel = fvgInZone ? '\x1b[32mHarga di zona FVG (support)\x1b[0m' : fvgHasBullish ? `${row.fvgBullishCount} gap bullish (terdekat ${fNum(row.fvgNearestPct, 1)}% bawah)` : 'Tidak ada FVG bullish'
+  console.log(`  ${tick(fvgHasBullish)} FVG: ${fvgLabel}${row.fvgBearishCount > 0 ? ` | ${row.fvgBearishCount} gap bearish` : ''}`)
   console.log(line)
   // Phase 2 detail
   const bktLabel = row.breakoutSignal === 'breakout' ? '\x1b[32mBREAKOUT\x1b[0m' : row.breakoutSignal === 'approaching' ? '\x1b[33mMENDEKATI PIVOT\x1b[0m' : 'Tidak ada'

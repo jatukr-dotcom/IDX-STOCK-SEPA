@@ -109,6 +109,40 @@ function calcForeignFlow(rows: OhlcvEntry[]) {
   return { net5d, net20d, acceleration, streak }
 }
 
+function checkShortTermDrop(rows: OhlcvEntry[]): { priceDrop: boolean; obvDrop: boolean } {
+  if (rows.length < 10) {
+    return { priceDrop: false, obvDrop: false }
+  }
+  
+  // Calculate OBV points
+  let obv = 0
+  const series: number[] = []
+  for (let i = 0; i < rows.length; i++) {
+    if (i === 0) {
+      series.push(0)
+      continue
+    }
+    if (rows[i]!.close > rows[i - 1]!.close) {
+      obv += rows[i]!.volume
+    } else if (rows[i]!.close < rows[i - 1]!.close) {
+      obv -= rows[i]!.volume
+    }
+    series.push(obv)
+  }
+
+  const recent10 = rows.slice(-10)
+  const smaPrice10 = recent10.reduce((s, r) => s + r.close, 0) / 10
+  const smaObv10 = series.slice(-10).reduce((s, v) => s + v, 0) / 10
+
+  const lastPrice = rows[rows.length - 1]!.close
+  const lastObv = series[series.length - 1]!
+
+  return {
+    priceDrop: lastPrice < smaPrice10 * 0.98, // drop of at least 2% below 10-day avg
+    obvDrop: lastObv < smaObv10 // OBV just needs to be below SMA
+  }
+}
+
 function calcAvgTradeSize(rows: OhlcvEntry[], window: number): number | null {
   const slice = rows.slice(-window)
   const totalFreq = slice.reduce((s, r) => s + r.frequency, 0)
@@ -212,6 +246,14 @@ function computeSmtScore(
     reasons.push('OBV naik (akumulasi volume)')
   } else if (obvTrend === 'flat') {
     volumePriceScore = 5
+  }
+
+  // --- 3B. Short-Term Disruption Warning ---
+  const stDrop = checkShortTermDrop(rows)
+  if (stDrop.obvDrop && stDrop.priceDrop) {
+    reasons.push('⚠️ Alert: Momentum harian rontok (OBV & Harga < SMA10)')
+  } else if (stDrop.obvDrop) {
+    reasons.push('⚠️ Alert: OBV harian menukik tajam ke bawah SMA10')
   }
 
   // --- 4. Trade Size Profile (20 pts) ---
@@ -449,7 +491,9 @@ export async function GET(ctx: Context) {
   const closesTemp = new Map<string, number[]>()
   for (const r of priceRows200) {
     const c = r.priceClose != null ? Number(r.priceClose) : null
-    if (c == null || c <= 0) continue
+    if (c == null || c <= 0) {
+      continue
+    }
     const arr = closesTemp.get(r.stockCode) ?? []
     arr.push(c)
     closesTemp.set(r.stockCode, arr)
@@ -462,7 +506,9 @@ export async function GET(ctx: Context) {
     if (arr.length >= 63) {
       const price3mAgo = arr[arr.length - 63]!
       const priceNow = arr[arr.length - 1]!
-      if (price3mAgo > 0) ret3mByCode.set(sc, ((priceNow - price3mAgo) / price3mAgo) * 100)
+      if (price3mAgo > 0) {
+        ret3mByCode.set(sc, ((priceNow - price3mAgo) / price3mAgo) * 100)
+      }
     }
   }
 

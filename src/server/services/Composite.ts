@@ -46,19 +46,34 @@ export class Composite {
   }
 
   private static minMaxNormalize(values: number[]): Map<number, number> {
-    const filtered = values.filter((value) => Number.isFinite(value))
+    const filtered = values.filter((value) => Number.isFinite(value)).sort((a, b) => a - b)
     if (filtered.length === 0) {
       return new Map()
     }
-    const min = Math.min(...filtered)
-    const max = Math.max(...filtered)
+    
+    // Winsorization (5th and 95th percentiles) to prevent outliers from skewing the score
+    const p5Index = Math.floor(filtered.length * 0.05)
+    const p95Index = Math.floor(filtered.length * 0.95)
+    
+    // Fallback to absolute min/max if we have too few data points
+    const min = filtered.length > 20 ? (filtered[p5Index] ?? filtered[0]!) : filtered[0]!
+    const max = filtered.length > 20 ? (filtered[p95Index] ?? filtered[filtered.length - 1]!) : filtered[filtered.length - 1]!
+    
     const span = max - min
     const valueToNormalizedMap = new Map<number, number>()
+    
     for (const value of values) {
       if (!Number.isFinite(value)) {
         continue
       }
-      valueToNormalizedMap.set(value, span === 0 ? 0.5 : (value - min) / span)
+      if (span === 0) {
+        valueToNormalizedMap.set(value, 0.5)
+      } else {
+        const normalized = (value - min) / span
+        // Clamp between 0 and 1 so outliers don't exceed the scale
+        const clamped = Math.max(0, Math.min(1, normalized))
+        valueToNormalizedMap.set(value, clamped)
+      }
     }
     return valueToNormalizedMap
   }

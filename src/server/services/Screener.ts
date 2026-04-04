@@ -6,6 +6,7 @@
  * Fullstack developer with a focus on security and experience in trading systems.
  */
 
+import { sql } from 'drizzle-orm'
 import Database from '@app/server/Database.ts'
 import * as Schemas from '@app/server/schemas/index.ts'
 import type * as Types from '@app/server/services/Types.ts'
@@ -83,14 +84,17 @@ export class Screener {
               subIndustry: row.subIndustry,
               subIndustryCode: row.subIndustryCode,
               indexCode: row.indexCode,
-              marketCapital: row.marketCapital,
+              marketCapital: row.marketCapital ?? sql`${Schemas.screener.marketCapital}`,
               totalRevenue: row.totalRevenue,
-              npm: row.npm,
-              per: row.per,
-              pbv: row.pbv,
-              roa: row.roa,
-              roe: row.roe,
-              der: row.der,
+              eps: sql`${Schemas.screener.eps}`,
+              bookValue: sql`${Schemas.screener.bookValue}`,
+              dividendYield: sql`${Schemas.screener.dividendYield}`,
+              npm: row.npm ?? sql`${Schemas.screener.npm}`,
+              per: row.per ?? sql`${Schemas.screener.per}`,
+              pbv: row.pbv ?? sql`${Schemas.screener.pbv}`,
+              roa: row.roa ?? sql`${Schemas.screener.roa}`,
+              roe: row.roe ?? sql`${Schemas.screener.roe}`,
+              der: row.der ?? sql`${Schemas.screener.der}`,
               week4PC: row.week4PC,
               week13PC: row.week13PC,
               week26PC: row.week26PC,

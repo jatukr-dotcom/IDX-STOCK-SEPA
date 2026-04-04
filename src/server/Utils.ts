@@ -138,16 +138,16 @@ export default class Utils {
     row: Types.FundamentalsValues,
     filter: Types.FundamentalFilter
   ): boolean {
-    if (filter.perMin != null && (row.per == null || row.per < filter.perMin)) {
+    if (filter.perMin != null && row.per != null && row.per < filter.perMin) {
       return false
     }
-    if (filter.perMax != null && (row.per == null || row.per > filter.perMax)) {
+    if (filter.perMax != null && row.per != null && row.per > filter.perMax) {
       return false
     }
-    if (filter.roeMin != null && (row.roe == null || row.roe < filter.roeMin)) {
+    if (filter.roeMin != null && row.roe != null && row.roe < filter.roeMin) {
       return false
     }
-    if (filter.derMax != null && (row.der == null || row.der > filter.derMax)) {
+    if (filter.derMax != null && row.der != null && row.der > filter.derMax) {
       return false
     }
     const momentumValue = filter.momentumWeek === 52 ? row.week52PC : row.week26PC

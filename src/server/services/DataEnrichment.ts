@@ -6,7 +6,7 @@
  * Fullstack developer with a focus on security and experience in trading systems.
  */
 
-import { eq, gte } from 'drizzle-orm'
+import { eq, gte, sql } from 'drizzle-orm'
 import Database from '@app/server/Database.ts'
 import * as Schemas from '@app/server/schemas/index.ts'
 
@@ -16,6 +16,7 @@ interface FRRow {
   quarter: number
   eps: number | null
   bookValue: number | null
+  sales: number | null
   profitAttrOwner: number | null
 }
 
@@ -58,21 +59,51 @@ function computeTtmProfit(rows: FRRow[]): number | null {
   return currentYtd + prevFy.profitAttrOwner * (4 - latest.quarter) / 4
 }
 
+/** Compute TTM (Trailing 12 Months) sales. */
+function computeTtmSales(rows: FRRow[]): number | null {
+  if (rows.length === 0) {
+    return null
+  }
+  const sorted = [...rows].sort((a, b) =>
+    a.year !== b.year ? b.year - a.year : b.quarter - a.quarter
+  )
+  const latest = sorted[0]!
+  if (latest.sales == null) {
+    return null
+  }
+
+  // Q4 = full year, TTM is directly the annual figure
+  if (latest.quarter === 4) {
+    return latest.sales
+  }
+
+  // For Q1-Q3: TTM = currentYtd + (prevFY - prevSameQ)
+  const currentYtd = latest.sales
+  const prevFy = sorted.find((r) => r.year === latest.year - 1 && r.quarter === 4)
+  if (prevFy?.sales == null) {
+    return currentYtd // best-effort: use YTD
+  }
+
+  const prevSameQ = sorted.find((r) => r.year === latest.year - 1 && r.quarter === latest.quarter)
+  if (prevSameQ?.sales != null) {
+    return currentYtd + (prevFy.sales - prevSameQ.sales)
+  }
+  // Approximate: annualise current YTD with prev-FY trailing quarters
+  return currentYtd + prevFy.sales * (4 - latest.quarter) / 4
+}
+
 /** Compute corrected Book Value Per Share using current listed shares. */
 function computeCorrectedBvps(rows: FRRow[], listedShares: number): number | null {
   if (listedShares <= 0) {
     return null
   }
 
-  // Prefer latest Q4 (annual filing — most reliable shares count)
-  const q4rows = rows
-    .filter((r) => r.quarter === 4 && r.bookValue != null)
-    .sort((a, b) => b.year - a.year)
+  // Use the chronologically latest available book value
   const allWithBv = rows
     .filter((r) => r.bookValue != null)
     .sort((a, b) => a.year !== b.year ? b.year - a.year : b.quarter - a.quarter)
 
-  const useRow = q4rows[0] ?? allWithBv[0]
+  const useRow = allWithBv[0]
   if (useRow == null || useRow.bookValue == null) {
     return null
   }
@@ -111,6 +142,7 @@ export class DataEnrichment {
         quarter: Schemas.financialHistory.quarter,
         eps: Schemas.financialHistory.eps,
         bookValue: Schemas.financialHistory.bookValue,
+        sales: Schemas.financialHistory.sales,
         profitAttrOwner: Schemas.financialHistory.profitAttrOwner
       })
       .from(Schemas.financialHistory)
@@ -210,13 +242,42 @@ export class DataEnrichment {
         ? Math.round((totalDiv / priceClose) * 10000) / 100
         : null
 
+      const epsFinal = ttmEps != null ? Math.round(ttmEps * 100) / 100 : null
+
+      // PER: allow negative (loss-making companies), but skip zero EPS
+      const per = epsFinal != null && epsFinal !== 0
+        ? Math.round((priceClose / epsFinal) * 100) / 100
+        : null
+
+      const bvpsFinal = correctedBvps != null ? Math.round(correctedBvps * 100) / 100 : null
+
+      // PBV: only meaningful when book value > 0
+      const pbv = bvpsFinal != null && bvpsFinal > 0
+        ? Math.round((priceClose / bvpsFinal) * 100) / 100
+        : null
+
+      // ROE (%): only meaningful when book value > 0
+      const roe = epsFinal != null && bvpsFinal != null && bvpsFinal > 0
+        ? Math.round((epsFinal / bvpsFinal) * 10000) / 100
+        : null
+
+      // NPM (%): TTM Profit / TTM Sales — only meaningful when sales > 0
+      const ttmSales = computeTtmSales(rows)
+      const npm = ttmProfit != null && ttmSales != null && ttmSales > 0
+        ? Math.round((ttmProfit / ttmSales) * 10000) / 100
+        : null
+
       await Database
         .update(Schemas.screener)
         .set({
-          eps: ttmEps != null ? Math.round(ttmEps * 100) / 100 : null,
-          bookValue: correctedBvps != null ? Math.round(correctedBvps * 100) / 100 : null,
+          eps: epsFinal ?? sql`${Schemas.screener.eps}`,
+          bookValue: bvpsFinal ?? sql`${Schemas.screener.bookValue}`,
           marketCapital: Math.round(marketCap),
-          dividendYield: divYield
+          dividendYield: divYield ?? sql`${Schemas.screener.dividendYield}`,
+          per: per ?? sql`${Schemas.screener.per}`,
+          pbv: pbv ?? sql`${Schemas.screener.pbv}`,
+          roe: roe ?? sql`${Schemas.screener.roe}`,
+          npm: npm ?? sql`${Schemas.screener.npm}`
         })
         .where(eq(Schemas.screener.code, code))
       updateCount++

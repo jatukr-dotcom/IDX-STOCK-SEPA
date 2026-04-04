@@ -17,3 +17,11 @@ dist/
 # OS
 .DS_Store
 Thumbs.db
+
+# Temporary / debug scripts
+src/server/inject_*.ts
+src/server/revert_*.ts
+src/server/check-api.ts
+src/server/test-*.ts
+src/server/FixRatios.ts
+db.sqlite
