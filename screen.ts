@@ -276,6 +276,19 @@ async function query<T>(sql: string, args: (string | number | null)[] = []): Pro
   return result.rows as unknown as T[]
 }
 
+// ─── Format helpers ──────────────────────────────────────────────────────────
+
+/** Format foreign net shares as Rupiah value (shares × price), adaptive scale */
+function formatForeignRp(netShares: number | null, price: number): string {
+  if (netShares == null) return '—'
+  const rp = netShares * price
+  const abs = Math.abs(rp)
+  const sign = rp >= 0 ? '+' : ''
+  if (abs >= 1e12) return `${sign}${(rp / 1e12).toFixed(1)}T`
+  if (abs >= 1e9) return `${sign}${(rp / 1e9).toFixed(1)}B`
+  return `${sign}${(rp / 1e6).toFixed(0)}M`
+}
+
 // ─── Math helpers ─────────────────────────────────────────────────────────────
 
 function calcMA(prices: number[], period: number): number | null {
@@ -2040,7 +2053,7 @@ function printStockDetail(row: ScreenRow) {
   const smtSignalLabel = row.smtSignal === 'strong-buy' ? '\x1b[32mSTRONG BUY\x1b[0m' : row.smtSignal === 'buy' ? '\x1b[32mBUY\x1b[0m' : row.smtSignal === 'neutral' ? '\x1b[33mNETRAL\x1b[0m' : row.smtSignal === 'sell' ? '\x1b[31mSELL\x1b[0m' : '\x1b[31mSTRONG SELL\x1b[0m'
   console.log(`  ═══ Smart Money ═══`)
   console.log(`  SMT Score       : ${smtColor}${row.smtScore}/100 [${smtBar}]\x1b[0m`)
-  const smtFn5dStr = row.foreignNet5d != null ? `${row.foreignNet5d >= 0 ? '+' : ''}${(row.foreignNet5d / 1_000_000_000).toFixed(1)}B (5d)` : '—'
+  const smtFn5dStr = `${formatForeignRp(row.foreignNet5d, row.price)} (5d)`
   const smtAccelStr = row.foreignAcceleration != null && row.foreignAcceleration > 0 ? ' ▲ accelerating' : row.foreignAcceleration != null && row.foreignAcceleration < 0 ? ' ▼ decelerating' : ''
   console.log(`  Foreign Flow    : ${smtFn5dStr}${smtAccelStr}`)
   console.log(`  Consecutive Buy : ${row.consecutiveForeignBuyDays > 0 ? `${row.consecutiveForeignBuyDays} hari berturut-turut` : '—'} | Akum Window: ${row.foreignBuyDays20d}/20h beli`)
@@ -2129,7 +2142,7 @@ if (argMode === 'smt') {
   console.log(`  ${'─'.repeat(100)}`)
   for (let i = 0; i < top.length; i++) {
     const r = top[i]!
-    const smtFn5d = r.foreignNet5d != null ? `${r.foreignNet5d >= 0 ? '+' : ''}${(r.foreignNet5d / 1_000_000_000).toFixed(1)}B` : '—'
+    const smtFn5d = formatForeignRp(r.foreignNet5d, r.price)
     const smtStreak = r.consecutiveForeignBuyDays > 0 ? `${r.consecutiveForeignBuyDays}h` : '—'
     const smtTxChg = r.avgTradeSizeChange != null ? `${r.avgTradeSizeChange >= 0 ? '+' : ''}${r.avgTradeSizeChange.toFixed(1)}%` : '—'
     const smtBo = r.bidOfferRatio != null ? r.bidOfferRatio.toFixed(2) : '—'
