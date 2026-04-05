@@ -1197,6 +1197,31 @@ deno task ui:dev
 
 ## Changelog
 
+### 2026-04-05 — Phase 7: Stage Gating + Regime-Aware Scoring
+
+Tiga fix desain yang ditemukan dari evaluasi output top 10 pasca-Phase 6:
+
+| # | Fix | Dampak |
+|---|-----|--------|
+| 7A | **Stage Quality Multiplier** — ganti `stage2Bonus +5` additive → multiplicative: S2=×1.0, S1=×0.80, S3=×0.60, S4=×0.40 | Stage 1/3/4 tidak lagi bisa rank setara Stage 2; sesuai Minervini "never buy outside Stage 2" |
+| 7B | **Sell Penalty dikuatkan** — `ma50: 6→15`, `stop: 12→20`, `supportBreak: 10→15`, `obvDiv: 8→10` | Stock dengan Breakdown MA50 keluar dari top ranking (bukan sekadar warning) |
+| 7C | **Regime-Adaptive Filter** — `filterThreshold` dari single `30` → object `{ bear: 40, neutral: 30, bull: 25 }` | Di BEAR: 135 kandidat → ~17 (hanya saham terkuat), di BULL: lebih permisif (25) |
+
+**Contoh dampak konkret** (BEAR regime, data 2026-04-02):
+
+| Saham | Pre-Phase 7 | Post-Phase 7 | Alasan |
+|-------|-------------|--------------|--------|
+| FAPA (Stage 2) | #1 / score 69 | #1 / score ~69 | Stage 2 ×1.0, tidak berubah |
+| TAPG (Stage 1) | #2 / score 62 | keluar top list | ×0.80 → 50, di bawah threshold 40 |
+| ADMR (Stage 2, MA50 break) | #4 / score 61 | #10 / score 47 | penalty –15 (bukan –6) |
+
+Header otomatis menampilkan threshold aktif:
+```
+[PERINGATAN] IHSG dalam fase BEAR — filter autoScore≥40, kurangi eksposur.
+```
+
+---
+
 ### 2026-04-05 — Phase 6: Audit Hardening
 
 Perbaikan 8 isu yang ditemukan dari audit mendalam post Phase 1-5:

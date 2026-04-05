@@ -134,7 +134,7 @@ const SCREEN_CONFIG = {
   // AutoScore
   auto: {
     baseWeights: { combined: 0.35, momentum: 0.15, smt: 0.20 },
-    stage2Bonus: 5,
+    stageMult: { s2: 1.0, s1: 0.80, s3: 0.60, s4: 0.40 },
     setupBonusCap: 20,
     breakoutBonus: 15, approachingBonus: 8, vcpBonus: 6, pullbackBonus: 4,
     pocketPivotBonus: 7, rsNewHighBonus: 6,
@@ -143,10 +143,10 @@ const SCREEN_CONFIG = {
     mjpBullishBonus: 2, mjpBearishPenalty: -2,
     cvBonus3: 5, cvBonus2: 2, cvForeignThreshold: 5,
     gorenganPenalty45: -10, gorenganPenalty30: -5,
-    sellPenalty: { stop: 12, ma50: 6, obvDiv: 8, supportBreak: 10 },
+    sellPenalty: { stop: 20, ma50: 15, obvDiv: 10, supportBreak: 15 },
     fundFloor: { min: 20, rampEnd: 35, minMult: 0.5 },
     parabolic: { extreme: { ratio: 5.0, mult: 0.2 }, high: { ratio: 3.0, mult: 0.4 }, mid: { ratio: 2.5, mult: 0.7 } },
-    filterThreshold: 30,
+    filterThreshold: { bear: 40, neutral: 30, bull: 25 },
   },
   // Gorengan filter
   gorengan: {
@@ -1779,8 +1779,6 @@ for (const [code, entries] of ohlcByCode) {
   // AutoScore: normalized ~100, stacked bonuses, severity-based penalties
   // Base (max 70): combined 0-35, momentum 0-15, smt 0-20
   let autoScore = (combinedScore * SCREEN_CONFIG.auto.baseWeights.combined) + (momentumFactor * SCREEN_CONFIG.auto.baseWeights.momentum) + (smtScore * SCREEN_CONFIG.auto.baseWeights.smt)
-  // Stage 2 quality boost
-  if (stage === 2) autoScore += SCREEN_CONFIG.auto.stage2Bonus
   // Setup bonuses — stackable, capped at 20
   let autoSetupBonus = 0
   if (breakoutSignal === 'breakout') autoSetupBonus += 15
@@ -1825,6 +1823,12 @@ for (const [code, entries] of ohlcByCode) {
     else if (extensionRatio > 3.0) autoScore *= 0.4
     else if (extensionRatio > 2.5) autoScore *= 0.7
   }
+  // Stage quality multiplier — Minervini Stage 2 is the baseline, penalize others
+  const stageMult = stage === 2 ? SCREEN_CONFIG.auto.stageMult.s2
+    : stage === 1 ? SCREEN_CONFIG.auto.stageMult.s1
+    : stage === 3 ? SCREEN_CONFIG.auto.stageMult.s3
+    : SCREEN_CONFIG.auto.stageMult.s4
+  autoScore *= stageMult
   autoScore = Math.max(0, Math.min(100, autoScore))
 
   results.push({
@@ -1876,7 +1880,8 @@ if (argMode === 'breakout') {
 } else if (argMode === 'smt') {
   filteredResults = results.filter((r) => r.smtScore >= Math.max(20, minScore))
 } else if (argMode === 'auto') {
-  filteredResults = results.filter((r) => r.autoScore >= Math.max(SCREEN_CONFIG.auto.filterThreshold, minScore))
+  const regimeThreshold = SCREEN_CONFIG.auto.filterThreshold[marketRegime]
+  filteredResults = results.filter((r) => r.autoScore >= Math.max(regimeThreshold, minScore))
 }
 
 // Sort
@@ -2159,7 +2164,9 @@ const regimeLabel = marketRegime === 'bear'
   : marketRegime === 'bull' ? '\x1b[32mBULL\x1b[0m' : 'Normal'
 console.log(`  Pasar: ${marketFollowThrough ? '\x1b[32mFollow-Through Day AKTIF\x1b[0m' : regimeLabel}`)
 if (marketRegime === 'bear') {
-  console.log(`  \x1b[31m[PERINGATAN] IHSG dalam fase BEAR — sinyal beli kurang reliable, kurangi eksposur.\x1b[0m`)
+  console.log(`  \x1b[31m[PERINGATAN] IHSG dalam fase BEAR — filter autoScore≥${SCREEN_CONFIG.auto.filterThreshold.bear}, sinyal beli kurang reliable, kurangi eksposur.\x1b[0m`)
+} else if (marketRegime === 'bull') {
+  console.log(`  \x1b[32m[INFO] IHSG dalam fase BULL — filter autoScore≥${SCREEN_CONFIG.auto.filterThreshold.bull}, kondisi favorable untuk breakout.\x1b[0m`)
 }
 console.log(dline)
 
