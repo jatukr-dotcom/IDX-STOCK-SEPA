@@ -1223,6 +1223,31 @@ Screener menggunakan data shareholder bulanan dari KSEI untuk menghitung **true 
 
 ## Changelog
 
+### 2026-04-06 — Phase 10: Bid/Offer Manipulation Resistance
+
+Bid/Offer Ratio sebelumnya bisa memberi sinyal palsu pada saham illikuid/shadow-owned karena:
+- Spoofing: order beli besar yang tidak niat eksekusi menggembungkan bid volume di EOD snapshot
+- Saham free float <5% (seperti FAPA): satu order 5 ribu lot sudah geser rasio dari 1.0 ke 5.0
+- Sinyal "foreign accumulating" dari shell BVI dihitung sebagai institutional smart money
+
+**Perubahan**:
+- 5-day consistency check: 3d aggregate tinggi tapi hanya 1 dari 5 hari tinggi → score −5
+- Float-aware discount: float <5% →×0.2, <10% →×0.5, <15% →×0.75 pada final score
+- Shell penalty: tax-haven shell holders ≥2 →×0.5 tambahan
+- bullishCount increment hanya jika final score ≥7 (bukan raw ratio ≥1.5)
+- Reliability label di detail output: HIGH (hijau) / MEDIUM (kuning) / LOW / SUSPECT (merah)
+- SUSPECT + LOW → warning banner di detail
+
+**Contoh impact FAPA** (float 0.97%, 4 BVI shells):
+- Raw bid/offer ratio tetap 4.60 (tidak diubah — data real)
+- Score: 10 →×0.2 (float) →×0.5 (shell) = **1 pt** (dari sebelumnya 10 pts)
+- Label: **[SUSPECT]** dengan warning spoofing risk
+- Tidak count sebagai bullish signal → SMT score drop ~9+ pts
+
+Saham IDX30/LQ45 dengan float >40% tidak terpengaruh (reliability HIGH, behavior identik).
+
+---
+
 ### 2026-04-06 — Phase 9: Detail Mode Bypass Filters
 
 `--detail KODE` sekarang dapat menampilkan profil lengkap untuk **semua stage** (1, 2, 3, 4) dan **saham gorengan**. Sebelumnya hanya saham yang lolos filter screening yang bisa dilihat detail-nya.

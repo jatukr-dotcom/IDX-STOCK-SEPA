@@ -249,6 +249,8 @@ type ScreenRow = {
   avgTradeSize5d: number | null
   avgTradeSizeChange: number | null
   bidOfferRatio: number | null
+  bidOfferConsistency5d: number | null
+  bidOfferReliability: 'high' | 'medium' | 'low' | 'suspect'
   // Broker history fields
   accumulatingBrokers: string[]
   brokerConcentrationPct: number | null
@@ -1313,7 +1315,8 @@ for (const [code, entries] of ohlcByCode) {
     if (ret3mPct > 300) gorenganScore += 25
     else if (ret3mPct > 200) gorenganScore += 15
   }
-  // Phase 8: Shareholder structural risk
+  // Phase 8: Shareholder structural risk — hoisted here so gorengan penalties can use metrics
+  // (trueRetailFloatPct / taxHavenShellCount also reused in Phase 10 bid/offer discount below)
   const holders = shareholdersByCode.get(code) ?? []
   let trueRetailFloatPct: number | null = null
   let top1Pct: number | null = null
@@ -1816,9 +1819,54 @@ for (const [code, entries] of ohlcByCode) {
     ? Math.round((smtTotalBid3d / smtTotalOffer3d) * 1000) / 1000
     : null
   if (smtBidOfferRatio != null) {
-    if (smtBidOfferRatio >= 1.5) { smtBidOfferScore = 10; smtBullishCount++; smtReasons.push(`Bid/Offer ${smtBidOfferRatio.toFixed(2)} (tekanan beli 3h)`) }
+    if (smtBidOfferRatio >= 1.5) { smtBidOfferScore = 10; smtReasons.push(`Bid/Offer ${smtBidOfferRatio.toFixed(2)} (tekanan beli 3h)`) }
     else if (smtBidOfferRatio >= 1.2) smtBidOfferScore = 6
     else if (smtBidOfferRatio >= 1.0) smtBidOfferScore = 3
+  }
+
+  // 5b. Bid/Offer Consistency — anti-spoofing: check how many of last 5 days had ratio >= 1.2
+  let smtBidOfferConsistency5d: number | null = null
+  if (entries.length >= 5) {
+    let consistentDays = 0
+    for (let d = 1; d <= 5; d++) {
+      const e = entries[entries.length - d]
+      if (!e || e.offerVolume <= 0 || e.bidVolume <= 0) continue
+      const dayRatio = e.bidVolume / e.offerVolume
+      if (dayRatio >= 1.2) consistentDays++
+    }
+    smtBidOfferConsistency5d = consistentDays
+    // Single-spike suspicious: 3d aggregate high but only 1 of 5 days actually high
+    if (smtBidOfferScore >= 6 && consistentDays <= 1) {
+      smtBidOfferScore = Math.max(0, smtBidOfferScore - 5)
+    }
+  }
+
+  // 5c. Float-aware discount — low float = manipulable bid/offer
+  if (smtBidOfferScore > 0) {
+    const effectiveFloat = trueRetailFloatPct
+      ?? (floatData && floatData.listed > 0 ? (floatData.tradable / floatData.listed) * 100 : null)
+    if (effectiveFloat != null) {
+      if (effectiveFloat < 5) smtBidOfferScore = Math.round(smtBidOfferScore * 0.2)
+      else if (effectiveFloat < 10) smtBidOfferScore = Math.round(smtBidOfferScore * 0.5)
+      else if (effectiveFloat < 15) smtBidOfferScore = Math.round(smtBidOfferScore * 0.75)
+    }
+    // Shell company penalty
+    if (taxHavenShellCount >= 2) {
+      smtBidOfferScore = Math.round(smtBidOfferScore * 0.5)
+    }
+  }
+
+  // Count bullish only after discounts applied — threshold 7 ensures quality
+  if (smtBidOfferScore >= 7) smtBullishCount++
+
+  // Bid/offer reliability classification
+  let bidOfferReliability: ScreenRow['bidOfferReliability'] = 'high'
+  {
+    const effectiveFloat2 = trueRetailFloatPct
+      ?? (floatData && floatData.listed > 0 ? (floatData.tradable / floatData.listed) * 100 : null)
+    if (effectiveFloat2 != null && effectiveFloat2 < 5) bidOfferReliability = 'suspect'
+    else if (taxHavenShellCount >= 2 || (effectiveFloat2 != null && effectiveFloat2 < 10)) bidOfferReliability = 'low'
+    else if ((smtBidOfferConsistency5d != null && smtBidOfferConsistency5d <= 1) || (effectiveFloat2 != null && effectiveFloat2 < 15)) bidOfferReliability = 'medium'
   }
 
   // 6. Cross-Signal Alignment (15 pts)
@@ -1926,6 +1974,8 @@ for (const [code, entries] of ohlcByCode) {
     avgTradeSize5d: smtAvgTradeSize5d,
     avgTradeSizeChange: smtTradeSizeChange,
     bidOfferRatio: smtBidOfferRatio,
+    bidOfferConsistency5d: smtBidOfferConsistency5d,
+    bidOfferReliability,
     accumulatingBrokers: smtAccumBrokers,
     brokerConcentrationPct: brokerConcentrationMapScreen.get(code) ?? null,
     autoScore,
@@ -2208,7 +2258,15 @@ function printStockDetail(row: ScreenRow) {
   const smtTscStr = row.avgTradeSizeChange != null ? `${row.avgTradeSizeChange >= 0 ? '+' : ''}${row.avgTradeSizeChange.toFixed(1)}% vs 20d${Math.abs(row.avgTradeSizeChange) >= 20 ? ' (institusional)' : ''}` : '—'
   console.log(`  Avg Trade Size  : ${smtTscStr}`)
   const smtBoStr = row.bidOfferRatio != null ? `${row.bidOfferRatio.toFixed(2)}${row.bidOfferRatio >= 1.5 ? ' (buyer dominated)' : row.bidOfferRatio >= 1.0 ? ' (balanced)' : ' (seller dominated)'}` : '—'
-  console.log(`  Bid/Offer Ratio : ${smtBoStr}`)
+  const relColor = row.bidOfferReliability === 'high' ? '\x1b[32m' : row.bidOfferReliability === 'medium' ? '\x1b[33m' : '\x1b[31m'
+  const relLabel = row.bidOfferReliability.toUpperCase()
+  const consistency = row.bidOfferConsistency5d != null ? ` | konsistensi ${row.bidOfferConsistency5d}/5h` : ''
+  console.log(`  Bid/Offer Ratio : ${smtBoStr} ${relColor}[${relLabel}]\x1b[0m${consistency}`)
+  if (row.bidOfferReliability === 'suspect') {
+    console.log(`  \x1b[31m  ⚠ Bid/Offer tidak reliable: float tipis, mudah dimanipulasi (spoofing risk)\x1b[0m`)
+  } else if (row.bidOfferReliability === 'low') {
+    console.log(`  \x1b[33m  ⚠ Bid/Offer reliability rendah: low float / shell holders terdeteksi\x1b[0m`)
+  }
   console.log(`  Signal          : ${smtSignalLabel}`)
   if (row.smtReasons.length > 0) console.log(`  Reasons         : ${row.smtReasons.join(', ')}`)
   // Broker Activity section
