@@ -1223,6 +1223,25 @@ Screener menggunakan data shareholder bulanan dari KSEI untuk menghitung **true 
 
 ## Changelog
 
+### 2026-04-06 — Phase 9: Detail Mode Bypass Filters
+
+`--detail KODE` sekarang dapat menampilkan profil lengkap untuk **semua stage** (1, 2, 3, 4) dan **saham gorengan**. Sebelumnya hanya saham yang lolos filter screening yang bisa dilihat detail-nya.
+
+**Perubahan**:
+- Stage 3/4 filter + gorengan filter di-bypass jika `code === detailCode`
+- Warning banner tampil di detail output untuk Stage 1/3/4 dan gorengan
+- Entry Plan untuk Stage ≠ 2 ditampilkan dengan warning "INFO ONLY"
+
+**Kegunaan**:
+- Riset shareholder structure untuk saham apapun (pair dengan Phase 8)
+- Pre-watch list analysis (Stage 1 emerging)
+- Post-mortem saham yang sudah topping/declining
+- Inspeksi gorengan untuk memahami red flag
+
+Summary table (`--mode auto --top N`) tetap menerapkan filter lengkap — bypass hanya berlaku untuk target `--detail` spesifik.
+
+---
+
 ### 2026-04-05 — Phase 8: Shareholder Quality Filter
 
 Tambah deteksi structural ownership risk dari data KSEI bulanan:

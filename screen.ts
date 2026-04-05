@@ -1342,11 +1342,11 @@ for (const [code, entries] of ohlcByCode) {
       gorenganScore += SCREEN_CONFIG.shareholder.shellCount.pts
     }
   }
-  if (gorenganScore >= SCREEN_CONFIG.gorengan.filterMax) continue
+  if (gorenganScore >= SCREEN_CONFIG.gorengan.filterMax && code !== detailCode) continue
 
   // Stage
   const stage = determineStageConfirmed(closes)
-  if (stage === 3 || stage === 4) continue
+  if ((stage === 3 || stage === 4) && code !== detailCode) continue
 
   // Trend template
   const ma50 = calcMA(closes, 50)
@@ -2059,6 +2059,18 @@ function printStockDetail(row: ScreenRow) {
   console.log(`  Sektor: ${row.sector ?? '-'} | Harga: ${row.price.toFixed(0)} | Data: ${dateFmt}`)
   console.log(dline)
 
+  // Phase 9: Warning banner untuk non-buy-candidate stages
+  if (row.stage === 3) {
+    console.log(`  \x1b[33m⚠ STAGE 3 (Topping/Distribution) — Bukan untuk entry beli. Analisis profil/exit.\x1b[0m`)
+  } else if (row.stage === 4) {
+    console.log(`  \x1b[31m⚠ STAGE 4 (Declining) — Avoid. Downtrend aktif, short candidate saja.\x1b[0m`)
+  } else if (row.stage === 1) {
+    console.log(`  \x1b[36mℹ STAGE 1 (Basing) — Pre-breakout, belum Stage 2. Watchlist saja.\x1b[0m`)
+  }
+  if (row.gorenganScore >= SCREEN_CONFIG.gorengan.filterMax) {
+    console.log(`  \x1b[31m⚠ GORENGAN (score ${row.gorenganScore}) — Risiko manipulasi tinggi. Lihat shareholder structure.\x1b[0m`)
+  }
+
   const tick = (v: boolean) => v ? '\x1b[32m✓\x1b[0m' : '\x1b[31m✗\x1b[0m'
   console.log(`  ${tick(row.stage === 2)} Stage: ${row.stage === 2 ? '\x1b[32mStage 2 (Advancing)\x1b[0m' : `Stage ${row.stage}`}`)
   console.log(`  ${tick(row.trendCriteriaCount >= 6)} Trend Template: ${row.trendCriteriaCount}/8 kriteria`)
@@ -2102,7 +2114,12 @@ function printStockDetail(row: ScreenRow) {
     const epCfg = SCREEN_CONFIG.entryPlan
     const portfolioForCalc = portfolioSize > 0 ? portfolioSize : epCfg.defaultPortfolio
     const riskPctForCalc = portfolioSize > 0 ? riskPct : epCfg.defaultRiskPct
-    console.log(`  ═══ Entry Plan ═══`)
+    if (row.stage !== 2) {
+      console.log(`  \x1b[33m═══ Entry Plan (INFO ONLY — Stage ${row.stage}) ═══\x1b[0m`)
+      console.log(`  \x1b[33m⚠ Setup terdeteksi tapi bukan Stage 2. Jangan entry.\x1b[0m`)
+    } else {
+      console.log(`  ═══ Entry Plan ═══`)
+    }
 
     if (row.entryType === 'breakout' && row.pivotPoint != null) {
       const pivot = row.pivotPoint
@@ -2235,7 +2252,7 @@ if (detailCode) {
   if (!row) {
     const existsInDb = ohlcByCode.has(detailCode)
     if (existsInDb) {
-      console.log(`\nSaham ${detailCode} ditemukan di database tapi tidak lolos filter screening (gorengan / Stage 3-4).`)
+      console.log(`\nSaham ${detailCode} ditemukan di database tapi tidak dapat diproses (history <50 hari / tidak memenuhi kriteria minimum).`)
     } else {
       console.log(`\nSaham ${detailCode} tidak ditemukan di database.`)
     }
