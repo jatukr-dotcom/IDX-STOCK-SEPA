@@ -143,7 +143,7 @@ const SCREEN_CONFIG = {
     mjpBullishBonus: 2, mjpBearishPenalty: -2,
     cvBonus3: 5, cvBonus2: 2, cvForeignThreshold: 5,
     gorenganPenalty45: -10, gorenganPenalty30: -5,
-    sellPenalty: { climax: 0.5, stop: -12, ma50: -6, obvDiv: -8, supportBreak: -10 },
+    sellPenalty: { stop: 12, ma50: 6, obvDiv: 8, supportBreak: 10 },
     fundFloor: { min: 20, rampEnd: 35, minMult: 0.5 },
     parabolic: { extreme: { ratio: 5.0, mult: 0.2 }, high: { ratio: 3.0, mult: 0.4 }, mid: { ratio: 2.5, mult: 0.7 } },
     filterThreshold: 30,
@@ -566,7 +566,7 @@ function detectFVG(
 
   // Check if current price is inside any bullish FVG (bounce zone)
   const priceinFVG = unfilledBullish.some((z) =>
-    currentPrice >= z.bottom && currentPrice <= z.top * 1.02
+    currentPrice >= z.bottom && currentPrice <= z.top
   )
 
   return {
@@ -974,6 +974,27 @@ let marketFollowThrough = false
   }
 }
 
+// Phase 2C: Market Regime Detection — bear/neutral/bull based on IHSG MA200 slope + drawdown
+let marketRegime: 'bull' | 'neutral' | 'bear' = 'neutral'
+let ihsgDrawdownPct: number | null = null
+{
+  const ihsgVals = Array.from(ihsgByDate.entries()).sort((a, b) => a[0] - b[0]).map((e) => e[1])
+  if (ihsgVals.length >= 220) {
+    const ma200 = ihsgVals.slice(-200).reduce((a, b) => a + b, 0) / 200
+    const ma200Early = ihsgVals.slice(-220, -20).reduce((a, b) => a + b, 0) / 200
+    const ma200SlopePct = ma200Early > 0 ? (ma200 - ma200Early) / ma200Early * 100 : 0
+    const current = ihsgVals[ihsgVals.length - 1]!
+    const sliceLen = Math.min(252, ihsgVals.length)
+    const high252 = Math.max(...ihsgVals.slice(-sliceLen))
+    ihsgDrawdownPct = high252 > 0 ? ((current - high252) / high252) * 100 : null
+    if (ma200SlopePct < -2 || (ihsgDrawdownPct != null && ihsgDrawdownPct < -15)) {
+      marketRegime = 'bear'
+    } else if (ma200SlopePct > 2 && current > ma200) {
+      marketRegime = 'bull'
+    }
+  }
+}
+
 // Query screener
 const screenerRows = await query<{
   code: string; name: string | null; sector: string | null; market_capital: number | null
@@ -1238,13 +1259,7 @@ for (const [code, entries] of ohlcByCode) {
   const avgVol20 = volumes.slice(-20).reduce((a, b) => a + b, 0) / 20
   if (volumes[volumes.length - 1]! > avgVol20 * 10) gorenganScore += 10
   if ((historyByCode.get(code) ?? []).length === 0) gorenganScore += 5
-  // Layer 1: Parabolic extension penalty
-  if (extensionRatio != null) {
-    if (extensionRatio > 5.0) gorenganScore += 30
-    else if (extensionRatio > 3.0) gorenganScore += 20
-    else if (extensionRatio > 2.5) gorenganScore += 10
-  }
-  // Layer 1: 3-month climax run penalty
+  // Layer 1: 3-month climax run penalty (parabolic extension handled separately via autoScore multiplier)
   if (ret3mPct != null) {
     if (ret3mPct > 300) gorenganScore += 25
     else if (ret3mPct > 200) gorenganScore += 15
@@ -1468,7 +1483,8 @@ for (const [code, entries] of ohlcByCode) {
       const todayGain = pct252[pct252.length - 1] ?? 0
       const last20Vols = volumes.slice(-20)
       const maxVol20 = Math.max(...last20Vols)
-      if (last5PctGains.includes(maxGainDay) && todayGain === maxGainDay && todayVol >= maxVol20) {
+      const _EPS = 1e-9
+      if (last5PctGains.some((g) => Math.abs(g - maxGainDay) < _EPS) && Math.abs(todayGain - maxGainDay) < _EPS && todayVol >= maxVol20) {
         sellSignal = 'Climax Top'
       }
     }
@@ -1493,7 +1509,8 @@ for (const [code, entries] of ohlcByCode) {
       sellSignal = 'Breakdown MA50'
     }
     // 5. OBV Divergence: price makes new high but OBV makes lower high (bearish)
-    if (sellSignal == null && entries.length >= 40) {
+    //    Requires 60d lookback (30d recent vs 30d prior) + confirmed on 2 of last 3 days
+    if (sellSignal == null && entries.length >= 60) {
       let divObv = 0
       const divOBV: number[] = [0]
       for (let di = 1; di < entries.length; di++) {
@@ -1501,18 +1518,23 @@ for (const [code, entries] of ohlcByCode) {
         else if (entries[di]!.close < entries[di - 1]!.close) divObv -= entries[di]!.volume
         divOBV.push(divObv)
       }
-      const recentCloseHigh = Math.max(...closes.slice(-20))
-      const priorCloseHigh = Math.max(...closes.slice(-40, -20))
-      const recentOBVHigh = Math.max(...divOBV.slice(-20))
-      const priorOBVHigh = Math.max(...divOBV.slice(-40, -20))
-      if (recentCloseHigh > priorCloseHigh && recentOBVHigh < priorOBVHigh) {
-        sellSignal = 'OBV Divergence'
+      let divergenceDays = 0
+      for (let look = 0; look < 3; look++) {
+        const endIdx = entries.length - look
+        const recentCloseHigh = Math.max(...closes.slice(endIdx - 30, endIdx))
+        const priorCloseHigh = Math.max(...closes.slice(endIdx - 60, endIdx - 30))
+        const recentOBVHigh = Math.max(...divOBV.slice(endIdx - 30, endIdx))
+        const priorOBVHigh = Math.max(...divOBV.slice(endIdx - 60, endIdx - 30))
+        if (recentCloseHigh > priorCloseHigh && recentOBVHigh < priorOBVHigh) divergenceDays++
       }
+      if (divergenceDays >= 2) sellSignal = 'OBV Divergence'
     }
-    // 6. Support Breakdown: price below recent base low (25d, excl last 5d)
-    if (sellSignal == null && entries.length >= 25) {
+    // 6. Support Breakdown: price just broke below recent base low (25d, excl last 5d)
+    //    Requires yesterday still above support to avoid retroactive triggers
+    if (sellSignal == null && entries.length >= 30) {
       const baseLow = Math.min(...lows.slice(-25, -5))
-      if (price < baseLow) {
+      const yesterdayClose = entries[entries.length - 2]?.close ?? price
+      if (price < baseLow && yesterdayClose >= baseLow) {
         sellSignal = 'Support Breakdown'
       }
     }
@@ -1559,9 +1581,10 @@ for (const [code, entries] of ohlcByCode) {
   } else if (pullbackSignal && ema21 != null) {
     entryType = 'pullback'
     buyZoneHigh = ema21 * 1.02
-    const stopFromMa50 = ma50 ?? ema21 * (1 - epCfg.stopLossPct)
-    const stopFromPct = ema21 * (1 - epCfg.stopLossPct)
-    entryStopLoss = Math.max(stopFromMa50, stopFromPct)
+    const pctStop = ema21 * (1 - epCfg.stopLossPct)
+    // MA50 valid as stop only if within 10% of EMA21 (not too far below)
+    const ma50Valid = ma50 != null && ma50 >= ema21 * 0.90 && ma50 <= ema21 * 1.05
+    entryStopLoss = ma50Valid ? Math.max(ma50, pctStop) : pctStop
     riskPerShareCalc = ema21 - entryStopLoss
     entryRiskPct = ema21 > 0 ? (riskPerShareCalc / ema21) * 100 : null
   }
@@ -1788,10 +1811,10 @@ for (const [code, entries] of ohlcByCode) {
   else if (gorenganScore >= 30) autoScore -= 5
   // Sell signal — severity-based penalty (not blanket ×0.5)
   if (sellSignal === 'Climax Top' || sellSignal === 'Upper BB 3d+') autoScore *= 0.5
-  else if (sellSignal === '7% Stop Breach') autoScore -= 12
-  else if (sellSignal === 'Breakdown MA50') autoScore += SCREEN_CONFIG.auto.sellPenalty.ma50
-  else if (sellSignal === 'OBV Divergence') autoScore += SCREEN_CONFIG.auto.sellPenalty.obvDiv
-  else if (sellSignal === 'Support Breakdown') autoScore += SCREEN_CONFIG.auto.sellPenalty.supportBreak
+  else if (sellSignal === '7% Stop Breach') autoScore -= SCREEN_CONFIG.auto.sellPenalty.stop
+  else if (sellSignal === 'Breakdown MA50') autoScore -= SCREEN_CONFIG.auto.sellPenalty.ma50
+  else if (sellSignal === 'OBV Divergence') autoScore -= SCREEN_CONFIG.auto.sellPenalty.obvDiv
+  else if (sellSignal === 'Support Breakdown') autoScore -= SCREEN_CONFIG.auto.sellPenalty.supportBreak
   // Layer 2: Fundamental floor — gradual linear ramp (no cliff edge)
   // fundScore 0→20: multiplier 0.5, fundScore 20→35: ramp 0.5→1.0, fundScore ≥35: no penalty
   if (finalFundScore < 20) autoScore *= 0.5
@@ -2131,7 +2154,13 @@ console.log(`\n${dline}`)
 console.log(`  IDX SCREENER — Terminal Report`)
 console.log(`  Data: ${dateFmt} | Mode: ${argMode.toUpperCase()} | Top ${topN} dari ${filteredResults.length} kandidat (${results.length} lolos filter)`)
 if (sectorFilter) console.log(`  Sektor: ${sectorFilter}`)
-console.log(`  Pasar: ${marketFollowThrough ? '\x1b[32mFollow-Through Day AKTIF\x1b[0m' : 'Normal'}`)
+const regimeLabel = marketRegime === 'bear'
+  ? `\x1b[31mBEAR\x1b[0m (drawdown ${ihsgDrawdownPct != null ? ihsgDrawdownPct.toFixed(1) + '%' : '?'})`
+  : marketRegime === 'bull' ? '\x1b[32mBULL\x1b[0m' : 'Normal'
+console.log(`  Pasar: ${marketFollowThrough ? '\x1b[32mFollow-Through Day AKTIF\x1b[0m' : regimeLabel}`)
+if (marketRegime === 'bear') {
+  console.log(`  \x1b[31m[PERINGATAN] IHSG dalam fase BEAR — sinyal beli kurang reliable, kurangi eksposur.\x1b[0m`)
+}
 console.log(dline)
 
 // ─── SMT mode table ───────────────────────────────────────────────────────────

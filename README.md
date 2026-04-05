@@ -1197,6 +1197,31 @@ deno task ui:dev
 
 ## Changelog
 
+### 2026-04-05 — Phase 6: Audit Hardening
+
+Perbaikan 8 isu yang ditemukan dari audit mendalam post Phase 1-5:
+
+| # | Fix | Dampak |
+|---|-----|--------|
+| 6A | FVG boundary: hapus buffer `×1.02` arbitrer | Price harus strictly dalam zone `[bottom, top]` |
+| 6B | Climax Top: `===` float → epsilon `1e-9` | Hindari false negative akibat floating-point rounding |
+| 6C | OBV Divergence: 40d → 60d lookback + konfirmasi 2-of-3 hari | Kurangi false positive dari noise harian |
+| 6D | Parabolic extension: hapus dari gorengan score | Extension = penalty kontinyu (autoScore ×), bukan exclusion keras |
+| 6E | **Bear Market Regime Detection** | IHSG MA200 slope + drawdown →  label BEAR/BULL di header + warning merah |
+| 6F | Support Breakdown: cek `yesterdayClose >= baseLow` | Hindari trigger retroaktif untuk base panjang |
+| 6G | Sell penalty config: nilai positif + `−=` | Kode lebih mudah dibaca, numeric output identik |
+| 6H | Entry Plan MA50 stop: validasi ≥90% EMA21 | MA50 yang terlalu jauh di bawah EMA21 tidak dipakai sebagai stop |
+
+**Bear Market Regime Detection:**
+```
+Pasar: BEAR (drawdown -18.3%) → [PERINGATAN] IHSG dalam fase BEAR
+Pasar: Follow-Through Day AKTIF  → (jika FTD aktif, label normal digantikan)
+Pasar: Normal / BULL             → kondisi non-bear
+```
+Trigger bear: MA200 slope < -2% ATAU drawdown dari 252d high < -15%.
+
+---
+
 ### 2026-04-04 — Robustness Overhaul + Entry Plan Feature
 
 Audit menyeluruh `screen.ts` menemukan kelemahan struktural. Semua diperbaiki dalam 5 fase:
