@@ -1195,7 +1195,45 @@ deno task ui:dev
 
 ---
 
+### Data Shareholder KSEI (Phase 8)
+
+Screener menggunakan data shareholder bulanan dari KSEI untuk menghitung **true retail float** dan mendeteksi **shell company risk**.
+
+**Cara update data** (monthly):
+1. Download PDF dari website KSEI: `composition_of_stocks_owned_by_investors_DD-MMM-YYYY.pdf`
+2. Parse ke TSV: `python scripts/parse_ksei_shareholders.py input.pdf data/shareholders.tsv`
+3. Import ke DB: `deno run -A src/server/IngestShareholders.ts data/shareholders.tsv`
+
+**Metrics yang dihitung**:
+- **True Retail Float** = 100% - sum(top 10 holders %)
+- **Top-1 Concentration** = % holder terbesar
+- **Tax-Haven Shell Count** = jumlah holder tipe CP+F yang berdomisili di BVI/Cayman/Mauritius/dll
+
+**Gorengan penalty tambahan**:
+| Kondisi | Penalty |
+|---------|---------|
+| True retail float < 5% | +20 |
+| True retail float 5-10% | +10 |
+| Top-1 holder > 75% | +10 |
+| Tax-haven shell count >= 3 | +15 |
+
+**Contoh FAPA**: True retail float 0,97% + top-1 79,31% + 4 shell BVI = **gorengan +45** total. AutoScore turun dari ~69 ke ~54 (penalti -10 karena gorengan>=45).
+
+---
+
 ## Changelog
+
+### 2026-04-05 — Phase 8: Shareholder Quality Filter
+
+Tambah deteksi structural ownership risk dari data KSEI bulanan:
+- Parse PDF KSEI ke TSV ke SQLite (Python + Deno pipeline)
+- Hitung true retail float, top-1 concentration, tax-haven shell count
+- Gorengan penalty baru: float <5% (+20), float <10% (+10), top-1 >75% (+10), >=3 shell entities (+15)
+- Detail output tampilkan top 8 holders dengan flag [F] foreign & [SHELL] untuk tax-haven BVI/Cayman entities
+
+Temuan: FAPA punya true retail float hanya 0,97% (79,31% Prinsep + 6,98% Fangiono Perkasa Sejati + 3,98% treasury + 4 shell BVI @ ~2%). Screener sebelumnya rank FAPA #1 dengan autoScore ~69 tapi tidak bisa deteksi risiko struktural ini. Setelah Phase 8: gorenganScore naik ke 45, autoScore turun ke 54 (penalti -10 karena gorengan>=45), FAPA tetap muncul di list tapi dengan warning Gorengan yang jelas.
+
+---
 
 ### 2026-04-05 — Phase 7: Stage Gating + Regime-Aware Scoring
 

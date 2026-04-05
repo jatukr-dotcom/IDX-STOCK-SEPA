@@ -162,6 +162,17 @@ const SCREEN_CONFIG = {
     climax3m: { high: 300, highPts: 25, mid: 200, midPts: 15 },
     filterMax: 60,
   },
+  // Shareholder quality (Phase 8)
+  shareholder: {
+    // Tax-haven / nominee-friendly jurisdictions
+    taxHavens: ['VIRGIN ISLANDS, BRITISH', 'CAYMAN ISLANDS', 'MAURITIUS', 'SEYCHELLES',
+                'BAHAMAS', 'BERMUDA', 'MARSHALL ISLANDS', 'PANAMA', 'JERSEY', 'GUERNSEY'],
+    // Penalty thresholds
+    ultraConcentration: { top1: 75, pts: 10 },        // 1 holder > 75% = extreme concentration
+    trueFloatLow: { threshold: 5, pts: 20 },          // retail float < 5%
+    trueFloatMid: { threshold: 10, pts: 10 },         // retail float 5-10%
+    shellCount: { min: 3, pts: 15 },                  // >=3 shell entities in top holders
+  },
   // MJP
   mjp: { largeCap: 0.01, smallCap: 0.02 },
   // Date gap detection
@@ -260,6 +271,11 @@ type ScreenRow = {
   entryStopLoss: number | null
   riskPerShare: number | null
   riskPct: number | null
+  // Phase 8: Shareholder quality fields
+  trueRetailFloatPct: number | null
+  top1HolderPct: number | null
+  taxHavenShellCount: number
+  topHolders: Array<{ investor: string; type: string | null; lf: string | null; domicile: string | null; pct: number }>
 }
 
 type WatchlistEntry = { code: string; name: string | null; score: number; rsRank: number; stage: StageNumber }
@@ -995,6 +1011,39 @@ let ihsgDrawdownPct: number | null = null
   }
 }
 
+// Phase 8: Load shareholder data (latest snapshot per code)
+type ShareholderRow = {
+  investor: string; type: string | null; lf: string | null; nationality: string | null
+  domicile: string | null; shares: number; pct: number
+}
+const shareholdersByCode = new Map<string, ShareholderRow[]>()
+try {
+  const shRows = await query<{
+    code: string; investor_name: string; investor_type: string | null
+    local_foreign: string | null; nationality: string | null; domicile: string | null
+    total_shares: number; percentage: number
+  }>(`
+    WITH latest AS (SELECT code, MAX(snapshot_date) AS d FROM stock_shareholder GROUP BY code)
+    SELECT s.code, s.investor_name, s.investor_type, s.local_foreign, s.nationality,
+           s.domicile, s.total_shares, s.percentage
+    FROM stock_shareholder s JOIN latest l ON s.code = l.code AND s.snapshot_date = l.d
+    ORDER BY s.code, s.percentage DESC
+  `)
+  for (const r of shRows) {
+    const arr = shareholdersByCode.get(r.code) ?? []
+    arr.push({
+      investor: r.investor_name, type: r.investor_type, lf: r.local_foreign,
+      nationality: r.nationality, domicile: r.domicile,
+      shares: r.total_shares, pct: r.percentage,
+    })
+    shareholdersByCode.set(r.code, arr)
+  }
+  console.log(`[INFO] Loaded shareholder data for ${shareholdersByCode.size} emiten`)
+} catch {
+  // stock_shareholder table not yet created — degrade gracefully
+  console.log('[INFO] Shareholder data not available (run IngestShareholders.ts to enable Phase 8)')
+}
+
 // Query screener
 const screenerRows = await query<{
   code: string; name: string | null; sector: string | null; market_capital: number | null
@@ -1263,6 +1312,35 @@ for (const [code, entries] of ohlcByCode) {
   if (ret3mPct != null) {
     if (ret3mPct > 300) gorenganScore += 25
     else if (ret3mPct > 200) gorenganScore += 15
+  }
+  // Phase 8: Shareholder structural risk
+  const holders = shareholdersByCode.get(code) ?? []
+  let trueRetailFloatPct: number | null = null
+  let top1Pct: number | null = null
+  let taxHavenShellCount = 0
+  if (holders.length > 0) {
+    const top10Sum = holders.slice(0, 10).reduce((s, h) => s + h.pct, 0)
+    trueRetailFloatPct = Math.max(0, 100 - top10Sum)
+    top1Pct = holders[0]?.pct ?? null
+    // Count tax-haven foreign corporates (CP type + F + tax haven domicile)
+    for (const h of holders) {
+      const dom = (h.domicile ?? '').toUpperCase()
+      if (h.type === 'CP' && h.lf === 'F' && SCREEN_CONFIG.shareholder.taxHavens.some((th) => dom.includes(th))) {
+        taxHavenShellCount++
+      }
+    }
+    // Phase 8: Structural shareholder penalties
+    if (trueRetailFloatPct < SCREEN_CONFIG.shareholder.trueFloatLow.threshold) {
+      gorenganScore += SCREEN_CONFIG.shareholder.trueFloatLow.pts
+    } else if (trueRetailFloatPct < SCREEN_CONFIG.shareholder.trueFloatMid.threshold) {
+      gorenganScore += SCREEN_CONFIG.shareholder.trueFloatMid.pts
+    }
+    if (top1Pct != null && top1Pct > SCREEN_CONFIG.shareholder.ultraConcentration.top1) {
+      gorenganScore += SCREEN_CONFIG.shareholder.ultraConcentration.pts
+    }
+    if (taxHavenShellCount >= SCREEN_CONFIG.shareholder.shellCount.min) {
+      gorenganScore += SCREEN_CONFIG.shareholder.shellCount.pts
+    }
   }
   if (gorenganScore >= SCREEN_CONFIG.gorengan.filterMax) continue
 
@@ -1864,7 +1942,11 @@ for (const [code, entries] of ohlcByCode) {
     buyZoneHigh,
     entryStopLoss,
     riskPerShare: riskPerShareCalc,
-    riskPct: entryRiskPct
+    riskPct: entryRiskPct,
+    trueRetailFloatPct, top1HolderPct: top1Pct, taxHavenShellCount,
+    topHolders: holders.slice(0, 10).map((h) => ({
+      investor: h.investor, type: h.type, lf: h.lf, domicile: h.domicile, pct: h.pct,
+    })),
   })
 }
 
@@ -2072,6 +2154,27 @@ function printStockDetail(row: ScreenRow) {
         const lots = Math.floor(riskPerTrade / risk / 100)
         console.log(`  Position Size  : ${lots} lot @ Rp ${fIDR(entry)} (risk ${riskPctForCalc}% of Rp ${fIDR(portfolioForCalc)})`)
       }
+    }
+    console.log(line)
+  }
+  // Phase 8: Shareholder structure
+  if (row.topHolders.length > 0) {
+    console.log('─'.repeat(60))
+    console.log('  \x1b[33m═══ Shareholder Structure ═══\x1b[0m')
+    const floatColor = (row.trueRetailFloatPct ?? 100) < 5 ? '\x1b[31m' : (row.trueRetailFloatPct ?? 100) < 10 ? '\x1b[33m' : '\x1b[32m'
+    console.log(`  True Retail Float: ${floatColor}${row.trueRetailFloatPct?.toFixed(2)}%\x1b[0m (100% - top 10 holders)`)
+    console.log(`  Top-1 Holder     : ${row.top1HolderPct?.toFixed(2)}%`)
+    if (row.taxHavenShellCount >= 2) {
+      console.log(`  \x1b[31m[!] Tax-Haven Shells: ${row.taxHavenShellCount} entitas (BVI/Cayman/dll)\x1b[0m`)
+    }
+    console.log(`  - Top Holders:`)
+    for (const h of row.topHolders.slice(0, 8)) {
+      const flag = h.lf === 'F' ? '\x1b[36m[F]\x1b[0m' : '   '
+      const dom = h.domicile ? ` (${h.domicile.slice(0, 20)})` : ''
+      const shellFlag = h.type === 'CP' && h.lf === 'F' &&
+        SCREEN_CONFIG.shareholder.taxHavens.some((th) => (h.domicile ?? '').toUpperCase().includes(th))
+        ? ' \x1b[31m[SHELL]\x1b[0m' : ''
+      console.log(`    ${flag} ${h.pct.toFixed(2).padStart(5)}%  ${h.investor.slice(0, 42)}${dom}${shellFlag}`)
     }
     console.log(line)
   }
