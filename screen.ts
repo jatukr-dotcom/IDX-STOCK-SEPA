@@ -1435,7 +1435,13 @@ for (const [code, entries] of ohlcByCode) {
       if (i <= 10) continue
       const prev = entries[i - 1]!; const cur = entries[i]!
       const ma10i = closes.slice(i - 9, i + 1).reduce((a, b) => a + b, 0) / 10
-      const maxDV = Math.max(...entries.slice(i - 10, i).filter((e, j, a) => j > 0 && e.close < a[j - 1]!.close).map((e) => e.volume).concat([0]))
+      // Fix Phase 11: compare each entry to its real previous day in full array, not within slice
+      let maxDV = 0
+      for (let k = i - 10; k < i; k++) {
+        if (k > 0 && entries[k]!.close < entries[k - 1]!.close) {
+          if (entries[k]!.volume > maxDV) maxDV = entries[k]!.volume
+        }
+      }
       if (cur.close > prev.close && cur.volume > maxDV && cur.close >= ma10i) { hasPocketPivot = true; break }
     }
   }

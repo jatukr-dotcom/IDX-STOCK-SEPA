@@ -1223,6 +1223,18 @@ Screener menggunakan data shareholder bulanan dari KSEI untuk menghitung **true 
 
 ## Changelog
 
+### 2026-04-08 — Phase 11: Fix Pocket Pivot False Positive
+
+**Bug**: Perhitungan `maxDV` (max down-day volume) dalam Pocket Pivot menggunakan `Array.filter((e, j, a) => j > 0 ...)` dimana `j` adalah indeks dalam **slice**, bukan array penuh. Entry pertama slice (j=0) tidak pernah dievaluasi sebagai down-day, meskipun entry tersebut memang down-day relatif terhadap hari sebelumnya.
+
+**Dampak**: Jika entry volume tinggi jatuh di posisi j=0, maxDV terlalu rendah → Pocket Pivot false positive.
+
+**Contoh**: TOTL 2026-04-08 — 20260317 (vol 6,17jt, turun dari 1000→995) di posisi j=0 → dilewati → maxDV hanya 2,78jt → PP "terdeteksi" padahal vol 2,96jt < 6,17jt.
+
+**Fix**: Ganti slice-based filter → explicit loop yang compare setiap entry terhadap `entries[k-1]` di array penuh.
+
+---
+
 ### 2026-04-06 — Phase 10: Bid/Offer Manipulation Resistance
 
 Bid/Offer Ratio sebelumnya bisa memberi sinyal palsu pada saham illikuid/shadow-owned karena:
