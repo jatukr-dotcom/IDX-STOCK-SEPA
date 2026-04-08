@@ -492,10 +492,13 @@ function detectVCP(
     return { range, avgVol }
   })
 
+  // Phase 12A: require EVERY transition to contract by ≥30% (Minervini: each leg tighter)
+  // Previously: ≥1 contraction allowed W1→W2 to expand while W0→W1 contracted → false positive
   let contractions = 0
   for (let i = 1; i < analyzed.length; i++) {
-    if (analyzed[i]!.range < analyzed[i - 1]!.range * 0.85) contractions++
+    if (analyzed[i]!.range < analyzed[i - 1]!.range * 0.70) contractions++
   }
+  const allContracting = contractions >= analyzed.length - 1
 
   const volumeDrying = analyzed[2]!.avgVol < analyzed[0]!.avgVol * 0.75
 
@@ -506,7 +509,7 @@ function detectVCP(
   const nearHighs = pctFromHigh >= -20
 
   return {
-    isVcp: contractions >= 1 && volumeDrying && nearHighs,
+    isVcp: allContracting && volumeDrying && nearHighs,
     contractions,
     volumeDrying
   }
@@ -1669,8 +1672,9 @@ for (const [code, entries] of ohlcByCode) {
     entryType = 'pullback'
     buyZoneHigh = ema21 * 1.02
     const pctStop = ema21 * (1 - epCfg.stopLossPct)
-    // MA50 valid as stop only if within 10% of EMA21 (not too far below)
-    const ma50Valid = ma50 != null && ma50 >= ema21 * 0.90 && ma50 <= ema21 * 1.05
+    // Phase 12B: MA50 valid as stop only if BELOW entry (EMA21) and not too far below
+    // If MA50 > EMA21, using it as stop would place stop above entry → negative risk bug
+    const ma50Valid = ma50 != null && ma50 >= ema21 * 0.90 && ma50 < ema21
     entryStopLoss = ma50Valid ? Math.max(ma50, pctStop) : pctStop
     riskPerShareCalc = ema21 - entryStopLoss
     entryRiskPct = ema21 > 0 ? (riskPerShareCalc / ema21) * 100 : null

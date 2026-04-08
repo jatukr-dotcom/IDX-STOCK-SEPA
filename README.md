@@ -1223,6 +1223,17 @@ Screener menggunakan data shareholder bulanan dari KSEI untuk menghitung **true 
 
 ## Changelog
 
+### 2026-04-08 — Phase 12: Fix VCP False Positive + Entry Plan Stop Loss Bug
+
+**Fix 12A — VCP false positive**:
+- **Bug**: `detectVCP` hanya butuh `contractions >= 1` dari 2 transisi — artinya W0→W1 kontrak, tapi W1→W2 justru melebar tetap lolos. Contoh: ASGR W1=16.11%, W2=16.56% (melebar 2.8%) → isVcp=True (salah).
+- **Fix**: Ganti ke `allContracting = contractions >= analyzed.length - 1` (semua transisi harus kontrak). Threshold per transisi diperketat dari 15% (×0.85) ke 30% (×0.70), sesuai Minervini tiap leg harus ~30-50% lebih ketat.
+
+**Fix 12B — Entry Plan stop loss di atas entry**:
+- **Bug**: `ma50Valid` check mengizinkan `ma50 <= ema21 * 1.05` — MA50 hingga 5% di atas EMA21. Jika MA50 > EMA21, `Math.max(ma50, pctStop)` = MA50 > entry → stop di atas entry → risk negatif.
+- **Contoh**: ASGR EMA21=1590, MA50=1607 → stop=1607 > entry=1590 → Risk = -17 (bug).
+- **Fix**: Ubah ke `ma50 < ema21` — MA50 hanya valid sebagai stop jika benar-benar di **bawah** entry level.
+
 ### 2026-04-08 — Phase 11: Fix Pocket Pivot False Positive
 
 **Bug**: Perhitungan `maxDV` (max down-day volume) dalam Pocket Pivot menggunakan `Array.filter((e, j, a) => j > 0 ...)` dimana `j` adalah indeks dalam **slice**, bukan array penuh. Entry pertama slice (j=0) tidak pernah dievaluasi sebagai down-day, meskipun entry tersebut memang down-day relatif terhadap hari sebelumnya.
