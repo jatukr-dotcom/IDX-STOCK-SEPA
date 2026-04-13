@@ -204,6 +204,7 @@ type ScreenRow = {
   combinedScore: number
   gorenganScore: number
   epsGrowthPct: number | null
+  epsFullYearGrowthPct: number | null
   roe: number | null
   der: number | null
   trendCriteriaCount: number
@@ -412,7 +413,7 @@ function calcQEps(byKey: Map<string, HistRow>, year: number, quarter: number): n
   return (row.profitAttrOwner - (prev?.profitAttrOwner ?? 0)) / shares
 }
 
-function calcEpsInfo(histRows: HistRow[]): { score: number; latestGrowthPct: number | null; acceleration: boolean; recovery: boolean; consecutiveGrowthQ: number } {
+function calcEpsInfo(histRows: HistRow[]): { score: number; latestGrowthPct: number | null; fullYearGrowthPct: number | null; acceleration: boolean; recovery: boolean; consecutiveGrowthQ: number } {
   const byKey = new Map<string, HistRow>()
   for (const r of histRows) byKey.set(`${r.year}_${r.quarter}`, r)
   let latestYear: number | null = null
@@ -423,7 +424,7 @@ function calcEpsInfo(histRows: HistRow[]): { score: number; latestGrowthPct: num
       if (byKey.get(`${y}_${q}`)?.profitAttrOwner != null) { latestYear = y; latestQ = q; break outer }
     }
   }
-  if (latestYear == null || latestQ == null) return { score: 0, latestGrowthPct: null, acceleration: false, recovery: false, consecutiveGrowthQ: 0 }
+  if (latestYear == null || latestQ == null) return { score: 0, latestGrowthPct: null, fullYearGrowthPct: null, acceleration: false, recovery: false, consecutiveGrowthQ: 0 }
   const curEps = calcQEps(byKey, latestYear, latestQ)
   const pyEps = calcQEps(byKey, latestYear - 1, latestQ)
   let latestGrowthPct: number | null = null
@@ -445,6 +446,19 @@ function calcEpsInfo(histRows: HistRow[]): { score: number; latestGrowthPct: num
     if (ce != null && pe != null && ce > pe) { consecutiveGrowthQ++ } else break
     cq--; if (cq === 0) { cq = 4; cy-- }
   }
+  // Full-year growth: compare Q4 annual EPS (cumulative = full year) vs prior year Q4
+  // Uses the TTM eps field directly from Q4 row — more stable than standalone Q comparison
+  let fullYearGrowthPct: number | null = null
+  let latestFYYear: number | null = null
+  for (const y of [currentYear, currentYear - 1, currentYear - 2]) {
+    const q4 = byKey.get(`${y}_4`)
+    if (q4?.eps != null && q4.eps !== 0) { latestFYYear = y; break }
+  }
+  if (latestFYYear != null) {
+    const curFY = byKey.get(`${latestFYYear}_4`)?.eps ?? null
+    const pyFY = byKey.get(`${latestFYYear - 1}_4`)?.eps ?? null
+    if (curFY != null && pyFY != null && pyFY !== 0) fullYearGrowthPct = ((curFY - pyFY) / Math.abs(pyFY)) * 100
+  }
   let score = 0
   if (latestGrowthPct != null) {
     if (latestGrowthPct >= SCREEN_CONFIG.eps.growthHigh) score += SCREEN_CONFIG.eps.growthHighPts
@@ -454,7 +468,7 @@ function calcEpsInfo(histRows: HistRow[]): { score: number; latestGrowthPct: num
   if (acceleration) score += SCREEN_CONFIG.eps.accelerationPts
   else if (recovery) score += SCREEN_CONFIG.eps.recoveryPts
   if (consecutiveGrowthQ >= SCREEN_CONFIG.eps.consecutiveQMin) score += SCREEN_CONFIG.eps.consecutiveQPts
-  return { score, latestGrowthPct, acceleration, recovery, consecutiveGrowthQ }
+  return { score, latestGrowthPct, fullYearGrowthPct, acceleration, recovery, consecutiveGrowthQ }
 }
 
 // ─── Volume helpers ───────────────────────────────────────────────────────────
@@ -1970,6 +1984,7 @@ for (const [code, entries] of ohlcByCode) {
   results.push({
     code, name: sc?.name ?? null, sector: sc?.sector ?? null, price, stage, rsRank, sepaScore, techScore,
     fundScore: finalFundScore, combinedScore, gorenganScore, epsGrowthPct: epsInfo.latestGrowthPct,
+    epsFullYearGrowthPct: epsInfo.fullYearGrowthPct,
     roe: roe > 0 ? roe : null, der: der < 999 ? der : null, trendCriteriaCount, hasRsLineNewHigh: rsLineNewHigh,
     hasPocketPivot, patternType, baseCount, setupType, volumeSignal, cmf, mfi, obvTrend, foreignNetPct,
     volSurgePct, volCriteriaCount, vcpIsVcp: vcpResult.isVcp, vcpContractions: vcpResult.contractions,
@@ -2135,8 +2150,12 @@ function printStockDetail(row: ScreenRow) {
   console.log(`  ${tick(row.stage === 2)} Stage: ${row.stage === 2 ? '\x1b[32mStage 2 (Advancing)\x1b[0m' : `Stage ${row.stage}`}`)
   console.log(`  ${tick(row.trendCriteriaCount >= 6)} Trend Template: ${row.trendCriteriaCount}/8 kriteria`)
   console.log(`  ${tick(row.rsRank >= 70)} RS Rank: ${row.rsRank} ${row.rsRank >= 70 ? '(≥70 ✓)' : '(< 70)'}`)
-  if (row.epsGrowthPct != null) {
-    console.log(`  ${tick(row.epsGrowthPct >= 25)} EPS Growth: ${row.epsGrowthPct >= 0 ? '+' : ''}${row.epsGrowthPct.toFixed(1)}% YoY`)
+  if (row.epsGrowthPct != null || row.epsFullYearGrowthPct != null) {
+    const qStr = row.epsGrowthPct != null ? `${row.epsGrowthPct >= 0 ? '+' : ''}${row.epsGrowthPct.toFixed(1)}%` : 'N/A'
+    const fyStr = row.epsFullYearGrowthPct != null ? `${row.epsFullYearGrowthPct >= 0 ? '+' : ''}${row.epsFullYearGrowthPct.toFixed(1)}%` : 'N/A'
+    const tickQ = tick((row.epsGrowthPct ?? -999) >= 25)
+    console.log(`  ${tickQ} EPS Growth (Kuartal YoY) : ${qStr}`)
+    console.log(`             EPS Growth (Full Year YoY): ${fyStr}`)
   } else {
     console.log(`  ${tick(false)} EPS Growth: tidak ada data`)
   }
