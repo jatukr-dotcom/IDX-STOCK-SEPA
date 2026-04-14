@@ -249,6 +249,7 @@ type ScreenRow = {
   foreignBuyDays20d: number
   avgTradeSize5d: number | null
   avgTradeSizeChange: number | null
+  instRatio: number | null
   bidOfferRatio: number | null
   bidOfferConsistency5d: number | null
   bidOfferReliability: 'high' | 'medium' | 'low' | 'suspect'
@@ -1861,6 +1862,36 @@ for (const [code, entries] of ohlcByCode) {
     }
   }
 
+  // 4B. Freq/Vol Divergence (8 pts) — deteksi jejak institusi vs retail
+  // Logika: institusi beli = sedikit transaksi tapi volume besar per transaksi
+  //         retail ramai  = banyak transaksi tapi volume kecil per transaksi
+  // Jika volRatio >> freqRatio → avg lot/transaksi membesar → institusional
+  // Jika freqRatio >> volRatio → avg lot/transaksi mengecil → retail driven
+  let smtFreqVolScore = 0
+  let smtInstRatio: number | null = null
+  if (smtHasEnoughData) {
+    const avgVol5d  = entries.slice(-5).reduce((s: number, e: OhlcvEntry) => s + e.volume, 0) / 5
+    const avgVol20d = entries.slice(-20).reduce((s: number, e: OhlcvEntry) => s + e.volume, 0) / 20
+    const avgFreq5d  = entries.slice(-5).reduce((s: number, e: OhlcvEntry) => s + e.frequency, 0) / 5
+    const avgFreq20d = entries.slice(-20).reduce((s: number, e: OhlcvEntry) => s + e.frequency, 0) / 20
+    if (avgVol20d > 0 && avgFreq20d > 0 && avgFreq5d > 0) {
+      const volRatio  = avgVol5d  / avgVol20d
+      const freqRatio = avgFreq5d / avgFreq20d
+      smtInstRatio = Math.round((volRatio / freqRatio) * 100) / 100
+      // ratio > 1: volume tumbuh lebih cepat dari frekuensi = transaksi makin besar = institusi
+      // ratio < 1: frekuensi tumbuh lebih cepat dari volume = transaksi makin kecil = retail
+      if (smtInstRatio >= 2.0) {
+        smtFreqVolScore = 8; smtBullishCount++
+        smtReasons.push(`Vol/Freq ${smtInstRatio.toFixed(1)}× (transaksi besar, institusional)`)
+      } else if (smtInstRatio >= 1.5) {
+        smtFreqVolScore = 5
+      } else if (smtInstRatio >= 1.2) {
+        smtFreqVolScore = 2
+      }
+      // retail-driven surge (ratio < 0.7): skor tetap 0, tidak perlu penalti
+    }
+  }
+
   // 5. Bid/Offer Pressure (max 4 pts, diturunkan dari 10)
   // Data adalah end-of-day snapshot order book (sisa antrian belum tereksekusi),
   // bukan akumulasi sepanjang hari. Hanya 0.1–2% dari total volume diperdagangkan.
@@ -1946,7 +1977,7 @@ for (const [code, entries] of ohlcByCode) {
     smtReasons.push(`${smtAccumBrokers[0]} akumulasi konsisten 20h`)
   }
 
-  const smtBaseScore = smtForeignFlowScore + smtForeignStreakScore + smtSustainedScore + smtVolPriceScore + smtTradeSizeScore + smtBidOfferScore + smtCrossScore + smtBrokerConcScore
+  const smtBaseScore = smtForeignFlowScore + smtForeignStreakScore + smtSustainedScore + smtVolPriceScore + smtTradeSizeScore + smtFreqVolScore + smtBidOfferScore + smtCrossScore + smtBrokerConcScore
   const smtScore = Math.min(100, smtBaseScore + smtBrokerAccumBonus)
   const smtSignal: ScreenRow['smtSignal'] = smtScore >= 75 ? 'strong-buy' : smtScore >= 55 ? 'buy' : smtScore >= 35 ? 'neutral' : smtScore >= 20 ? 'sell' : 'strong-sell'
 
@@ -2022,6 +2053,7 @@ for (const [code, entries] of ohlcByCode) {
     foreignBuyDays20d,
     avgTradeSize5d: smtAvgTradeSize5d,
     avgTradeSizeChange: smtTradeSizeChange,
+    instRatio: smtInstRatio,
     bidOfferRatio: smtBidOfferRatio,
     bidOfferConsistency5d: smtBidOfferConsistency5d,
     bidOfferReliability,
@@ -2310,6 +2342,11 @@ function printStockDetail(row: ScreenRow) {
   console.log(`  Consecutive Buy : ${row.consecutiveForeignBuyDays > 0 ? `${row.consecutiveForeignBuyDays} hari berturut-turut` : '—'} | Akum Window: ${row.foreignBuyDays20d}/20h beli`)
   const smtTscStr = row.avgTradeSizeChange != null ? `${row.avgTradeSizeChange >= 0 ? '+' : ''}${row.avgTradeSizeChange.toFixed(1)}% vs 20d${Math.abs(row.avgTradeSizeChange) >= 20 ? ' (institusional)' : ''}` : '—'
   console.log(`  Avg Trade Size  : ${smtTscStr}`)
+  if (row.instRatio != null) {
+    const irColor = row.instRatio >= 2.0 ? '\x1b[32m' : row.instRatio >= 1.2 ? '\x1b[33m' : row.instRatio < 0.8 ? '\x1b[31m' : ''
+    const irLabel = row.instRatio >= 2.0 ? 'institusional dominan' : row.instRatio >= 1.5 ? 'cenderung institusional' : row.instRatio >= 1.2 ? 'mixed' : row.instRatio < 0.8 ? 'retail driven' : 'normal'
+    console.log(`  Vol/Freq Ratio  : ${irColor}${row.instRatio.toFixed(2)}× \x1b[0m(${irLabel})`)
+  }
   const smtBoStr = row.bidOfferRatio != null ? `${row.bidOfferRatio.toFixed(2)}${row.bidOfferRatio >= 1.5 ? ' (buyer dominated)' : row.bidOfferRatio >= 1.0 ? ' (balanced)' : ' (seller dominated)'}` : '—'
   const relColor = row.bidOfferReliability === 'high' ? '\x1b[32m' : row.bidOfferReliability === 'medium' ? '\x1b[33m' : '\x1b[31m'
   const relLabel = row.bidOfferReliability.toUpperCase()
