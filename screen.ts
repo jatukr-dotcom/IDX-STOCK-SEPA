@@ -894,19 +894,23 @@ function detectPowerFlag(entries: OhlcvEntry[], rsRank: number): FlagResult {
   if (allFlagEntries.length < 1) return empty
   const flagDays = allFlagEntries.length
 
-  // Use last 5 days (or all flag days if fewer) for tightness measurement
+  // Use CLOSE prices (not H/L) for flag tightness — intraday wicks are noise.
+  // A flag is defined by where price CLOSES, not how wide the intraday swings are.
+  // Example: MAIN Apr 1 had open=950, low=860, close=920 (shakeout day) but
+  // subsequent closes stayed at 920-925 — clearly a tight flag in closing prices.
   const recentFlag = allFlagEntries.slice(-Math.min(5, allFlagEntries.length))
-  const flagHigh = Math.max(...recentFlag.map((e) => e.high))
-  const flagLow = Math.min(...recentFlag.map((e) => e.low))
-  const flagWidthPct = flagLow > 0 ? (flagHigh - flagLow) / flagLow * 100 : 999
+  const recentCloses = recentFlag.map((e) => e.close)
+  const closeHigh = Math.max(...recentCloses)
+  const closeLow = Math.min(...recentCloses)
+  const flagWidthPct = closeLow > 0 ? (closeHigh - closeLow) / closeLow * 100 : 999
 
-  // Must be tight recent consolidation
+  // Must be tight recent consolidation in closing prices
   if (flagWidthPct > 8.0) return empty
 
   // Volume contraction: compare today's vol to power move vol
   const flagVolContraction = powerEntry.volume > 0 ? todayVol / powerEntry.volume : 1
-  // Today's price must still be within or near the recent flag body (not broken down)
-  if (todayClose < flagLow * 0.97) return empty
+  // Today's close must not be significantly below recent flag close range (broken down)
+  if (todayClose < closeLow * 0.97) return empty
 
   // ── Scoring ──────────────────────────────────────────────────────
   // 1. Power move strength (0-30)
