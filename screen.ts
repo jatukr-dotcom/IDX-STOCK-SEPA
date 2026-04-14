@@ -3,7 +3,7 @@
  * Jalankan: deno run -A screen.ts [options]
  *
  * Options:
- *   --mode technical|fundamental|combined|momentum|breakout|vcp|pullback|smt|auto|flag
+ *   --mode technical|fundamental|combined|momentum|breakout|vcp|pullback|smt|auto|flag|scalp
  *   --top N                                (default: 15)
  *   --min-score N                          (default: 0)
  *   --sector "nama sektor"                 (default: semua)
@@ -278,6 +278,13 @@ type ScreenRow = {
   top1HolderPct: number | null
   taxHavenShellCount: number
   topHolders: Array<{ investor: string; type: string | null; lf: string | null; domicile: string | null; pct: number }>
+  // Scalp mode fields
+  scalpScore: number
+  scalpGainPct: number | null       // today's close-to-close gain %
+  scalpVolRatio: number | null      // today's vol / avg20d vol
+  scalpCloseStrength: number | null // (close-low)/(high-low) × 100
+  scalpConsecutiveDays: number      // berapa hari berturut burst (incl. today)
+  scalpStop: number | null          // today's low = stop loss besok
   // Flag mode fields
   flagScore: number
   powerMoveGainPct: number | null
@@ -951,6 +958,95 @@ function detectPowerFlag(entries: OhlcvEntry[], rsRank: number): FlagResult {
   return { flagScore, powerMoveGainPct: powerGainPct, powerMoveVolRatio: powerVolRatio, powerMoveDaysAgo: daysAgo, flagWidthPct, flagDays, flagVolContraction }
 }
 
+type ScalpResult = {
+  scalpScore: number
+  scalpGainPct: number | null
+  scalpVolRatio: number | null
+  scalpCloseStrength: number | null
+  scalpConsecutiveDays: number
+  scalpStop: number | null
+}
+
+/**
+ * Detect momentum scalp setup:
+ * Today had a strong burst (gain ≥5%, vol ≥2×, closed in upper range).
+ * Tomorrow, ride the institutional follow-through for intraday momentum.
+ *
+ * Risk rules (displayed, not filtered):
+ *   - CLIMAX if 3+ consecutive burst days → exhaustion likely
+ *   - LOW FLOAT / GORENGAN if avg lot/tx < 300 → manipulable
+ *   - GAP RISK if yesterday also had big gain → tomorrow may open too high
+ */
+function detectScalp(entries: OhlcvEntry[], rsRank: number): ScalpResult {
+  const empty: ScalpResult = {
+    scalpScore: 0, scalpGainPct: null, scalpVolRatio: null,
+    scalpCloseStrength: null, scalpConsecutiveDays: 0, scalpStop: null,
+  }
+  if (entries.length < 5) return empty
+
+  const todayE = entries[entries.length - 1]!
+  const prevE  = entries[entries.length - 2]!
+  if (prevE.close <= 0 || todayE.high <= todayE.low) return empty
+
+  const avg20Vol = entries.slice(-20).reduce((s, e) => s + e.volume, 0) / Math.min(20, entries.length)
+  if (avg20Vol <= 0) return empty
+
+  const gainPct      = (todayE.close - prevE.close) / prevE.close * 100
+  const volRatio     = todayE.volume / avg20Vol
+  const closeStrength = (todayE.close - todayE.low) / (todayE.high - todayE.low) * 100
+
+  // Minimum threshold: meaningful gain + volume surge + didn't close weak
+  if (gainPct < 5.0 || volRatio < 2.0 || closeStrength < 60) return empty
+
+  // Count consecutive burst days (incl. today), looking back up to 5 days
+  let consecutiveDays = 0
+  for (let i = entries.length - 1; i >= Math.max(1, entries.length - 5); i--) {
+    const e = entries[i]!, p = entries[i - 1]!
+    if (p.close <= 0) break
+    const g  = (e.close - p.close) / p.close * 100
+    const vr = avg20Vol > 0 ? e.volume / avg20Vol : 0
+    if (g >= 3.0 && vr >= 1.5) consecutiveDays++
+    else break
+  }
+
+  // ── Scoring ──────────────────────────────────────────────────────────────────
+  // 1. Volume ratio (0-30): bigger surge = stronger institutional conviction
+  const volScore =
+    volRatio >= 8 ? 30 : volRatio >= 5 ? 26 : volRatio >= 3 ? 22 : 18
+
+  // 2. Gain % (0-25): 5-15% sweet spot; huge gains risk climax reversal
+  const gainScore =
+    gainPct >= 5  && gainPct < 10 ? 25 :
+    gainPct >= 10 && gainPct < 18 ? 20 :
+    gainPct >= 18 && gainPct < 25 ? 13 : 6   // >25% = potential climax
+
+  // 3. Close strength (0-25): closed near high = buyer control at end of day
+  const closeScore =
+    closeStrength >= 95 ? 25 :
+    closeStrength >= 85 ? 21 :
+    closeStrength >= 75 ? 15 :
+    closeStrength >= 65 ? 8 : 0
+
+  // 4. RS bonus (0-15): higher relative strength = more momentum context
+  const rsScore =
+    rsRank >= 90 ? 15 : rsRank >= 80 ? 12 : rsRank >= 70 ? 8 :
+    rsRank >= 60 ? 4 : 0
+
+  // 5. Climax penalty: day 3+ = probability of exhaustion rises sharply
+  const climaxPenalty = consecutiveDays >= 3 ? 25 : consecutiveDays >= 2 ? 10 : 0
+
+  const scalpScore = Math.max(0, Math.min(100, volScore + gainScore + closeScore + rsScore - climaxPenalty))
+
+  return {
+    scalpScore,
+    scalpGainPct: gainPct,
+    scalpVolRatio: volRatio,
+    scalpCloseStrength: closeStrength,
+    scalpConsecutiveDays: consecutiveDays,
+    scalpStop: todayE.low,
+  }
+}
+
 function colorScore(score: number): string {
   if (score >= 75) return `\x1b[32m${score.toFixed(1)}\x1b[0m`
   if (score >= 55) return `\x1b[33m${score.toFixed(1)}\x1b[0m`
@@ -1524,7 +1620,8 @@ for (const [code, entries] of ohlcByCode) {
 
   // Stage
   const stage = determineStageConfirmed(closes)
-  if ((stage === 3 || stage === 4) && code !== detailCode) continue
+  // Scalp mode includes Stage 3/4 — big volatile moves happen in any stage
+  if ((stage === 3 || stage === 4) && code !== detailCode && argMode !== 'scalp') continue
 
   // Trend template
   const ma50 = calcMA(closes, 50)
@@ -1724,6 +1821,9 @@ for (const [code, entries] of ohlcByCode) {
   // ─── Phase 2B: Power Move + Flag detection ──────────────────────────────────
   const flagResult = detectPowerFlag(entries, rsRank)
 
+  // ─── Phase 2B2: Scalp momentum burst detection ───────────────────────────────
+  const scalpResult = detectScalp(entries, rsRank)
+
   // ─── Phase 2C: Shakeout detection ──────────────────────────────────────────
   let shakeoutDetected = false
   if (ma50 != null && entries.length >= 5) {
@@ -1882,7 +1982,8 @@ for (const [code, entries] of ohlcByCode) {
   const momentumFactor = Math.round(rsComponent + epsComponent + trendComponent + volComponent + foreignComponent)
 
   const sortScore = argMode === 'technical' ? techScore : argMode === 'fundamental' ? finalFundScore : argMode === 'momentum' ? momentumFactor : combinedScore
-  if (argMode !== 'auto' && argMode !== 'smt' && sortScore < minScore) continue
+  // scalp/flag/auto/smt use their own score computed later — don't pre-filter here
+  if (argMode !== 'auto' && argMode !== 'smt' && argMode !== 'scalp' && argMode !== 'flag' && sortScore < minScore) continue
 
   // Reasons
   const reasons: string[] = []
@@ -2180,6 +2281,12 @@ for (const [code, entries] of ohlcByCode) {
     topHolders: holders.slice(0, 10).map((h) => ({
       investor: h.investor, type: h.type, lf: h.lf, domicile: h.domicile, pct: h.pct,
     })),
+    scalpScore: scalpResult.scalpScore,
+    scalpGainPct: scalpResult.scalpGainPct,
+    scalpVolRatio: scalpResult.scalpVolRatio,
+    scalpCloseStrength: scalpResult.scalpCloseStrength,
+    scalpConsecutiveDays: scalpResult.scalpConsecutiveDays,
+    scalpStop: scalpResult.scalpStop,
     flagScore: flagResult.flagScore,
     powerMoveGainPct: flagResult.powerMoveGainPct,
     powerMoveVolRatio: flagResult.powerMoveVolRatio,
@@ -2209,6 +2316,11 @@ if (argMode === 'breakout') {
   // Minimum flagScore configurable via --min-score (default 40)
   const flagMin = Math.max(40, minScore)
   filteredResults = results.filter((r) => r.flagScore >= flagMin && r.rsRank >= 70)
+} else if (argMode === 'scalp') {
+  // Scalp mode: burst hari ini (gain ≥5%, vol ≥2×, close strength ≥60%)
+  // Default min-score 50; override dengan --min-score
+  const scalpMin = Math.max(50, minScore)
+  filteredResults = results.filter((r) => r.scalpScore >= scalpMin)
 }
 
 // Sort
@@ -2222,9 +2334,10 @@ filteredResults.sort((a, b) => {
   if (sortBy === 'smt') return b.smtScore - a.smtScore
   if (sortBy === 'auto') return b.autoScore - a.autoScore
   if (sortBy === 'flag') return b.flagScore - a.flagScore
-  // default sort by score — flag mode defaults to flagScore
-  const sa = argMode === 'technical' ? a.techScore : argMode === 'fundamental' ? a.fundScore : argMode === 'momentum' ? a.momentumFactor : argMode === 'smt' ? a.smtScore : argMode === 'auto' ? a.autoScore : argMode === 'flag' ? a.flagScore : a.combinedScore
-  const sb = argMode === 'technical' ? b.techScore : argMode === 'fundamental' ? b.fundScore : argMode === 'momentum' ? b.momentumFactor : argMode === 'smt' ? b.smtScore : argMode === 'auto' ? b.autoScore : argMode === 'flag' ? b.flagScore : b.combinedScore
+  if (sortBy === 'scalp') return b.scalpScore - a.scalpScore
+  // default sort by score — flag/scalp modes default to their own score
+  const sa = argMode === 'technical' ? a.techScore : argMode === 'fundamental' ? a.fundScore : argMode === 'momentum' ? a.momentumFactor : argMode === 'smt' ? a.smtScore : argMode === 'auto' ? a.autoScore : argMode === 'flag' ? a.flagScore : argMode === 'scalp' ? a.scalpScore : a.combinedScore
+  const sb = argMode === 'technical' ? b.techScore : argMode === 'fundamental' ? b.fundScore : argMode === 'momentum' ? b.momentumFactor : argMode === 'smt' ? b.smtScore : argMode === 'auto' ? b.autoScore : argMode === 'flag' ? b.flagScore : argMode === 'scalp' ? b.scalpScore : b.combinedScore
   return sb - sa
 })
 
@@ -2563,6 +2676,75 @@ if (argMode === 'smt') {
   Deno.exit(0)
 }
 
+// ─── Scalp mode table ─────────────────────────────────────────────────────────
+
+if (argMode === 'scalp') {
+  const nextDay = dateFmt  // sinyal hari ini, entry besok
+  console.log(`  Sinyal burst hari ini (${nextDay}) — entry besok pagi, manfaatkan momentum follow-through`)
+  console.log(`  ${pad('#', 3)} ${pad('Kode', 6)} ${pad('Nama', 20)} ${'Scalp'.padStart(6)} ${'RS'.padStart(3)} ${'Gain%'.padStart(6)} ${'Vol×'.padStart(5)} ${'ClsHi'.padStart(6)} ${'Days'.padStart(4)} ${'Entry~'.padStart(8)} ${'Stop'.padStart(7)} ${pad('Warnings', 28)}`)
+  console.log(`  ${'─'.repeat(115)}`)
+  for (let i = 0; i < top.length; i++) {
+    const r = top[i]!
+
+    // ScalpScore color
+    const ss = r.scalpScore
+    const ssStr = String(ss).padStart(6)
+    const ssColored = ss >= 70 ? `\x1b[32m${ssStr}\x1b[0m` : ss >= 55 ? `\x1b[33m${ssStr}\x1b[0m` : `\x1b[90m${ssStr}\x1b[0m`
+
+    // RS color
+    const rsStr = String(r.rsRank).padStart(3)
+    const rsColored = r.rsRank >= 85 ? `\x1b[32m${rsStr}\x1b[0m` : r.rsRank >= 70 ? `\x1b[33m${rsStr}\x1b[0m` : rsStr
+
+    const gain = r.scalpGainPct != null ? `+${r.scalpGainPct.toFixed(1)}%`.padStart(6) : '—'.padStart(6)
+    const gainColored = r.scalpGainPct != null && r.scalpGainPct >= 15
+      ? `\x1b[33m${gain}\x1b[0m`  // kuning = besar, hati-hati
+      : `\x1b[32m${gain}\x1b[0m`
+
+    const vol = r.scalpVolRatio != null ? `${r.scalpVolRatio.toFixed(1)}×`.padStart(5) : '—'.padStart(5)
+    const volColored = r.scalpVolRatio != null && r.scalpVolRatio >= 3
+      ? `\x1b[32m${vol}\x1b[0m` : vol
+
+    const cs = r.scalpCloseStrength
+    const csStr = cs != null ? `${cs.toFixed(0)}%`.padStart(6) : '—'.padStart(6)
+    const csColored = cs != null
+      ? (cs >= 85 ? `\x1b[32m${csStr}\x1b[0m` : cs >= 70 ? `\x1b[33m${csStr}\x1b[0m` : `\x1b[31m${csStr}\x1b[0m`)
+      : csStr
+
+    const daysStr = String(r.scalpConsecutiveDays).padStart(4)
+    const daysColored = r.scalpConsecutiveDays >= 3 ? `\x1b[31m${daysStr}\x1b[0m` : r.scalpConsecutiveDays >= 2 ? `\x1b[33m${daysStr}\x1b[0m` : daysStr
+
+    // Entry reference = today's close ± (buy near open tomorrow)
+    const entryStr = `~${r.price.toFixed(0)}`.padStart(8)
+    const stopStr  = r.scalpStop != null ? r.scalpStop.toFixed(0).padStart(7) : '—'.padStart(7)
+    const stopRisk = r.scalpStop != null && r.price > 0
+      ? ` (${((r.price - r.scalpStop) / r.price * 100).toFixed(1)}%)`
+      : ''
+
+    // Build warnings
+    const warns: string[] = []
+    if (r.scalpConsecutiveDays >= 3) warns.push('\x1b[31mCLIMAX\x1b[0m')
+    else if (r.scalpConsecutiveDays >= 2) warns.push('\x1b[33mDay-2\x1b[0m')
+    if (r.scalpGainPct != null && r.scalpGainPct >= 20) warns.push('\x1b[33mGAP RISK\x1b[0m')
+    if (r.gorenganScore >= 30) warns.push('\x1b[31mGORENGAN\x1b[0m')
+    if (marketRegime === 'bear') warns.push('\x1b[31mBEAR\x1b[0m')
+
+    console.log(
+      `  ${pad(String(i + 1), 3)} ${pad(r.code, 6)} ${pad(r.name?.slice(0, 20) ?? '-', 20)} ${ssColored} ${rsColored} ${gainColored} ${volColored} ${csColored} ${daysColored} ${entryStr} ${stopStr}${stopRisk.padEnd(8)}  ${warns.join(' ')}`
+    )
+  }
+  console.log(dline)
+  console.log(`  Kolom: ScalpScore(0-100) | Gain%=naik hari ini | Vol×=vol/avg20d | ClsHi%=posisi close dalam range | Days=hari burst berturut`)
+  console.log(`  Entry~=sekitar close hari ini | Stop=low hari ini | Risiko stop per saham ditampilkan dalam kurung`)
+  console.log(`  ⚠  CLIMAX(day 3+) = risiko reversal tinggi | GAP RISK = gain >20%, besok mungkin gap up mahal | GORENGAN = waspada manipulasi`)
+  console.log(`  Strategy: beli dekat open besok, target +5-8% intraday, cut jika tembus Stop`)
+  console.log(`  SKIP jika besok open >8% dari Entry~ — entry terlalu mahal`)
+  console.log(`  Untuk detail: deno run -A screen.ts --detail KODE`)
+  console.log(`  Filter: --top N --min-score N (default 50) | Sort: --sort scalp|rs|volume`)
+  console.log(dline + '\n')
+  client.close()
+  Deno.exit(0)
+}
+
 // ─── Flag mode table ──────────────────────────────────────────────────────────
 
 if (argMode === 'flag') {
@@ -2739,8 +2921,8 @@ if (watchlistAction === 'save' && watchlistName) {
 }
 
 console.log(`  Untuk detail saham: deno run -A screen.ts --detail KODE`)
-console.log(`  Mode: --mode technical|fundamental|combined|momentum|breakout|vcp|pullback|smt|auto|flag`)
-console.log(`  Sort: --sort rs|eps|volume|foreign|momentum|atr|smt|auto|flag`)
+console.log(`  Mode: --mode technical|fundamental|combined|momentum|breakout|vcp|pullback|smt|auto|flag|scalp`)
+console.log(`  Sort: --sort rs|eps|volume|foreign|momentum|atr|smt|auto|flag|scalp`)
 console.log(`  Lainnya: --top N --min-score N --sector "nama" --compact --portfolio N --risk-pct N --as-of YYYYMMDD`)
 console.log(`  Export: --export csv [--output file.csv]`)
 console.log(`  Watchlist: --watchlist save|load|show|compare <nama>`)
