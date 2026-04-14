@@ -1861,7 +1861,10 @@ for (const [code, entries] of ohlcByCode) {
     }
   }
 
-  // 5. Bid/Offer Pressure (10 pts) — 3-day aggregate to reduce noise
+  // 5. Bid/Offer Pressure (max 4 pts, diturunkan dari 10)
+  // Data adalah end-of-day snapshot order book (sisa antrian belum tereksekusi),
+  // bukan akumulasi sepanjang hari. Hanya 0.1–2% dari total volume diperdagangkan.
+  // Mudah dimanipulasi dengan pasang limit order besar lalu cancel. Bobot dikurangi.
   let smtBidOfferScore = 0
   const smtBoSlice = entries.slice(-3)
   const smtTotalBid3d = smtBoSlice.reduce((s: number, e: OhlcvEntry) => s + e.bidVolume, 0)
@@ -1870,12 +1873,12 @@ for (const [code, entries] of ohlcByCode) {
     ? Math.round((smtTotalBid3d / smtTotalOffer3d) * 1000) / 1000
     : null
   if (smtBidOfferRatio != null) {
-    if (smtBidOfferRatio >= 1.5) { smtBidOfferScore = 10; smtReasons.push(`Bid/Offer ${smtBidOfferRatio.toFixed(2)} (tekanan beli 3h)`) }
-    else if (smtBidOfferRatio >= 1.2) smtBidOfferScore = 6
-    else if (smtBidOfferRatio >= 1.0) smtBidOfferScore = 3
+    if (smtBidOfferRatio >= 1.5) smtBidOfferScore = 4
+    else if (smtBidOfferRatio >= 1.2) smtBidOfferScore = 2
+    else if (smtBidOfferRatio >= 1.0) smtBidOfferScore = 1
   }
 
-  // 5b. Bid/Offer Consistency — anti-spoofing: check how many of last 5 days had ratio >= 1.2
+  // 5b. Anti-spoofing: jika hanya 1 dari 5 hari yang benar-benar bid dominan → reset ke 0
   let smtBidOfferConsistency5d: number | null = null
   if (entries.length >= 5) {
     let consistentDays = 0
@@ -1886,10 +1889,7 @@ for (const [code, entries] of ohlcByCode) {
       if (dayRatio >= 1.2) consistentDays++
     }
     smtBidOfferConsistency5d = consistentDays
-    // Single-spike suspicious: 3d aggregate high but only 1 of 5 days actually high
-    if (smtBidOfferScore >= 6 && consistentDays <= 1) {
-      smtBidOfferScore = Math.max(0, smtBidOfferScore - 5)
-    }
+    if (consistentDays <= 1) smtBidOfferScore = 0  // spike tunggal tidak dihitung
   }
 
   // 5c. Float-aware discount — low float = manipulable bid/offer
@@ -1901,14 +1901,11 @@ for (const [code, entries] of ohlcByCode) {
       else if (effectiveFloat < 10) smtBidOfferScore = Math.round(smtBidOfferScore * 0.5)
       else if (effectiveFloat < 15) smtBidOfferScore = Math.round(smtBidOfferScore * 0.75)
     }
-    // Shell company penalty
-    if (taxHavenShellCount >= 2) {
-      smtBidOfferScore = Math.round(smtBidOfferScore * 0.5)
-    }
+    if (taxHavenShellCount >= 2) smtBidOfferScore = Math.round(smtBidOfferScore * 0.5)
   }
 
-  // Count bullish only after discounts applied — threshold 7 ensures quality
-  if (smtBidOfferScore >= 7) smtBullishCount++
+  // Count bullish only if max score (4/4) setelah semua discount — threshold ketat
+  if (smtBidOfferScore >= 4) smtBullishCount++
 
   // Bid/offer reliability classification
   let bidOfferReliability: ScreenRow['bidOfferReliability'] = 'high'
