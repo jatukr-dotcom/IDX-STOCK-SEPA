@@ -254,8 +254,6 @@ type ScreenRow = {
   bidOfferConsistency5d: number | null
   bidOfferReliability: 'high' | 'medium' | 'low' | 'suspect'
   // Broker history fields
-  accumulatingBrokers: string[]
-  brokerConcentrationPct: number | null
   autoScore: number
   // Parabolic / overextension fields
   extensionRatio: number | null
@@ -1951,34 +1949,8 @@ for (const [code, entries] of ohlcByCode) {
   // 6. Cross-Signal Alignment (15 pts)
   let smtCrossScore = smtBullishCount >= 4 ? 15 : smtBullishCount === 3 ? 10 : smtBullishCount === 2 ? 5 : 0
 
-  // 7. Broker concentration scoring (0-10 pts) — matches server smart-money.ts logic
-  const smtBrokerConc = brokerConcentrationMapScreen.get(code) ?? null
-  let smtBrokerConcScore = 0
-  if (smtBrokerConc != null) {
-    if (smtBrokerConc >= 70) { smtBrokerConcScore = 10; smtBullishCount++; smtReasons.push(`Broker terkonsentrasi (top3: ${smtBrokerConc.toFixed(0)}%)`) }
-    else if (smtBrokerConc >= 60) smtBrokerConcScore = 7
-    else if (smtBrokerConc >= 50) smtBrokerConcScore = 4
-  }
-  // Re-calc cross-signal with broker info (same as server)
-  if (smtBrokerConcScore >= 7) {
-    if (smtBullishCount >= 5) smtCrossScore = 15
-    else if (smtBullishCount === 4) smtCrossScore = 12
-    else if (smtBullishCount === 3) smtCrossScore = 8
-  }
-
-  // 8. Broker accumulation bonus (from broker_top_daily — +2/+3 pts, cap total at 100)
-  const smtAccumBrokers = brokerAccumMapScreen.get(code) ?? []
-  let smtBrokerAccumBonus = 0
-  if (smtAccumBrokers.length >= 2) {
-    smtBrokerAccumBonus = 3
-    smtReasons.push(`${smtAccumBrokers.slice(0, 2).join(', ')} akumulasi konsisten`)
-  } else if (smtAccumBrokers.length === 1) {
-    smtBrokerAccumBonus = 2
-    smtReasons.push(`${smtAccumBrokers[0]} akumulasi konsisten 20h`)
-  }
-
-  const smtBaseScore = smtForeignFlowScore + smtForeignStreakScore + smtSustainedScore + smtVolPriceScore + smtTradeSizeScore + smtFreqVolScore + smtBidOfferScore + smtCrossScore + smtBrokerConcScore
-  const smtScore = Math.min(100, smtBaseScore + smtBrokerAccumBonus)
+  const smtBaseScore = smtForeignFlowScore + smtForeignStreakScore + smtSustainedScore + smtVolPriceScore + smtTradeSizeScore + smtFreqVolScore + smtBidOfferScore + smtCrossScore
+  const smtScore = Math.min(100, smtBaseScore)
   const smtSignal: ScreenRow['smtSignal'] = smtScore >= 75 ? 'strong-buy' : smtScore >= 55 ? 'buy' : smtScore >= 35 ? 'neutral' : smtScore >= 20 ? 'sell' : 'strong-sell'
 
   // AutoScore: normalized ~100, stacked bonuses, severity-based penalties
@@ -1994,21 +1966,18 @@ for (const [code, entries] of ohlcByCode) {
   // Signal quality bonuses (max 18)
   if (hasPocketPivot) autoScore += 7
   if (rsLineNewHigh) autoScore += 6
-  if (smtAccumBrokers.length >= 2) autoScore += 5
-  else if (smtAccumBrokers.length === 1) autoScore += 3
+  // broker accum bonus removed — data tidak valid (market-wide bukan stock-specific)
   // FVG + MJP bonuses (max 6)
   if (fvgResult.priceinFVG) autoScore += 4
   else if (fvgResult.bullishCount > 0 && fvgNearestPct != null && fvgNearestPct < 3) autoScore += 2
   if (obvMom.mjp === 'bullish') autoScore += 2
   else if (obvMom.mjp === 'bearish') autoScore -= 2
-  // Cross-validation convergence bonus: reward when multiple independent signals align
-  // volume=akumulasi AND foreignNet>5% AND brokerAccum≥2 → all 3 independently confirm institutional buying
+  // Cross-validation convergence bonus: volume akumulasi + foreign net kuat
   const cvVolAccum = volumeSignal === 'akumulasi'
   const cvForeignStrong = foreignNetPct != null && foreignNetPct > 5
-  const cvBrokerAccum = smtAccumBrokers.length >= 2
-  const cvCount = [cvVolAccum, cvForeignStrong, cvBrokerAccum].filter(Boolean).length
-  if (cvCount === 3) autoScore += 5
-  else if (cvCount === 2) autoScore += 2
+  const cvCount = [cvVolAccum, cvForeignStrong].filter(Boolean).length
+  if (cvCount === 2) autoScore += 5
+  else if (cvCount === 1) autoScore += 2
   // Gorengan gradual penalty
   if (gorenganScore >= 45) autoScore -= 10
   else if (gorenganScore >= 30) autoScore -= 5
@@ -2057,8 +2026,6 @@ for (const [code, entries] of ohlcByCode) {
     bidOfferRatio: smtBidOfferRatio,
     bidOfferConsistency5d: smtBidOfferConsistency5d,
     bidOfferReliability,
-    accumulatingBrokers: smtAccumBrokers,
-    brokerConcentrationPct: brokerConcentrationMapScreen.get(code) ?? null,
     autoScore,
     extensionRatio,
     ret3mPct,
@@ -2359,21 +2326,6 @@ function printStockDetail(row: ScreenRow) {
   }
   console.log(`  Signal          : ${smtSignalLabel}`)
   if (row.smtReasons.length > 0) console.log(`  Reasons         : ${row.smtReasons.join(', ')}`)
-  // Broker Activity section — only shown when valid stock-specific data exists
-  if (row.brokerConcentrationPct != null || row.accumulatingBrokers.length > 0) {
-    console.log(line)
-    console.log(`  ═══ Broker Activity ═══`)
-    if (row.brokerConcentrationPct != null) {
-      const concStr = row.brokerConcentrationPct >= 60 ? `\x1b[33m${row.brokerConcentrationPct.toFixed(1)}%\x1b[0m (konsentrasi tinggi)` : `${row.brokerConcentrationPct.toFixed(1)}%`
-      console.log(`  Konsentrasi Top3: ${concStr}`)
-    }
-    if (row.accumulatingBrokers.length > 0) {
-      console.log(`  ▶ Broker Akumulasi (hadir konsisten ≥50% hari, avg rank ≤5):`)
-      for (const bname of row.accumulatingBrokers) {
-        console.log(`    \x1b[32m🏦 ${bname}\x1b[0m`)
-      }
-    }
-  }
   // Position sizing (Phase 3E)
   if (portfolioSize > 0) {
     const riskPerTrade = portfolioSize * riskPct / 100
