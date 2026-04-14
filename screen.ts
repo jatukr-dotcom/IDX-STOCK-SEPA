@@ -3,7 +3,7 @@
  * Jalankan: deno run -A screen.ts [options]
  *
  * Options:
- *   --mode technical|fundamental|combined|momentum|breakout|vcp|pullback|smt|auto
+ *   --mode technical|fundamental|combined|momentum|breakout|vcp|pullback|smt|auto|flag
  *   --top N                                (default: 15)
  *   --min-score N                          (default: 0)
  *   --sector "nama sektor"                 (default: semua)
@@ -278,6 +278,14 @@ type ScreenRow = {
   top1HolderPct: number | null
   taxHavenShellCount: number
   topHolders: Array<{ investor: string; type: string | null; lf: string | null; domicile: string | null; pct: number }>
+  // Flag mode fields
+  flagScore: number
+  powerMoveGainPct: number | null
+  powerMoveVolRatio: number | null
+  powerMoveDaysAgo: number | null
+  flagWidthPct: number | null
+  flagDays: number | null
+  flagVolContraction: number | null
 }
 
 type WatchlistEntry = { code: string; name: string | null; score: number; rsRank: number; stage: StageNumber }
@@ -820,6 +828,123 @@ function fIDR(n: number): string {
 
 function stageLabel(s: StageNumber): string {
   return ['', 'S1', 'S2', 'S3', 'S4'][s] ?? '??'
+}
+
+type FlagResult = {
+  flagScore: number
+  powerMoveGainPct: number | null
+  powerMoveVolRatio: number | null
+  powerMoveDaysAgo: number | null
+  flagWidthPct: number | null
+  flagDays: number | null
+  flagVolContraction: number | null
+}
+
+/**
+ * Detect "Power Move + Flag" setup:
+ * A power move day (≥3% gain on ≥1.5× vol) followed by a tight
+ * consolidation (≤6% range) with contracting volume.
+ * Does NOT require Stage 2 or positive EPS — purely technical/RS-driven.
+ */
+function detectPowerFlag(entries: OhlcvEntry[], rsRank: number): FlagResult {
+  const empty: FlagResult = {
+    flagScore: 0, powerMoveGainPct: null, powerMoveVolRatio: null,
+    powerMoveDaysAgo: null, flagWidthPct: null, flagDays: null, flagVolContraction: null,
+  }
+  if (entries.length < 10 || rsRank < 70) return empty
+
+  const avg20Vol = entries.slice(-20).reduce((s, e) => s + e.volume, 0) / Math.min(20, entries.length)
+  if (avg20Vol <= 0) return empty
+
+  const todayVol = entries[entries.length - 1]!.volume
+  const todayClose = entries[entries.length - 1]!.close
+
+  // Scan last 5–20 days for the best power move day (excluding today)
+  const scanFrom = Math.max(1, entries.length - 20)
+  const scanTo = entries.length - 2  // exclude last day (consolidation must be after)
+
+  let bestPowerIdx = -1
+  let bestPowerScore = 0
+
+  for (let i = scanFrom; i <= scanTo; i++) {
+    const prev = entries[i - 1]
+    if (!prev || prev.close <= 0) continue
+    const e = entries[i]!
+    const gainPct = (e.close - prev.close) / prev.close * 100
+    const volRatio = avg20Vol > 0 ? e.volume / avg20Vol : 0
+    // Must be a clear up day with elevated volume
+    if (gainPct < 3.0 || volRatio < 1.5) continue
+    // Score: prefer higher gain × vol ratio, more recent
+    const score = gainPct * volRatio
+    if (score > bestPowerScore) { bestPowerScore = score; bestPowerIdx = i }
+  }
+
+  if (bestPowerIdx < 0) return empty
+
+  const powerEntry = entries[bestPowerIdx]!
+  const prevEntry = entries[bestPowerIdx - 1]!
+  const powerGainPct = (powerEntry.close - prevEntry.close) / prevEntry.close * 100
+  const powerVolRatio = powerEntry.volume / avg20Vol
+  const daysAgo = entries.length - 1 - bestPowerIdx  // 1 = yesterday, 2 = 2d ago, etc.
+
+  // Flag body: measure tightness using RECENT 5 days (not full range since power move)
+  // This avoids counting mid-flag shakeouts as "wide" — we want to know if the stock
+  // is currently tight, regardless of brief pullbacks right after the thrust.
+  const allFlagEntries = entries.slice(bestPowerIdx + 1)
+  if (allFlagEntries.length < 1) return empty
+  const flagDays = allFlagEntries.length
+
+  // Use last 5 days (or all flag days if fewer) for tightness measurement
+  const recentFlag = allFlagEntries.slice(-Math.min(5, allFlagEntries.length))
+  const flagHigh = Math.max(...recentFlag.map((e) => e.high))
+  const flagLow = Math.min(...recentFlag.map((e) => e.low))
+  const flagWidthPct = flagLow > 0 ? (flagHigh - flagLow) / flagLow * 100 : 999
+
+  // Must be tight recent consolidation
+  if (flagWidthPct > 8.0) return empty
+
+  // Volume contraction: compare today's vol to power move vol
+  const flagVolContraction = powerEntry.volume > 0 ? todayVol / powerEntry.volume : 1
+  // Today's price must still be within or near the recent flag body (not broken down)
+  if (todayClose < flagLow * 0.97) return empty
+
+  // ── Scoring ──────────────────────────────────────────────────────
+  // 1. Power move strength (0-30)
+  let pmScore = 0
+  if (powerVolRatio >= 2.5) pmScore = 30
+  else if (powerVolRatio >= 2.0) pmScore = 25
+  else if (powerVolRatio >= 1.75) pmScore = 20
+  else pmScore = 15
+
+  // 2. Flag tightness (0-30): tighter = better
+  let tightScore = 0
+  if (flagWidthPct <= 3.0) tightScore = 30
+  else if (flagWidthPct <= 4.5) tightScore = 25
+  else if (flagWidthPct <= 6.0) tightScore = 20
+  else tightScore = 10
+
+  // 3. Volume contraction (0-20): lower today vol vs power move = better
+  let contractionScore = 0
+  if (flagVolContraction <= 0.30) contractionScore = 20
+  else if (flagVolContraction <= 0.45) contractionScore = 17
+  else if (flagVolContraction <= 0.60) contractionScore = 13
+  else if (flagVolContraction <= 0.80) contractionScore = 8
+  else contractionScore = 3
+
+  // 4. RS bonus (0-20)
+  let rsBonus = 0
+  if (rsRank >= 90) rsBonus = 20
+  else if (rsRank >= 85) rsBonus = 15
+  else if (rsRank >= 80) rsBonus = 10
+  else if (rsRank >= 75) rsBonus = 7
+  else rsBonus = 4
+
+  // Penalty: power move too long ago (flag stales after 15d)
+  const stalePenalty = daysAgo > 15 ? 10 : daysAgo > 10 ? 5 : 0
+
+  const flagScore = Math.max(0, Math.min(100, pmScore + tightScore + contractionScore + rsBonus - stalePenalty))
+
+  return { flagScore, powerMoveGainPct: powerGainPct, powerMoveVolRatio: powerVolRatio, powerMoveDaysAgo: daysAgo, flagWidthPct, flagDays, flagVolContraction }
 }
 
 function colorScore(score: number): string {
@@ -1589,6 +1714,9 @@ for (const [code, entries] of ohlcByCode) {
     }
   }
 
+  // ─── Phase 2B: Power Move + Flag detection ──────────────────────────────────
+  const flagResult = detectPowerFlag(entries, rsRank)
+
   // ─── Phase 2C: Shakeout detection ──────────────────────────────────────────
   let shakeoutDetected = false
   if (ma50 != null && entries.length >= 5) {
@@ -2045,6 +2173,13 @@ for (const [code, entries] of ohlcByCode) {
     topHolders: holders.slice(0, 10).map((h) => ({
       investor: h.investor, type: h.type, lf: h.lf, domicile: h.domicile, pct: h.pct,
     })),
+    flagScore: flagResult.flagScore,
+    powerMoveGainPct: flagResult.powerMoveGainPct,
+    powerMoveVolRatio: flagResult.powerMoveVolRatio,
+    powerMoveDaysAgo: flagResult.powerMoveDaysAgo,
+    flagWidthPct: flagResult.flagWidthPct,
+    flagDays: flagResult.flagDays,
+    flagVolContraction: flagResult.flagVolContraction,
   })
 }
 
@@ -2062,6 +2197,11 @@ if (argMode === 'breakout') {
 } else if (argMode === 'auto') {
   const regimeThreshold = SCREEN_CONFIG.auto.filterThreshold[marketRegime]
   filteredResults = results.filter((r) => r.autoScore >= Math.max(regimeThreshold, minScore))
+} else if (argMode === 'flag') {
+  // Flag mode: RS ≥ 70 + valid flag setup detected (flagScore > 0)
+  // Minimum flagScore configurable via --min-score (default 40)
+  const flagMin = Math.max(40, minScore)
+  filteredResults = results.filter((r) => r.flagScore >= flagMin && r.rsRank >= 70)
 }
 
 // Sort
@@ -2074,9 +2214,10 @@ filteredResults.sort((a, b) => {
   if (sortBy === 'atr') return (b.atrPct ?? 0) - (a.atrPct ?? 0)
   if (sortBy === 'smt') return b.smtScore - a.smtScore
   if (sortBy === 'auto') return b.autoScore - a.autoScore
-  // default sort by score
-  const sa = argMode === 'technical' ? a.techScore : argMode === 'fundamental' ? a.fundScore : argMode === 'momentum' ? a.momentumFactor : argMode === 'smt' ? a.smtScore : argMode === 'auto' ? a.autoScore : a.combinedScore
-  const sb = argMode === 'technical' ? b.techScore : argMode === 'fundamental' ? b.fundScore : argMode === 'momentum' ? b.momentumFactor : argMode === 'smt' ? b.smtScore : argMode === 'auto' ? b.autoScore : b.combinedScore
+  if (sortBy === 'flag') return b.flagScore - a.flagScore
+  // default sort by score — flag mode defaults to flagScore
+  const sa = argMode === 'technical' ? a.techScore : argMode === 'fundamental' ? a.fundScore : argMode === 'momentum' ? a.momentumFactor : argMode === 'smt' ? a.smtScore : argMode === 'auto' ? a.autoScore : argMode === 'flag' ? a.flagScore : a.combinedScore
+  const sb = argMode === 'technical' ? b.techScore : argMode === 'fundamental' ? b.fundScore : argMode === 'momentum' ? b.momentumFactor : argMode === 'smt' ? b.smtScore : argMode === 'auto' ? b.autoScore : argMode === 'flag' ? b.flagScore : b.combinedScore
   return sb - sa
 })
 
@@ -2415,6 +2556,57 @@ if (argMode === 'smt') {
   Deno.exit(0)
 }
 
+// ─── Flag mode table ──────────────────────────────────────────────────────────
+
+if (argMode === 'flag') {
+  // Header: Rank | Code | Name | FlagScore | RS | Stage | Power(gain,vol) | DaysAgo | FlagWidth | Contraction | EPS
+  console.log(`  ${pad('#', 3)} ${pad('Kode', 6)} ${pad('Nama', 20)} ${'Flag'.padStart(5)} ${'RS'.padStart(3)} ${pad('St', 3)} ${'PwrGain'.padStart(8)} ${'PwrVol'.padStart(7)} ${'D.Ago'.padStart(6)} ${'Width'.padStart(6)} ${'Cont'.padStart(5)} ${'EPS%'.padStart(6)} ${pad('Catatan', 20)}`)
+  console.log(`  ${'─'.repeat(110)}`)
+  for (let i = 0; i < top.length; i++) {
+    const r = top[i]!
+    // FlagScore color
+    const fs = r.flagScore
+    const fsStr = String(fs).padStart(5)
+    const fsColored = fs >= 70 ? `\x1b[32m${fsStr}\x1b[0m` : fs >= 55 ? `\x1b[33m${fsStr}\x1b[0m` : `\x1b[90m${fsStr}\x1b[0m`
+
+    const rsStr = String(r.rsRank).padStart(3)
+    const rsColored = r.rsRank >= 85 ? `\x1b[32m${rsStr}\x1b[0m` : r.rsRank >= 75 ? `\x1b[33m${rsStr}\x1b[0m` : rsStr
+
+    const pmGain = r.powerMoveGainPct != null ? `+${r.powerMoveGainPct.toFixed(1)}%`.padStart(8) : '—'.padStart(8)
+    const pmVol = r.powerMoveVolRatio != null ? `${r.powerMoveVolRatio.toFixed(1)}×`.padStart(7) : '—'.padStart(7)
+    const dAgo = r.powerMoveDaysAgo != null ? `${r.powerMoveDaysAgo}d`.padStart(6) : '—'.padStart(6)
+    const width = r.flagWidthPct != null ? `${r.flagWidthPct.toFixed(1)}%`.padStart(6) : '—'.padStart(6)
+    // Contraction: color green if today vol is < 50% of power move vol
+    const contRaw = r.flagVolContraction != null ? `${(r.flagVolContraction * 100).toFixed(0)}%` : '—'
+    const contColored = r.flagVolContraction != null
+      ? (r.flagVolContraction <= 0.45 ? `\x1b[32m${contRaw.padStart(5)}\x1b[0m` : r.flagVolContraction <= 0.65 ? `\x1b[33m${contRaw.padStart(5)}\x1b[0m` : contRaw.padStart(5))
+      : '—'.padStart(5)
+
+    const epsStr = r.epsGrowthPct != null ? `${r.epsGrowthPct >= 0 ? '+' : ''}${r.epsGrowthPct.toFixed(0)}%` : '—'
+    const epsColored = r.epsGrowthPct != null && r.epsGrowthPct >= 20 ? `\x1b[32m${epsStr.padStart(6)}\x1b[0m` : r.epsGrowthPct != null && r.epsGrowthPct < 0 ? `\x1b[31m${epsStr.padStart(6)}\x1b[0m` : epsStr.padStart(6)
+
+    // Notes: signals, VCP, shakeout (stage already in its own column)
+    const notes: string[] = []
+    if (r.vcpIsVcp) notes.push('\x1b[35mVCP\x1b[0m')
+    if (r.shakeoutDetected) notes.push('Shake')
+    if (r.hasPocketPivot) notes.push('PP')
+    if (r.breakoutSignal === 'approaching') notes.push('\x1b[33mAPR\x1b[0m')
+    if (r.sellSignal) notes.push(`\x1b[31m${r.sellSignal}\x1b[0m`)
+
+    console.log(
+      `  ${pad(String(i + 1), 3)} ${pad(r.code, 6)} ${pad(r.name?.slice(0, 20) ?? '-', 20)} ${fsColored} ${rsColored} ${colorStage(r.stage).padStart(9)} ${pmGain} ${pmVol} ${dAgo} ${width} ${contColored} ${epsColored}  ${notes.join(' ')}`
+    )
+  }
+  console.log(dline)
+  console.log(`  Kolom: FlagScore(0-100) | RS | PwrGain=gain hari power move | PwrVol=vol×avg | D.Ago=hari lalu | Width=range flag | Cont=vol hari ini/power move`)
+  console.log(`  Cont hijau(≤45%) = volume mengering kuat — sinyal terbaik`)
+  console.log(`  Untuk detail: deno run -A screen.ts --detail KODE`)
+  console.log(`  Filter: --top N --min-score N (default 40) | Sort: --sort rs|flag|momentum`)
+  console.log(dline + '\n')
+  client.close()
+  Deno.exit(0)
+}
+
 if (argMode === 'auto') {
   console.log(`  ${pad('#', 3)} ${pad('Kode', 6)} ${pad('Nama', 20)} ${'AutoScore'.padStart(9)} ${'Setup'.padStart(10)} ${'SMT'.padStart(10)} ${'Cmbnd'.padStart(5)} ${'Mmt'.padStart(4)} ${pad('Warnings', 20)}`)
   console.log(`  ${'─'.repeat(100)}`)
@@ -2540,8 +2732,8 @@ if (watchlistAction === 'save' && watchlistName) {
 }
 
 console.log(`  Untuk detail saham: deno run -A screen.ts --detail KODE`)
-console.log(`  Mode: --mode technical|fundamental|combined|momentum|breakout|vcp|pullback|smt|auto`)
-console.log(`  Sort: --sort rs|eps|volume|foreign|momentum|atr|smt|auto`)
+console.log(`  Mode: --mode technical|fundamental|combined|momentum|breakout|vcp|pullback|smt|auto|flag`)
+console.log(`  Sort: --sort rs|eps|volume|foreign|momentum|atr|smt|auto|flag`)
 console.log(`  Lainnya: --top N --min-score N --sector "nama" --compact --portfolio N --risk-pct N`)
 console.log(`  Export: --export csv [--output file.csv]`)
 console.log(`  Watchlist: --watchlist save|load|show|compare <nama>`)
