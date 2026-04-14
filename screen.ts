@@ -979,6 +979,8 @@ const outputFile = args.includes('--output') ? args[args.indexOf('--output') + 1
 const backtestCode = args.includes('--backtest') ? (args[args.indexOf('--backtest') + 1] ?? '').toUpperCase() : null
 const backtestDays = args.includes('--days') ? Number(args[args.indexOf('--days') + 1]) : 30
 const autoDetailN = args.includes('--auto-detail') ? Number(args[args.indexOf('--auto-detail') + 1]) : 3
+// --as-of YYYYMMDD: simulate screener as if run on a past date (backtest / historical view)
+const asOfArg = args.includes('--as-of') ? Number(args[args.indexOf('--as-of') + 1]) : null
 
 // Watchlist & alert CLI
 const watchlistIdx = args.indexOf('--watchlist')
@@ -1078,7 +1080,8 @@ if (latestDate == null) {
   console.log('Tidak ada data di database.')
   Deno.exit(1)
 }
-const dateRef = Number(latestDate)
+// --as-of overrides dateRef for historical simulation; clamp to actual latest date
+const dateRef = asOfArg != null ? Math.min(asOfArg, Number(latestDate)) : Number(latestDate)
 const dateStart = (() => {
   const s = String(dateRef)
   const d = new Date(`${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`)
@@ -2734,7 +2737,7 @@ if (watchlistAction === 'save' && watchlistName) {
 console.log(`  Untuk detail saham: deno run -A screen.ts --detail KODE`)
 console.log(`  Mode: --mode technical|fundamental|combined|momentum|breakout|vcp|pullback|smt|auto|flag`)
 console.log(`  Sort: --sort rs|eps|volume|foreign|momentum|atr|smt|auto|flag`)
-console.log(`  Lainnya: --top N --min-score N --sector "nama" --compact --portfolio N --risk-pct N`)
+console.log(`  Lainnya: --top N --min-score N --sector "nama" --compact --portfolio N --risk-pct N --as-of YYYYMMDD`)
 console.log(`  Export: --export csv [--output file.csv]`)
 console.log(`  Watchlist: --watchlist save|load|show|compare <nama>`)
 console.log(`  Alert: --alert set <CODE> <type> <val> | --alert list | --alert clear <CODE>|all`)
