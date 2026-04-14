@@ -2367,7 +2367,7 @@ if (triggeredAlerts.length > 0) {
 
 console.log(`\n${dline}`)
 console.log(`  IDX SCREENER — Terminal Report`)
-console.log(`  Data: ${dateFmt} | Mode: ${argMode.toUpperCase()} | Top ${topN} dari ${filteredResults.length} kandidat (${results.length} lolos filter)`)
+console.log(`  Data: ${dateFmt} | Mode: ${argMode.toUpperCase()} | Top ${top.length} dari ${filteredResults.length} kandidat (${results.length} lolos filter)`)
 if (sectorFilter) console.log(`  Sektor: ${sectorFilter}`)
 const regimeLabel = marketRegime === 'bear'
   ? `\x1b[31mBEAR\x1b[0m (drawdown ${ihsgDrawdownPct != null ? ihsgDrawdownPct.toFixed(1) + '%' : '?'})`
