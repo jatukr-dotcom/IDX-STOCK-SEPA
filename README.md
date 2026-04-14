@@ -22,7 +22,7 @@ Screener saham Indonesia dengan metode **Momentum Masters** (Minervini, Ryan, Za
 - **Base Pattern Detection** — Identifikasi Flat Base, Cup-and-Handle, dan High Tight Flag beserta base count.
 - **Power Play / Low Cheat** — Setup entry Minervini: konsolidasi ketat + volume kering sebelum breakout.
 - **🆕 Breakout Screener** — Deteksi saham yang breakout dari pivot base (volume ≥1.5× avg50d) atau mendekati pivot (dalam 3%), dengan ATR(14) dan Bollinger Band Squeeze.
-- **🆕 Smart Money Tracker** — Deteksi jejak institusi & asing: 6 sinyal kuantitatif (skor 0–100) + broker accumulation dari histori top-10 broker harian. Tampilkan kolom Foreign Flow, Streak, Trade Size, Bid/Offer, dan nama broker yang konsisten akumulasi.
+- **🆕 Smart Money Tracker** — Deteksi jejak institusi & asing: 7 sinyal kuantitatif (skor 0–100). Kolom: Foreign Flow, Streak, Trade Size Change, Bid/Offer, dan **Vol/Freq Ratio** (institusi = sedikit transaksi besar, retail = banyak transaksi kecil).
 - **AI Rekomendasi** — Skor terpadu teknikal + fundamental, narasi Claude AI (opsional), export PDF.
 - **Export PDF** — Semua tab utama bisa diekspor ke PDF (per saham, SEPA bulk, VCP bulk, Momentum Masters).
 - **Watchlist** — Simpan saham favorit dengan bintang.
@@ -35,7 +35,7 @@ Screener saham Indonesia dengan metode **Momentum Masters** (Minervini, Ryan, Za
 - **Sinyal entry presisi** — Breakout detection (BKT), Approaching pivot (APR), Pullback EMA21 (PB), Shakeout
 - **Sinyal exit** — Climax Top, Upper BB 3d+, 7% Stop Breach, OBV Divergence, Support Breakdown (6 sinyal)
 - **Quant signals** — ATR(14), Bollinger Band Squeeze, Multi-Factor Momentum (0–100), Sharpe Ratio
-- **Sinyal institusional** — `smt` mode: 6 sinyal jejak asing/institusional (total 100 pts) + broker accumulation bonus, sinyal hingga STRONG BUY
+- **Sinyal institusional** — `smt` mode: 7 sinyal jejak asing/institusional (total 100 pts), sinyal hingga STRONG BUY
 - **🆕 Entry Plan** — `--detail KODE` kini menampilkan rencana entry Minervini: pivot point, buy zone (0–5% di atas pivot), stop loss, target 1R/2R/3R, R/R ratio, dan position sizing (lot) otomatis
 - **Position sizing** — hitung lot berdasarkan ATR stop + portfolio size
 - **Workflow tools** — Watchlist (save/load/compare), CSV export, Alert system, Backtest sederhana
@@ -454,22 +454,48 @@ deno run -A screen.ts --mode auto --min-score 40
 
 ### Smart Money Tracker (SMT)
 
-Mendeteksi jejak **institusi dan investor asing** secara kuantitatif — sebelum pergerakan harga terlihat jelas. SMT menggabungkan 6 sinyal dari data yang sudah tersedia (foreign flow, OBV, trade size, bid/offer) ditambah bonus dari histori konsentrasi broker.
+Mendeteksi jejak **institusi dan investor asing** secara kuantitatif — sebelum pergerakan harga terlihat jelas. SMT menggabungkan 7 sinyal dari data transaksi harian yang valid.
 
 #### SMT Score (0–100 pts)
 
-| # | Sinyal | Pts | Sumber Data | Cara Hitung |
-|---|--------|-----|------------|-------------|
-| 1 | **Foreign Flow Momentum** | 30 | `foreign_buy`, `foreign_sell` | Akselerasi net-buy asing 5d vs rata-rata 20d, dinormalisasi terhadap avg volume 20d. Range `[-5%, +25%]` → `[0, 30]` |
+| # | Sinyal | Max Pts | Sumber Data | Cara Hitung |
+|---|--------|---------|------------|-------------|
+| 1 | **Foreign Flow Momentum** | 30 | `foreign_buy`, `foreign_sell` | Akselerasi net-buy asing: avg 5d vs avg 20d, dinormalisasi terhadap avg volume 20d |
 | 2 | **Foreign Flow Streak** | 10 | `foreign_buy`, `foreign_sell` | Hari berturut-turut asing net-buy: ≥5h=10, ≥3h=6, ≥1h=3 |
-| 3 | **OBV Divergence** | 15 | OHLCV | OBV naik + harga turun (divergensi bullish) = 15 pts; OBV naik + harga naik/flat = 12 pts |
-| 4 | **Trade Size Profile** | 20 | `value`, `frequency` | Avg trade size 5d vs 20d: `(value/freq)`. Naik = blok institusional. +20% → mulai score, +80% → maks |
-| 5 | **Bid/Offer Pressure** | 10 | `bid_volume`, `offer_volume` | Rasio 3-day aggregate: ≥1.5=10, ≥1.2=6, ≥1.0=3 pts |
-| 6 | **Cross-Signal Alignment** | 15 | — | Berapa sinyal di atas aktif serentak: ≥4=15, 3=10, 2=5 pts. Re-calculated lebih tinggi jika Broker Concentration kuat (≥7 pts). |
-| + | **Broker Concentration** | +10 | `broker_stock_metrics` | Top-3 broker volume ≥70%=10pts, ≥60%=7pts, ≥50%=4pts. Sinyal konsentrasi institusional. |
-| + | **Broker Accumulation Bonus** | +3 | `broker_top_daily` | Broker hadir ≥50% hari & avg rank ≤5 selama 20 hari: ≥2 broker=+3, 1 broker=+2 |
+| 2B | **Sustained Accumulation** | 10 | `foreign_buy`, `foreign_sell` | Asing net-buy ≥15/20 hari + net >5% = 10; ≥12/20h + net >3% = 6 |
+| 3 | **OBV Divergence** | 15 | OHLCV | OBV naik + harga turun = 15 pts (divergensi bullish terkuat); OBV naik + flat/naik = 12 pts |
+| 4 | **Trade Size Profile** | 20 | `value`, `frequency` | Avg nilai per transaksi 5d vs 20d. Membesar = blok institusional masuk |
+| 4B | **Vol/Freq Ratio** | 8 | `volume`, `frequency` | Rasio pertumbuhan volume vs frekuensi. ≥2.0×=8, ≥1.5×=5, ≥1.2×=2 pts |
+| 5 | **Bid/Offer Pressure** | 4 | `bid_volume`, `offer_volume` | Rasio 3-day aggregate bid÷offer. Bobot kecil karena data adalah snapshot end-of-day |
+| 6 | **Cross-Signal Alignment** | 15 | — | Berapa sinyal di atas aktif serentak: ≥4=15, 3=10, 2=5 pts |
 
-**Total maks: 113 pts, di-cap di 100.**
+**Total maks: 112 pts, di-cap di 100.**
+
+> **Catatan:** Komponen broker (konsentrasi & akumulasi) **dihapus** karena data `broker_top_daily` terbukti berisi ranking market-wide IDX — nilai identik untuk semua 438 saham — bukan data stock-specific.
+
+#### Vol/Freq Ratio — Cara Baca
+
+Mengukur apakah lonjakan aktivitas didorong institusi (transaksi besar) atau retail (transaksi kecil-kecil):
+
+```
+Vol/Freq Ratio = (avg volume 5h ÷ avg volume 20h) ÷ (avg frekuensi 5h ÷ avg frekuensi 20h)
+```
+
+| Nilai | Label | Interpretasi |
+|-------|-------|-------------|
+| ≥ 2.0× 🟢 | institusional dominan | Volume tumbuh 2× lebih cepat dari frekuensi — sedikit transaksi tapi sangat besar = institusi akumulasi |
+| 1.5–1.9× 🟡 | cenderung institusional | Ada jejak institusi, transaksi mulai membesar |
+| 1.2–1.4× 🟡 | mixed | Campuran retail + institusi |
+| 0.8–1.1× | normal | Volume dan frekuensi tumbuh proporsional |
+| < 0.8× 🔴 | retail driven | Frekuensi tumbuh lebih cepat dari volume — banyak transaksi kecil = retail ramai, bukan institusi |
+
+**Contoh nyata:**
+
+| Saham | Vol Ratio | Freq Ratio | Vol/Freq | Profil |
+|-------|-----------|-----------|----------|--------|
+| AALI | 4.1× | 1.9× | **1.34×** | Mixed — ada jejak institusi |
+| JPFA | 1.2× | 1.8× | **0.97×** | Normal — retail dan institusi seimbang |
+| SIMP | 4.3× | 3.5× | **1.11×** | Normal — institusi picu, retail ikut proporsional |
 
 #### Klasifikasi Sinyal
 
@@ -478,54 +504,44 @@ Mendeteksi jejak **institusi dan investor asing** secara kuantitatif — sebelum
 | ≥ 75 | **STRONG BUY** | Jejak institusional sangat kuat, multiple signals konfirmasi |
 | ≥ 55 | **BUY** | Akumulasi terdeteksi, setup menarik |
 | ≥ 35 | **NETRAL** | Beberapa sinyal ada tapi belum konklusif |
-| ≥ 20 | **SELL** | Distribusi lemah terdeteksi |
-| < 20 | **STRONG SELL** | Distribusi aktif, distribusi terindikasi |
+| < 35 | **SELL** | Tidak ada sinyal akumulasi atau distribusi terdeteksi |
 
 #### Cara Baca Output SMT (Terminal)
 
 ```
-#   Kode   Nama                  SMT  For5d   Streak  TxChg  B/O  Akum.Broker         Sinyal
-1   BBRI   Bank Rakyat Indonesia  78  +5.2B    7h     +32%   1.48 BRI DANAREKSA,...  STRONG BUY
+#   Kode   Nama                  SMT  For5d   Streak  TxChg  B/O  Sinyal
+1   AALI   Astra Agro Lestari    95  +16.7B    5h    +38.4%  8.01 STRONG BUY
 ```
 
 | Kolom | Arti |
 |---|---|
-| SMT | Skor 0–100 (hijau ≥75, kuning ≥55) |
+| SMT | Skor 0–100 (hijau ≥75, kuning ≥55, abu <35) |
 | For5d | Net foreign buy/sell 5 hari terakhir (+ = asing beli net) |
-| Streak | Hari berturut-turut asing net-buy |
-| TxChg | Perubahan avg ukuran transaksi 5d vs 20d (+ = institusional masuk) |
-| B/O | Bid/Offer ratio 3-day aggregate (>1.0 = buyer dominan) |
-| Akum.Broker | Broker yang konsisten di top-10 selama ≥50% dari 20 hari terakhir |
+| Streak | Hari berturut-turut asing net-buy (— = streak putus) |
+| TxChg | Perubahan avg ukuran transaksi 5d vs 20d (+ = transaksi membesar = institusional) |
+| B/O | Bid/Offer ratio 3-day aggregate (>1.0 = buyer dominan) — bobot kecil, snapshot end-of-day |
 
 #### Cara Baca Output Detail Saham (`--detail KODE`)
 
 ```
 ═══ Smart Money ═══
-SMT Score       : 78/100 [████████░░]
-Foreign Flow    : +5.2B (5d) ▲ accelerating
-Consecutive Buy : 7 hari berturut-turut
-Avg Trade Size  : +32.0% vs 20d (institusional)
-Bid/Offer Ratio : 1.48 (buyer dominated)
+SMT Score       : 95/100 [██████████]
+Foreign Flow    : +16.7B (5d) ▲ accelerating
+Consecutive Buy : 5 hari berturut-turut | Akum Window: 16/20h beli
+Avg Trade Size  : +38.4% vs 20d (institusional)
+Vol/Freq Ratio  : 1.34× (mixed)
+Bid/Offer Ratio : 8.01 (buyer dominated) [HIGH] | konsistensi 3/5h
 Signal          : STRONG BUY
-Reasons         : Foreign flow accelerating, Asing beli 7h berturut, OBV naik ...
-
-═══ Broker Activity ═══
-Konsentrasi Top3: 67.5% (konsentrasi tinggi)
-▶ Broker Akumulasi (hadir konsisten ≥50% hari, avg rank ≤5):
-  🏦 BRI DANAREKSA SEKURITAS
-  🏦 MANDIRI SEKURITAS
+Reasons         : Foreign flow accelerating, Asing beli 5h berturut, ...
 ```
 
-#### Sumber Data Broker
-
-Data broker berasal dari IDX API endpoint `GetBrokerSummary?stockCode=X&date=YYYYMMDD`. Data ini hanya tersedia setelah menjalankan:
-
-```bash
-deno task db:fetch-broker          # default: 60 hari terakhir
-deno task db:fetch-broker --days 90  # mundur lebih jauh
-```
-
-Data disimpan di tabel `broker_top_daily` (top-10 broker per saham per hari). Jika tabel belum ada, fitur broker di web dan terminal akan **degrade gracefully** — SMT tetap jalan tanpa bonus broker.
+| Field | Arti |
+|---|---|
+| Foreign Flow | Total net foreign 5 hari + arah akselerasi (▲/▼) |
+| Consecutive Buy | Streak asing net-buy berturut + proporsi 20 hari |
+| Avg Trade Size | Perubahan nilai rata-rata per transaksi vs 20h |
+| **Vol/Freq Ratio** | **Rasio pertumbuhan volume÷frekuensi — deteksi profil institusi vs retail** |
+| Bid/Offer Ratio | Sisa antrian order akhir hari (reliability rendah-sedang) |
 
 ---
 
