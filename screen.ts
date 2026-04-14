@@ -1138,8 +1138,11 @@ try {
     }
     const totalDays = allDates.size
     if (totalDays === 0) continue
-    const accumNames: string[] = []
-    for (const [, stat] of bmap.entries()) {
+    // Exclude retail platform brokers — they aggregate retail orders and appear in every stock
+  const RETAIL_BROKER_CODES = new Set(['XL', 'XC']) // Stockbit, Ajaib
+  const accumNames: string[] = []
+    for (const [bc, stat] of bmap.entries()) {
+      if (RETAIL_BROKER_CODES.has(bc)) continue
       const daysPresent = stat.dates.size
       const avgRank = stat.ranks.reduce((s, r) => s + r, 0) / stat.ranks.length
       const presencePct = daysPresent / totalDays
@@ -1161,6 +1164,27 @@ try {
   )
   for (const r of concRows) {
     if (r.top3_volume_pct != null) brokerConcentrationMapScreen.set(r.stock_code, Number(r.top3_volume_pct))
+  }
+  // Detect market-wide broker bug: if a broker appears in >60% of all stocks, it's not stock-specific
+  // Remove such brokers from ALL accumulation maps
+  if (brokerAccumMapScreen.size > 20) {
+    const totalStocks = brokerAccumMapScreen.size
+    const brokerCount = new Map<string, number>()
+    for (const names of brokerAccumMapScreen.values()) {
+      for (const name of names) brokerCount.set(name, (brokerCount.get(name) ?? 0) + 1)
+    }
+    const universalBrokers = new Set<string>()
+    for (const [name, count] of brokerCount.entries()) {
+      if (count / totalStocks > 0.60) universalBrokers.add(name)
+    }
+    if (universalBrokers.size > 0) {
+      console.warn(`[WARN] Broker berikut muncul di >60% saham (data market-wide, bukan stock-specific): ${[...universalBrokers].join(', ')} — dihapus dari Broker Akumulasi`)
+      for (const [sc, names] of brokerAccumMapScreen.entries()) {
+        const filtered = names.filter((n) => !universalBrokers.has(n))
+        if (filtered.length === 0) brokerAccumMapScreen.delete(sc)
+        else brokerAccumMapScreen.set(sc, filtered)
+      }
+    }
   }
   // Detect identical broker data bug: if all values are the same, data is aggregated incorrectly
   if (brokerConcentrationMapScreen.size > 10) {
