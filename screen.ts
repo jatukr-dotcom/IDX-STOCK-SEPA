@@ -839,8 +839,11 @@ function colorStage(s: StageNumber): string {
 
 const args = Deno.args
 const argMode = (args.includes('--mode') ? args[args.indexOf('--mode') + 1] : 'combined') as string
-const topN = args.includes('--top') ? Number(args[args.indexOf('--top') + 1]) : 15
 const minScore = args.includes('--min-score') ? Number(args[args.indexOf('--min-score') + 1]) : 0
+// If --min-score is set without explicit --top, show all qualifying results (no cap)
+const topN = args.includes('--top')
+  ? Number(args[args.indexOf('--top') + 1])
+  : minScore > 0 ? 9999 : 15
 const sectorFilter = args.includes('--sector') ? args[args.indexOf('--sector') + 1] : null
 const detailCode = args.includes('--detail') ? (args[args.indexOf('--detail') + 1] ?? '').toUpperCase() : null
 const sortBy = args.includes('--sort') ? (args[args.indexOf('--sort') + 1] ?? 'score') : 'score'
