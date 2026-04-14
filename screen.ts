@@ -2325,22 +2325,20 @@ function printStockDetail(row: ScreenRow) {
   }
   console.log(`  Signal          : ${smtSignalLabel}`)
   if (row.smtReasons.length > 0) console.log(`  Reasons         : ${row.smtReasons.join(', ')}`)
-  // Broker Activity section
-  console.log(line)
-  console.log(`  ═══ Broker Activity ═══`)
-  if (row.brokerConcentrationPct != null) {
-    const concStr = row.brokerConcentrationPct >= 60 ? `\x1b[33m${row.brokerConcentrationPct.toFixed(1)}%\x1b[0m (konsentrasi tinggi)` : `${row.brokerConcentrationPct.toFixed(1)}%`
-    console.log(`  Konsentrasi Top3: ${concStr}`)
-  } else {
-    console.log(`  Konsentrasi Top3: — (jalankan deno task db:fetch-broker)`)
-  }
-  if (row.accumulatingBrokers.length > 0) {
-    console.log(`  ▶ Broker Akumulasi (hadir konsisten ≥50% hari, avg rank ≤5):`)
-    for (const bname of row.accumulatingBrokers) {
-      console.log(`    \x1b[32m🏦 ${bname}\x1b[0m`)
+  // Broker Activity section — only shown when valid stock-specific data exists
+  if (row.brokerConcentrationPct != null || row.accumulatingBrokers.length > 0) {
+    console.log(line)
+    console.log(`  ═══ Broker Activity ═══`)
+    if (row.brokerConcentrationPct != null) {
+      const concStr = row.brokerConcentrationPct >= 60 ? `\x1b[33m${row.brokerConcentrationPct.toFixed(1)}%\x1b[0m (konsentrasi tinggi)` : `${row.brokerConcentrationPct.toFixed(1)}%`
+      console.log(`  Konsentrasi Top3: ${concStr}`)
     }
-  } else {
-    console.log(`  Broker Akumulasi: — (belum ada data histori broker / belum memenuhi kriteria)`)
+    if (row.accumulatingBrokers.length > 0) {
+      console.log(`  ▶ Broker Akumulasi (hadir konsisten ≥50% hari, avg rank ≤5):`)
+      for (const bname of row.accumulatingBrokers) {
+        console.log(`    \x1b[32m🏦 ${bname}\x1b[0m`)
+      }
+    }
   }
   // Position sizing (Phase 3E)
   if (portfolioSize > 0) {
@@ -2407,7 +2405,7 @@ console.log(dline)
 // ─── SMT mode table ───────────────────────────────────────────────────────────
 
 if (argMode === 'smt') {
-  const smtHeader = `  ${pad('#', 3)} ${pad('Kode', 6)} ${pad('Nama', 20)} ${'SMT'.padStart(5)} ${'For5d'.padStart(8)} ${'Streak'.padStart(7)} ${'TxChg'.padStart(7)} ${'B/O'.padStart(5)} ${pad('Akum.Broker', 18)} ${pad('Sinyal', 12)}`
+  const smtHeader = `  ${pad('#', 3)} ${pad('Kode', 6)} ${pad('Nama', 20)} ${'SMT'.padStart(5)} ${'For5d'.padStart(8)} ${'Streak'.padStart(7)} ${'TxChg'.padStart(7)} ${'B/O'.padStart(5)} ${pad('Sinyal', 12)}`
   console.log(smtHeader)
   console.log(`  ${'─'.repeat(100)}`)
   for (let i = 0; i < top.length; i++) {
@@ -2419,18 +2417,13 @@ if (argMode === 'smt') {
     const smtSigLabel = r.smtSignal === 'strong-buy' ? '\x1b[32mSTRONG BUY\x1b[0m' : r.smtSignal === 'buy' ? '\x1b[32mBUY\x1b[0m' : r.smtSignal === 'neutral' ? '\x1b[33mNETRAL\x1b[0m' : r.smtSignal === 'sell' ? '\x1b[31mSELL\x1b[0m' : '\x1b[31mSTRONG SELL\x1b[0m'
     const smtScoreStr = String(r.smtScore).padStart(5)
     const smtScoreColored = r.smtScore >= 75 ? `\x1b[32m${smtScoreStr}\x1b[0m` : r.smtScore >= 55 ? `\x1b[33m${smtScoreStr}\x1b[0m` : `\x1b[90m${smtScoreStr}\x1b[0m`
-    // Accumulating brokers: show first 2 (truncated), green if present
-    const accumBrokerStr = r.accumulatingBrokers.length > 0
-      ? `\x1b[32m${r.accumulatingBrokers.slice(0, 2).join(', ').slice(0, 17)}\x1b[0m`
-      : '\x1b[90m—\x1b[0m'
     console.log(
-      `  ${pad(String(i + 1), 3)} ${pad(r.code, 6)} ${pad(r.name?.slice(0, 20) ?? '-', 20)} ${smtScoreColored} ${smtFn5d.padStart(8)} ${smtStreak.padStart(7)} ${smtTxChg.padStart(7)} ${smtBo.padStart(5)} ${accumBrokerStr.padEnd(18 + 9)} ${smtSigLabel}`
+      `  ${pad(String(i + 1), 3)} ${pad(r.code, 6)} ${pad(r.name?.slice(0, 20) ?? '-', 20)} ${smtScoreColored} ${smtFn5d.padStart(8)} ${smtStreak.padStart(7)} ${smtTxChg.padStart(7)} ${smtBo.padStart(5)} ${smtSigLabel}`
     )
   }
   console.log(dline)
   console.log(`  Untuk detail: deno run -A screen.ts --detail KODE`)
   console.log(`  Sort: --sort smt|foreign|momentum | Filter: --top N --sector "nama"`)
-  console.log(`  [Akum.Broker] = broker hadir ≥50% hari & avg rank ≤5 (20 hari terakhir)`)
   console.log(dline + '\n')
   client.close()
   Deno.exit(0)
